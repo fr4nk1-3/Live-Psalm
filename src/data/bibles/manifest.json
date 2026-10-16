@@ -1,0 +1,272 @@
+[
+  {
+    "id": "bible-swahili-suv",
+    "name": "Biblia Takatifu (SUV - Swahili Union Version)",
+    "abbreviation": "SUV",
+    "fileName": "swahili-suv.json"
+  },
+  {
+    "id": "bible-swahili-rsuv",
+    "name": "Biblia Habari Njema (RSUV - Swahili)",
+    "abbreviation": "RSUV",
+    "fileName": "swahili-rsuv.json"
+  },
+  {
+    "id": "bible-kalenjin-2019",
+    "name": "Baibil Noet (Kalenjin 2019)",
+    "abbreviation": "KLJ19",
+    "fileName": "kalenjin-2019.json"
+  },
+  {
+    "id": "bible-kalenjin-std",
+    "name": "Baibil Noet (Kalenjin Standard)",
+    "abbreviation": "KLJ",
+    "fileName": "kalenjin-std.json"
+  },
+  {
+    "id": "bible-kalenjin-rev",
+    "name": "Baibil Noet (Kalenjin Revised)",
+    "abbreviation": "KLJR",
+    "fileName": "kalenjin-rev.json"
+  },
+  {
+    "id": "bible-kamba-std",
+    "name": "Mbivilia (Kamba Standard)",
+    "abbreviation": "KMB",
+    "fileName": "kamba-std.json"
+  },
+  {
+    "id": "bible-kamba-mbivlia",
+    "name": "Mbivilia (Kamba MBIVLIA)",
+    "abbreviation": "MBV",
+    "fileName": "kamba-mbivlia.json"
+  },
+  {
+    "id": "bible-kikuyu-2013",
+    "name": "Ibuku Rĩa Ngai (Kikuyu 2013)",
+    "abbreviation": "GKY13",
+    "fileName": "kikuyu-2013.json"
+  },
+  {
+    "id": "bible-kikuyu-2014",
+    "name": "Ibuku Rĩa Ngai (Kikuyu 2014)",
+    "abbreviation": "GKY14",
+    "fileName": "kikuyu-2014.json"
+  },
+  {
+    "id": "bible-kikuyu-2019",
+    "name": "Ibuku Rĩa Ngai (Kikuyu 2019)",
+    "abbreviation": "GKY19",
+    "fileName": "kikuyu-2019.json"
+  },
+  {
+    "id": "bible-luo-1985",
+    "name": "Muma Mutakatifu (Luo 1985)",
+    "abbreviation": "LUO85",
+    "fileName": "luo-1985.json"
+  },
+  {
+    "id": "bible-luo-2015",
+    "name": "Muma Mutakatifu (Luo 2015)",
+    "abbreviation": "LUO15",
+    "fileName": "luo-2015.json"
+  },
+  {
+    "id": "bible-luo-2020",
+    "name": "Muma Mutakatifu (Luo 2020)",
+    "abbreviation": "LUO20",
+    "fileName": "luo-2020.json"
+  },
+  {
+    "id": "bible-maasai-1970",
+    "name": "Bibilia (Maasai 1970)",
+    "abbreviation": "MAS70",
+    "fileName": "maasai-1970.json"
+  },
+  {
+    "id": "bible-maasai-2020",
+    "name": "Bibilia (Maasai 2020)",
+    "abbreviation": "MAS20",
+    "fileName": "maasai-2020.json"
+  },
+  {
+    "id": "bible-maasai-std",
+    "name": "Bibilia (Maasai Standard)",
+    "abbreviation": "MAS",
+    "fileName": "maasai-std.json"
+  },
+  {
+    "id": "bible-maasai-mbs",
+    "name": "Bibilia (Maasai MBS)",
+    "abbreviation": "MASMBS",
+    "fileName": "maasai-mbs.json"
+  },
+  {
+    "id": "bible-eng-amp",
+    "name": "Amplified Bible",
+    "abbreviation": "AMP",
+    "fileName": "eng-amp.json"
+  },
+  {
+    "id": "bible-eng-ampc",
+    "name": "Amplified Classic Bible",
+    "abbreviation": "AMPC",
+    "fileName": "eng-ampc.json"
+  },
+  {
+    "id": "bible-eng-niv",
+    "name": "New International Version",
+    "abbreviation": "NIV",
+    "fileName": "eng-niv.json"
+  },
+  {
+    "id": "bible-eng-nkjv",
+    "name": "New King James Version",
+    "abbreviation": "NKJV",
+    "fileName": "eng-nkjv.json"
+  },
+  {
+    "id": "bible-eng-esv",
+    "name": "English Standard Version",
+    "abbreviation": "ESV",
+    "fileName": "eng-esv.json"
+  },
+  {
+    "id": "bible-eng-nlt",
+    "name": "New Living Translation",
+    "abbreviation": "NLT",
+    "fileName": "eng-nlt.json"
+  },
+  {
+    "id": "bible-eng-kjv",
+    "name": "King James Version",
+    "abbreviation": "KJV",
+    "fileName": "eng-kjv.json"
+  },
+  {
+    "id": "bible-eng-nasb",
+    "name": "New American Standard Bible",
+    "abbreviation": "NASB",
+    "fileName": "eng-nasb.json"
+  },
+  {
+    "id": "bible-eng-bsb",
+    "name": "Berean Standard Bible",
+    "abbreviation": "BSB",
+    "fileName": "eng-bsb.json"
+  },
+  {
+    "id": "bible-eng-csb",
+    "name": "Christian Standard Bible",
+    "abbreviation": "CSB",
+    "fileName": "eng-csb.json"
+  },
+  {
+    "id": "bible-eng-tpt",
+    "name": "The Passion Translation",
+    "abbreviation": "TPT",
+    "fileName": "eng-tpt.json"
+  },
+  {
+    "id": "bible-eng-gnt",
+    "name": "Good News Translation",
+    "abbreviation": "GNT",
+    "fileName": "eng-gnt.json"
+  },
+  {
+    "id": "bible-eng-hcsb",
+    "name": "Holman Christian Standard Bible",
+    "abbreviation": "HCSB",
+    "fileName": "eng-hcsb.json"
+  },
+  {
+    "id": "bible-eng-net",
+    "name": "New English Translation",
+    "abbreviation": "NET",
+    "fileName": "eng-net.json"
+  },
+  {
+    "id": "bible-eng-nirv",
+    "name": "New International Reader's Version",
+    "abbreviation": "NIrV",
+    "fileName": "eng-nirv.json"
+  },
+  {
+    "id": "bible-eng-nrsv",
+    "name": "New Revised Standard Version",
+    "abbreviation": "NRSV",
+    "fileName": "eng-nrsv.json"
+  },
+  {
+    "id": "bible-eng-asv",
+    "name": "American Standard Version",
+    "abbreviation": "ASV",
+    "fileName": "eng-asv.json"
+  },
+  {
+    "id": "bible-eng-darby",
+    "name": "Darby Translation",
+    "abbreviation": "DARBY",
+    "fileName": "eng-darby.json"
+  },
+  {
+    "id": "bible-eng-easy",
+    "name": "Easy-to-Read Version",
+    "abbreviation": "EASY",
+    "fileName": "eng-easy.json"
+  },
+  {
+    "id": "bible-eng-erv",
+    "name": "Easy-to-Read Version (ERV)",
+    "abbreviation": "ERV",
+    "fileName": "eng-erv.json"
+  },
+  {
+    "id": "bible-eng-gw",
+    "name": "GOD'S WORD Translation",
+    "abbreviation": "GW",
+    "fileName": "eng-gw.json"
+  },
+  {
+    "id": "bible-eng-lsb",
+    "name": "Legacy Standard Bible",
+    "abbreviation": "LSB",
+    "fileName": "eng-lsb.json"
+  },
+  {
+    "id": "bible-eng-mev",
+    "name": "Modern English Version",
+    "abbreviation": "MEV",
+    "fileName": "eng-mev.json"
+  },
+  {
+    "id": "bible-eng-nasu",
+    "name": "NASB Update",
+    "abbreviation": "NASU",
+    "fileName": "eng-nasu.json"
+  },
+  {
+    "id": "bible-eng-rsv",
+    "name": "Revised Standard Version",
+    "abbreviation": "RSV",
+    "fileName": "eng-rsv.json"
+  },
+  {
+    "id": "bible-eng-tlb",
+    "name": "The Living Bible",
+    "abbreviation": "TLB",
+    "fileName": "eng-tlb.json"
+  },
+  {
+    "id": "bible-eng-tyn",
+    "name": "Tyndale 1537 Bible",
+    "abbreviation": "TYN",
+    "fileName": "eng-tyn.json"
+  },
+  {
+    "id": "bible-eng-ylt",
+    "name": "Young's Literal Translation",
+    "abbreviation": "YLT",
+    "fileName": "eng-ylt.json"
+  }
+]
