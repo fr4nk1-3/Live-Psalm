@@ -1,0 +1,50 @@
+name: Build & Update Release Assets
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:win
+      - name: Upload Windows Assets to v1.1.0 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.1.0
+          name: Live Psalms v1.1.0
+          make_latest: true
+          files: |
+            dist_electron/LivePsalms-Setup.exe
+            dist_electron/LivePsalms-Windows-Portable.exe
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:deb
+      - name: Upload Ubuntu .deb Asset to v1.1.0 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.1.0
+          name: Live Psalms v1.1.0
+          make_latest: true
+          files: |
+            dist_electron/LivePsalms-Ubuntu-amd64.deb

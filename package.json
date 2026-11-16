@@ -11,7 +11,8 @@
     "build": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "preview": "vite preview",
     "build:win": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --win",
-    "build:deb": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --linux deb"
+    "build:deb": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --linux deb",
+    "release:all": "npm run build:win && NODE_OPTIONS=--max-old-space-size=8192 npx electron-builder --linux deb && gh release upload v1.1.0 dist_electron/LivePsalms-Setup.exe dist_electron/LivePsalms-Windows-Portable.exe dist_electron/LivePsalms-Ubuntu-amd64.deb --clobber"
   },
   "build": {
     "appId": "com.livepsalms.app",
