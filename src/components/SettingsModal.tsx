@@ -1,28 +1,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Settings,
-  X,
-  Tv,
-  Key,
-  Database,
-  Building2,
-  Upload,
-  Globe,
-  Radio,
-  Check,
-  Image as ImageIcon,
-  Download,
-  RefreshCw,
-  Trash2,
-  Sliders,
-  HardDrive,
-  Copy,
-  RotateCcw
-} from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { StorageService, CustomBibleTranslation } from '../services/storage';
 import { BroadcastService } from '../services/broadcast';
 import { AppSettings, ChurchProfile } from '../types/presentation';
 import { ImporterService } from '../services/importer';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Field, FieldGroup } from './ui/field';
+import { Switch } from './ui/switch';
+import { Slider } from './ui/slider';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
+import { Kbd } from './ui/primitives';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from './ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,6 +43,25 @@ interface SettingsModalProps {
 }
 
 type SettingsTab = 'profile' | 'projection' | 'api' | 'obs' | 'shortcuts' | 'backup';
+
+const OUTPUT_ROWS = [
+  { key: 'audience' as const, label: 'Audience output' },
+  { key: 'stage' as const, label: 'Stage monitor' },
+  { key: 'led' as const, label: 'LED wall' }
+];
+
+const SHORTCUTS = [
+  { keys: 'Space / → / ↓', description: 'Next slide and take it live' },
+  { keys: '← / ↑', description: 'Previous slide and take it live' },
+  { keys: 'Alt + ↑ / ↓', description: 'Previous or next playlist item' },
+  { keys: 'Enter', description: 'Take the preview slide live' },
+  { keys: '1 – 9', description: 'Jump to slide 1–9' },
+  { keys: 'Ctrl + K', description: 'Open search' },
+  { keys: 'B', description: 'Black screen' },
+  { keys: 'L', description: 'Logo screen' },
+  { keys: 'F', description: 'Freeze frame' },
+  { keys: 'Esc', description: 'Clear the text overlay' }
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -266,7 +297,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         });
         setSettings(StorageService.getSettings());
         setCustomBibles(StorageService.getCustomBibles());
-        setBackupNotice('Backup restored! Reload the app to apply all restored playlists & songs.');
+        setBackupNotice('Backup restored. Reload the app to apply all restored playlists and songs.');
       } catch (err) {
         alert('Failed to read backup JSON file.');
       }
@@ -284,451 +315,400 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const hostIp = networkIps[0] || 'localhost';
   const port = settings.networkServerPort || 8080;
 
-  const navTabs: { id: SettingsTab; label: string; icon: any; color: string }[] = [
-    { id: 'profile', label: 'Church Profile', icon: Building2, color: 'text-indigo-400' },
-    { id: 'projection', label: 'Display & Transitions', icon: Sliders, color: 'text-sky-400' },
-    { id: 'api', label: 'Bible & Library', icon: Globe, color: 'text-amber-400' },
-    { id: 'obs', label: 'OBS & Network', icon: Radio, color: 'text-rose-400' },
-    { id: 'shortcuts', label: 'Hotkeys', icon: Key, color: 'text-emerald-400' },
-    { id: 'backup', label: 'System & Backup', icon: Database, color: 'text-purple-400' }
+  const navTabs: { id: SettingsTab; label: string }[] = [
+    { id: 'profile', label: 'Church profile' },
+    { id: 'projection', label: 'Display and transitions' },
+    { id: 'api', label: 'Bible and library' },
+    { id: 'obs', label: 'OBS and network' },
+    { id: 'shortcuts', label: 'Hotkeys' },
+    { id: 'backup', label: 'System and backup' }
   ];
 
-  const renderToggle = (checked: boolean, onChange: (val: boolean) => void) => (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`w-9 h-5 rounded-full transition-colors p-0.5 flex items-center shrink-0 ${
-        checked ? 'bg-indigo-500 justify-end' : 'bg-slate-700 justify-start'
-      }`}
-    >
-      <span className="w-4 h-4 rounded-full bg-white shadow" />
-    </button>
-  );
+  const logoSize = settings.churchProfile?.logoSize ?? 35;
+  const transitionMs = settings.transitionDurationMs ?? 300;
+  const networkBase = `http://${hostIp}:${port}`;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-4xl bg-[#0f1624] border border-[#26334a] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-xs animate-zoom-in">
-        {/* Modal Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/40 flex items-center justify-center">
-              <Settings className="w-4 h-4 text-indigo-400" />
-            </div>
-            <div>
-              <h2 className="font-black text-sm text-white uppercase tracking-wider">
-                System Settings &amp; Preferences
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Configure displays, transitions, OBS Studio, Bible datasets, and system backups.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <Dialog
+      open={isOpen}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-w-[840px]">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>Displays, transitions, OBS, Bible sources and backups.</DialogDescription>
+        </DialogHeader>
 
-        {/* Two-Column Body */}
-        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-          {/* Left Navigation Rail */}
-          <nav className="md:w-56 bg-[#0b101b] border-b md:border-b-0 md:border-r border-[#26334a] p-2.5 flex md:flex-col gap-1 overflow-x-auto shrink-0">
+        <div className="flex min-h-0 flex-1">
+          <nav
+            aria-label="Settings sections"
+            className="w-[180px] shrink-0 space-y-0.5 overflow-y-auto border-r border-border p-2"
+          >
             {navTabs.map(tab => {
-              const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-3 py-2 rounded-xl flex items-center gap-2.5 text-left font-bold text-xs transition whitespace-nowrap ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'flex h-8 w-full items-center rounded-md px-2.5 text-left text-xs transition-colors',
                     isActive
-                      ? 'bg-indigo-600/20 border border-indigo-500/50 text-white shadow'
-                      : 'border border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`}
+                      ? 'bg-accent font-medium text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                  )}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${tab.color}`} />
-                  <span>{tab.label}</span>
+                  {tab.label}
                 </button>
               );
             })}
           </nav>
 
-          {/* Right Settings Content Pane */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {/* TAB 1: CHURCH PROFILE */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {activeTab === 'profile' && (
-              <div className="space-y-4">
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-indigo-400" /> Church Identity
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                        Church Name
-                      </label>
-                      <input
+              <div className="space-y-5">
+                <FieldGroup title="Church identity">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Church name" htmlFor="settings-church-name">
+                      <Input
+                        id="settings-church-name"
                         type="text"
                         value={settings.churchProfile?.name || ''}
                         onChange={(e) => handleUpdateProfile({ name: e.target.value })}
-                        placeholder="e.g. GRACE COMMUNITY CHURCH"
-                        className="w-full bg-[#0b101b] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2 text-white font-bold outline-none"
+                        placeholder="Grace Community Church"
                       />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                        Tagline / Welcome Motto
-                      </label>
-                      <input
+                    </Field>
+                    <Field label="Tagline" htmlFor="settings-church-tagline">
+                      <Input
+                        id="settings-church-tagline"
                         type="text"
                         value={settings.churchProfile?.tagline || ''}
                         onChange={(e) => handleUpdateProfile({ tagline: e.target.value })}
-                        placeholder="e.g. Welcome To Worship"
-                        className="w-full bg-[#0b101b] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2 text-white outline-none"
+                        placeholder="Welcome to worship"
                       />
-                    </div>
+                    </Field>
                   </div>
-                </div>
+                </FieldGroup>
 
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-purple-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-purple-400" /> Church Logo &amp; Projection Size
-                  </div>
-                  <div className="flex items-center gap-4">
+                <Separator />
+
+                <FieldGroup
+                  title="Logo"
+                  description="Used on the logo screen, welcome slides and lower thirds."
+                >
+                  <div className="flex items-start gap-4">
                     {settings.churchProfile?.logoUrl ? (
-                      <div className="w-20 h-20 bg-[#0b101b] border border-slate-700 rounded-xl p-2 flex items-center justify-center shrink-0 overflow-hidden">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background/60 p-1.5">
                         <img
                           src={settings.churchProfile.logoUrl}
-                          alt="Church Logo"
-                          className="max-w-full max-h-full object-contain"
+                          alt="Church logo"
+                          className="max-h-full max-w-full object-contain"
                         />
                       </div>
                     ) : (
-                      <div className="w-20 h-20 bg-[#0b101b] border border-dashed border-slate-700 rounded-xl flex items-center justify-center text-slate-500 shrink-0 text-[10px] font-semibold">
-                        No Logo
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-center text-2xs text-muted-foreground">
+                        No logo
                       </div>
                     )}
 
-                    <div className="space-y-2 flex-1">
-                      <p className="text-slate-400 text-[11px]">
-                        Displayed on the Emergency <strong>LOGO</strong> screen, welcome cards, and lower thirds.
-                      </p>
+                    <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <label className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg cursor-pointer inline-flex items-center gap-1.5 shadow">
-                          <Upload className="w-3.5 h-3.5" /> Upload Logo
-                          <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                        </label>
+                        <Button asChild variant="secondary" size="sm">
+                          <label className="cursor-pointer">
+                            Upload logo
+                            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                          </label>
+                        </Button>
                         {settings.churchProfile?.logoUrl && (
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleUpdateProfile({ logoUrl: undefined })}
-                            className="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white font-bold rounded-lg text-[11px] transition"
                           >
                             Remove
-                          </button>
+                          </Button>
                         )}
                       </div>
+                      <p className="text-2xs leading-relaxed text-muted-foreground">
+                        PNG or SVG with a transparent background works best.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] text-slate-400 font-bold uppercase">
-                        Logo Size on Screen
-                      </label>
-                      <span className="text-xs font-bold text-purple-300">
-                        {settings.churchProfile?.logoSize ?? 35}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
+                  <Field
+                    label="Logo size"
+                    action={<span className="tabular text-2xs text-muted-foreground">{logoSize}%</span>}
+                    hint="Share of the screen height."
+                  >
+                    <Slider
+                      value={[logoSize]}
                       min={10}
                       max={90}
                       step={5}
-                      value={settings.churchProfile?.logoSize ?? 35}
-                      onChange={(e) => handleUpdateProfile({ logoSize: parseInt(e.target.value, 10) })}
-                      className="w-full accent-purple-500 cursor-pointer"
+                      onValueChange={([value]) => handleUpdateProfile({ logoSize: value })}
+                      aria-label="Logo size"
                     />
-                  </div>
-                </div>
+                  </Field>
+                </FieldGroup>
               </div>
             )}
 
-            {/* TAB 2: DISPLAYS & TRANSITIONS */}
             {activeTab === 'projection' && (
-              <div className="space-y-4">
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
+              <div className="space-y-5">
+                <FieldGroup title="Displays" description="Where each output window opens.">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-bold text-sky-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Tv className="w-4 h-4 text-sky-400" /> Connected Displays ({displays.length})
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => refreshSystemInfo()}
-                      className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow transition"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Detect Displays
-                    </button>
+                    <span className="text-2xs text-muted-foreground">
+                      {displays.length === 1 ? '1 display detected' : `${displays.length} displays detected`}
+                    </span>
+                    <Button type="button" variant="secondary" size="xs" onClick={() => refreshSystemInfo()}>
+                      Detect displays
+                    </Button>
                   </div>
 
                   {displays.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {displays.map((d, idx) => (
-                        <div
-                          key={d.id || idx}
-                          className="p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg flex items-center justify-between gap-2"
-                        >
-                          <div className="min-w-0">
-                            <div className="font-bold text-white text-xs truncate">
-                              {d.label || `Display ${idx + 1}`}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {d.bounds?.width || '?'} × {d.bounds?.height || '?'} px • ({d.bounds?.x ?? 0}, {d.bounds?.y ?? 0})
-                            </div>
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
-                              d.isPrimary || d.primary
-                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            }`}
-                          >
-                            {d.isPrimary || d.primary ? 'Primary' : 'External'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-[#0b101b] border border-slate-800 rounded-lg text-slate-400 text-[11px]">
-                      Click <strong>Detect Displays</strong> above to scan connected monitors.
-                    </div>
-                  )}
-
-                  {/* Output-to-Display Mapping */}
-                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
-                      Map Outputs to Specific Display
-                    </div>
-                    <div className="space-y-2">
-                      {[
-                        {
-                          key: 'audience' as const,
-                          label: 'Audience Output (Main Projector)',
-                          openFn: () => BroadcastService.openAudienceWindow()
-                        },
-                        {
-                          key: 'stage' as const,
-                          label: 'Stage Confidence Monitor',
-                          openFn: () => BroadcastService.openStageWindow()
-                        },
-                        {
-                          key: 'led' as const,
-                          label: 'LED Wall Display',
-                          openFn: () => BroadcastService.openLedWindow()
-                        }
-                      ].map(row => {
-                        const mappedVal = settings.outputDisplayMap?.[row.key] || 'auto';
+                    <div>
+                      {displays.map((d, idx) => {
+                        const primary = d.isPrimary || d.primary;
                         return (
                           <div
-                            key={row.key}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg"
+                            key={d.id || idx}
+                            className="flex items-center justify-between gap-3 border-t border-border/70 py-2 first:border-t-0"
                           >
-                            <span className="font-bold text-xs text-slate-200">{row.label}</span>
-                            <div className="flex items-center gap-1.5">
-                              <select
-                                value={mappedVal}
-                                onChange={(e) => {
-                                  const nextDisplayId = e.target.value;
-                                  updateSettings({
-                                    outputDisplayMap: {
-                                      ...(settings.outputDisplayMap || {}),
-                                      [row.key]: nextDisplayId
-                                    }
-                                  });
-                                  BroadcastService.moveOutputToDisplay(row.key, nextDisplayId);
-                                }}
-                                className="bg-[#121929] border border-slate-700 focus:border-sky-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none"
-                              >
-                                <option value="auto">Auto (External Display)</option>
-                                {displays.map((d, idx) => (
-                                  <option key={d.id || idx} value={String(d.id || idx + 1)}>
-                                    {d.label || `Display ${idx + 1}`} ({d.bounds?.width}×{d.bounds?.height})
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                onClick={row.openFn}
-                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold uppercase transition shrink-0"
-                                title={`Open ${row.label} on mapped display`}
-                              >
-                                Open
-                              </button>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs text-foreground">{d.label || `Display ${idx + 1}`}</p>
+                              <p className="tabular text-2xs text-muted-foreground">
+                                {d.bounds?.width || '?'} × {d.bounds?.height || '?'} px · ({d.bounds?.x ?? 0}, {d.bounds?.y ?? 0})
+                              </p>
                             </div>
+                            <span className="shrink-0 text-2xs text-muted-foreground">
+                              {primary ? 'Primary' : 'External'}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-2xs leading-relaxed text-muted-foreground">
+                      No displays detected yet. Use Detect displays to scan connected monitors.
+                    </p>
+                  )}
+                </FieldGroup>
 
-                  {/* Stage Display Distance / Visibility Mode */}
-                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
-                      Stage Display Mode
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => updateSettings({ stageViewMode: 'near' })}
-                        className={`p-3 rounded-xl border text-left transition ${
-                          (settings.stageViewMode || 'near') === 'near'
-                            ? 'bg-amber-600/20 border-amber-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Near Stage (Confidence)</span>
-                          {(settings.stageViewMode || 'near') === 'near' && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200 text-[9px] font-black uppercase">Active</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                          Full confidence monitor with current slide, next slide preview, speaker notes, and timer.
-                        </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateSettings({ stageViewMode: 'far' })}
-                        className={`p-3 rounded-xl border text-left transition ${
-                          settings.stageViewMode === 'far'
-                            ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Far Stage (Slide &amp; Counter Focus)</span>
-                          {settings.stageViewMode === 'far' && (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 text-[9px] font-black uppercase">Active</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                          High-contrast long-distance layout focused on the live slide, giant counter, and Book/Verse/Translation badges.
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <Separator />
 
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-indigo-400" /> Slide Transitions &amp; Behavior
-                  </div>
-
+                <FieldGroup title="Output mapping" description="Choose a display for each output window.">
                   <div>
-                    <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1.5">
-                      Default Slide Transition
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    {OUTPUT_ROWS.map(row => {
+                      const mappedVal = settings.outputDisplayMap?.[row.key] || 'auto';
+                      const openFn =
+                        row.key === 'audience'
+                          ? () => BroadcastService.openAudienceWindow()
+                          : row.key === 'stage'
+                            ? () => BroadcastService.openStageWindow()
+                            : () => BroadcastService.openLedWindow();
+                      return (
+                        <div
+                          key={row.key}
+                          className="flex flex-col gap-2 border-t border-border/70 py-2.5 first:border-t-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <span className="text-xs text-foreground">{row.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            <Select
+                              value={mappedVal}
+                              onValueChange={(nextDisplayId) => {
+                                updateSettings({
+                                  outputDisplayMap: {
+                                    ...(settings.outputDisplayMap || {}),
+                                    [row.key]: nextDisplayId
+                                  }
+                                });
+                                BroadcastService.moveOutputToDisplay(row.key, nextDisplayId);
+                              }}
+                            >
+                              <SelectTrigger className="w-[210px]" aria-label={`${row.label} display`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">Auto (external display)</SelectItem>
+                                {displays.map((d, idx) => (
+                                  <SelectItem key={d.id || idx} value={String(d.id || idx + 1)}>
+                                    {d.label || `Display ${idx + 1}`} ({d.bounds?.width}×{d.bounds?.height})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={openFn}
+                              title={`Open ${row.label.toLowerCase()}`}
+                            >
+                              Open
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+
+                <Separator />
+
+                <FieldGroup title="Stage display mode" description="How much detail the stage monitor shows.">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ stageViewMode: 'near' })}
+                      aria-pressed={(settings.stageViewMode || 'near') === 'near'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        (settings.stageViewMode || 'near') === 'near'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Near stage</span>
+                        {(settings.stageViewMode || 'near') === 'near' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        Current slide, next slide, speaker notes and timer.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ stageViewMode: 'far' })}
+                      aria-pressed={settings.stageViewMode === 'far'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        settings.stageViewMode === 'far'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Far stage</span>
+                        {settings.stageViewMode === 'far' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        Live slide, counter and reference, readable from a distance.
+                      </span>
+                    </button>
+                  </div>
+                </FieldGroup>
+
+                <Separator />
+
+                <FieldGroup title="Slide transitions">
+                  <Field label="Default transition">
+                    <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background/60 p-0.5">
                       {[
-                        { id: 'fade', label: 'Smooth Fade' },
-                        { id: 'slide', label: 'Slide Motion' },
-                        { id: 'cut', label: 'Instant Cut' }
+                        { id: 'fade', label: 'Fade' },
+                        { id: 'slide', label: 'Slide' },
+                        { id: 'cut', label: 'Cut' }
                       ].map(t => (
                         <button
                           key={t.id}
                           type="button"
                           onClick={() => updateSettings({ defaultTransition: t.id as any })}
-                          className={`py-2 px-3 rounded-lg border font-bold text-xs transition ${
+                          aria-pressed={(settings.defaultTransition || 'fade') === t.id}
+                          className={cn(
+                            'h-7 rounded-sm text-xs font-medium transition-colors',
                             (settings.defaultTransition || 'fade') === t.id
-                              ? 'bg-indigo-600/25 border-indigo-400 text-white'
-                              : 'bg-[#0b101b] border-slate-800 text-slate-400 hover:text-white'
-                          }`}
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
                         >
                           {t.label}
                         </button>
                       ))}
                     </div>
-                  </div>
+                  </Field>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] text-slate-400 font-bold uppercase">
-                        Transition Duration
-                      </label>
-                      <span className="text-xs font-mono font-bold text-indigo-300">
-                        {settings.transitionDurationMs ?? 300}ms
-                      </span>
-                    </div>
-                    <input
-                      type="range"
+                  <Field
+                    label="Duration"
+                    action={<span className="tabular text-2xs text-muted-foreground">{transitionMs} ms</span>}
+                  >
+                    <Slider
+                      value={[transitionMs]}
                       min={100}
                       max={800}
                       step={50}
-                      value={settings.transitionDurationMs ?? 300}
-                      onChange={(e) => updateSettings({ transitionDurationMs: parseInt(e.target.value, 10) })}
-                      className="w-full accent-indigo-500 cursor-pointer"
+                      onValueChange={([value]) => updateSettings({ transitionDurationMs: value })}
+                      aria-label="Transition duration"
+                    />
+                  </Field>
+
+                  <div className="flex items-start justify-between gap-4 border-t border-border/70 pt-3">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-show-verse-numbers">Verse reference on stage monitor</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Shows the reference and translation under the slide.
+                      </p>
+                    </div>
+                    <Switch
+                      id="settings-show-verse-numbers"
+                      checked={settings.showVerseNumbers ?? true}
+                      onCheckedChange={(value) => updateSettings({ showVerseNumbers: value })}
+                      aria-label="Verse reference on stage monitor"
                     />
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800 space-y-2.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-bold text-slate-200">Show Verse Reference on Stage Monitor</div>
-                        <div className="text-[10px] text-slate-400">
-                          Displays Scripture verse reference &amp; translation badge on the Stage Monitor.
-                        </div>
-                      </div>
-                      {renderToggle(settings.showVerseNumbers ?? true, (val) =>
-                        updateSettings({ showVerseNumbers: val })
-                      )}
+                  <div className="flex items-start justify-between gap-4 border-t border-border/70 pt-3">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-auto-launch-audience">Open audience screen at startup</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Opens the audience window when the app starts.
+                      </p>
                     </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-bold text-slate-200">Auto-Launch Audience Screen on Startup</div>
-                        <div className="text-[10px] text-slate-400">
-                          Automatically opens the Audience projection window when Live Psalms starts.
-                        </div>
-                      </div>
-                      {renderToggle(settings.autoLaunchAudience ?? false, (val) =>
-                        updateSettings({ autoLaunchAudience: val })
-                      )}
-                    </div>
+                    <Switch
+                      id="settings-auto-launch-audience"
+                      checked={settings.autoLaunchAudience ?? false}
+                      onCheckedChange={(value) => updateSettings({ autoLaunchAudience: value })}
+                      aria-label="Open audience screen at startup"
+                    />
                   </div>
-                </div>
+                </FieldGroup>
               </div>
             )}
 
-            {/* TAB 3: BIBLE & LIBRARY */}
             {activeTab === 'api' && (
-              <div className="space-y-4">
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-4">
-                  <div>
-                    <div className="font-bold text-amber-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-amber-400" /> Online API.Bible Search
+              <div className="space-y-5">
+                <FieldGroup
+                  title="Online Bible search"
+                  description="Adds online lookup alongside the offline library."
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-api-bible">API.Bible lookup</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Sends searches to API.Bible when the passage is not in a local version.
+                      </p>
                     </div>
-                    <p className="text-slate-400 text-[11px] mt-1">
-                      Enable online API.Bible lookup in addition to your offline Bible library.
-                    </p>
+                    <Switch
+                      id="settings-api-bible"
+                      checked={settings.apiBibleEnabled}
+                      onCheckedChange={(value) => updateSettings({ apiBibleEnabled: value })}
+                      aria-label="API.Bible lookup"
+                    />
                   </div>
-                  {renderToggle(settings.apiBibleEnabled, (val) =>
-                    updateSettings({ apiBibleEnabled: val })
-                  )}
-                </div>
+                </FieldGroup>
 
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Upload className="w-4 h-4 text-indigo-400" /> Import XML Bible Dataset
-                  </div>
-                  <p className="text-slate-400 text-[11px]">
-                    Import offline XML Bibles (Zefania XML, OpenSong XML, or XML Bible format).
-                  </p>
+                <Separator />
+
+                <FieldGroup
+                  title="Imported Bibles"
+                  description="Zefania XML, OpenSong XML or plain XML Bible datasets."
+                >
                   <input
                     type="file"
                     ref={xmlFileInputRef}
@@ -736,315 +716,268 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={handleXmlBibleUpload}
                     className="hidden"
                   />
-                  <button
-                    type="button"
-                    onClick={() => xmlFileInputRef.current?.click()}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg flex items-center gap-2 shadow"
-                  >
-                    <Upload className="w-4 h-4" /> Import XML Bible (.xml)
-                  </button>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => xmlFileInputRef.current?.click()}
+                    >
+                      Import XML file
+                    </Button>
+                  </div>
 
                   {customBibles.length > 0 && (
-                    <div className="pt-3 border-t border-slate-800 space-y-2">
-                      <div className="text-[10px] font-bold uppercase text-slate-400">
-                        Imported Custom Bibles ({customBibles.length})
-                      </div>
-                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    <div>
+                      <p className="pb-1 text-2xs text-muted-foreground">
+                        {customBibles.length === 1 ? '1 imported version' : `${customBibles.length} imported versions`}
+                      </p>
+                      <div className="max-h-48 overflow-y-auto">
                         {customBibles.map(cb => (
                           <div
                             key={cb.id}
-                            className="flex items-center justify-between gap-2 px-3 py-2 bg-[#0b101b] border border-slate-800 rounded-lg"
+                            className="flex items-center justify-between gap-3 border-t border-border/70 py-1.5 first:border-t-0"
                           >
                             <div className="min-w-0">
-                              <span className="font-bold text-white truncate block">{cb.name}</span>
-                              <span className="text-[10px] text-amber-300 font-semibold">{cb.abbreviation}</span>
+                              <p className="truncate text-xs text-foreground">{cb.name}</p>
+                              <p className="text-2xs text-muted-foreground">{cb.abbreviation}</p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCustomBible(cb.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
-                              title="Remove imported Bible"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  aria-label={`Options for ${cb.name}`}
+                                >
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => handleDeleteCustomBible(cb.id)}>
+                                  Remove from library
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
+                </FieldGroup>
               </div>
             )}
 
-            {/* TAB 4: OBS & NETWORK */}
             {activeTab === 'obs' && (
-              <div className="space-y-4">
-                <div className="bg-[#121929] border border-rose-500/40 p-4 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-bold text-rose-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-rose-400" /> Direct OBS Studio Bridge
-                    </div>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
-                        obsConnected
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                      }`}
-                    >
+              <div className="space-y-5">
+                <FieldGroup title="OBS Studio" description="Connect over the OBS WebSocket server (OBS 28 and later).">
+                  <div>
+                    <Badge variant={obsConnected ? 'success' : 'outline'}>
                       {obsConnected ? 'Connected' : 'Disconnected'}
-                    </span>
+                    </Badge>
                   </div>
 
-                  {/* OBS Transparent Alpha Background Toggle */}
-                  <div className="flex items-center justify-between gap-3 p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg">
-                    <div>
-                      <div className="font-bold text-slate-200">OBS Transparent (Alpha) Background</div>
-                      <div className="text-[10px] text-slate-400">
-                        Use transparent background on OBS browser/overlay output for lower thirds.
-                      </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-obs-alpha">Transparent background</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Sends a transparent background to OBS for lower thirds and overlays.
+                      </p>
                     </div>
-                    {renderToggle(settings.obsAlphaBackground, (val) =>
-                      updateSettings({ obsAlphaBackground: val })
-                    )}
+                    <Switch
+                      id="settings-obs-alpha"
+                      checked={settings.obsAlphaBackground}
+                      onCheckedChange={(value) => updateSettings({ obsAlphaBackground: value })}
+                      aria-label="Transparent background"
+                    />
                   </div>
 
-                  {/* Method 1: OBS WebSocket v5 */}
-                  <div className="bg-[#0b101b] border border-slate-800 p-3 rounded-lg space-y-2.5">
-                    <div className="text-xs font-bold text-indigo-300">
-                      OBS WebSocket v5 Bridge (OBS v28+)
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">
-                          WebSocket URL
-                        </label>
-                        <input
-                          type="text"
-                          value={obsWsUrl}
-                          onChange={(e) => {
-                            setObsWsUrl(e.target.value);
-                            localStorage.setItem('live_psalms_obs_ws_url', e.target.value);
-                          }}
-                          placeholder="ws://127.0.0.1:4455"
-                          className="w-full bg-[#121929] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">
-                          Password (Optional)
-                        </label>
-                        <input
-                          type="password"
-                          value={obsWsPassword}
-                          onChange={(e) => {
-                            setObsWsPassword(e.target.value);
-                            localStorage.setItem('live_psalms_obs_ws_pw', e.target.value);
-                          }}
-                          placeholder="Leave blank if disabled"
-                          className="w-full bg-[#121929] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="WebSocket URL" htmlFor="settings-obs-url">
+                      <Input
+                        id="settings-obs-url"
+                        type="text"
+                        value={obsWsUrl}
+                        onChange={(e) => {
+                          setObsWsUrl(e.target.value);
+                          localStorage.setItem('live_psalms_obs_ws_url', e.target.value);
+                        }}
+                        placeholder="ws://127.0.0.1:4455"
+                        className="font-mono"
+                      />
+                    </Field>
+                    <Field label="Password" htmlFor="settings-obs-password" hint="Leave blank if the server has no password.">
+                      <Input
+                        id="settings-obs-password"
+                        type="password"
+                        value={obsWsPassword}
+                        onChange={(e) => {
+                          setObsWsPassword(e.target.value);
+                          localStorage.setItem('live_psalms_obs_ws_pw', e.target.value);
+                        }}
+                        placeholder="Optional"
+                        className="font-mono"
+                      />
+                    </Field>
+                  </div>
 
-                    {obsError && (
-                      <div className="text-[10px] text-rose-400 font-semibold bg-rose-950/50 border border-rose-500/40 p-2 rounded">
-                        {obsError}
-                      </div>
-                    )}
+                  {obsError && <p className="text-2xs text-destructive">{obsError}</p>}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      {obsConnected ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => BroadcastService.disconnectObsWebSocket()}
-                            className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-xs transition"
-                          >
-                            Disconnect OBS
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => BroadcastService.ensureObsTextSources()}
-                            className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-200 hover:text-white font-bold rounded-lg text-xs transition"
-                          >
-                            Re-Sync Scene Sources
-                          </button>
-                        </>
-                      ) : (
-                        <button
+                  <div className="flex flex-wrap items-center gap-2">
+                    {obsConnected ? (
+                      <>
+                        <Button
                           type="button"
-                          onClick={() => {
-                            setObsError('');
-                            BroadcastService.connectObsWebSocket(obsWsUrl, obsWsPassword);
-                          }}
-                          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs transition shadow"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => BroadcastService.disconnectObsWebSocket()}
                         >
-                          Connect Directly to OBS
-                        </button>
-                      )}
-                    </div>
+                          Disconnect
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => BroadcastService.ensureObsTextSources()}
+                        >
+                          Re-sync scene sources
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setObsError('');
+                          BroadcastService.connectObsWebSocket(obsWsUrl, obsWsPassword);
+                        }}
+                      >
+                        Connect
+                      </Button>
+                    )}
                   </div>
+                </FieldGroup>
 
-                  {/* Method 2: Direct Local File Output */}
-                  <div className="bg-[#0b101b] border border-slate-800 p-3 rounded-lg space-y-2">
-                    <div className="text-xs font-bold text-amber-300">
-                      Local File Stream (OBS Text → Read from file)
-                    </div>
-                    <div className="space-y-1.5 font-mono text-[10px]">
-                      {[
-                        { label: 'Full Slide', file: 'live_combined.txt' },
-                        { label: 'Slide Body', file: 'live_slide.txt' },
-                        { label: 'Title / Ref', file: 'live_title.txt' },
-                        { label: 'Lower-Third Ticker', file: 'lower_third.txt' }
-                      ].map(item => {
-                        const sep = obsOutputDir.includes('\\') ? '\\' : '/';
-                        const fullPath = `${obsOutputDir}${sep}${item.file}`;
-                        return (
-                          <div
-                            key={item.file}
-                            className="flex items-center justify-between gap-2 bg-[#121929] border border-slate-800 px-2.5 py-1.5 rounded-lg"
-                          >
-                            <div className="truncate">
-                              <span className="text-slate-400 font-sans font-bold mr-2">{item.label}:</span>
-                              <span className="text-amber-300">{fullPath}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => copyText(item.file, fullPath)}
-                              className="px-2 py-0.5 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded text-[9px] font-sans font-bold shrink-0 transition"
-                            >
-                              {copiedKey === item.file ? 'Copied!' : 'Copy'}
-                            </button>
+                <Separator />
+
+                <FieldGroup
+                  title="Local file output"
+                  description="OBS text sources read these files. Copy a path into the source properties."
+                >
+                  <div>
+                    {[
+                      { label: 'Full slide', file: 'live_combined.txt' },
+                      { label: 'Slide body', file: 'live_slide.txt' },
+                      { label: 'Title and reference', file: 'live_title.txt' },
+                      { label: 'Lower third', file: 'lower_third.txt' }
+                    ].map(item => {
+                      const sep = obsOutputDir.includes('\\') ? '\\' : '/';
+                      const fullPath = `${obsOutputDir}${sep}${item.file}`;
+                      return (
+                        <div
+                          key={item.file}
+                          className="flex items-center justify-between gap-3 border-t border-border/70 py-1.5 first:border-t-0"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-2xs text-muted-foreground">{item.label}</p>
+                            <p className="truncate font-mono text-2xs text-foreground">{fullPath}</p>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => copyText(item.file, fullPath)}
+                          >
+                            {copiedKey === item.file ? 'Copied' : 'Copy'}
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                </FieldGroup>
 
-                {/* Network URLs */}
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-indigo-400" /> Wi-Fi Remote Display Links
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> http://{hostIp}:{port}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 font-mono text-[10px]">
+                <Separator />
+
+                <FieldGroup title="Network links" description={`Server address ${networkBase}`}>
+                  <div>
                     {[
                       { key: 'aud', label: 'Audience', url: `http://${hostIp}:${port}/?output=audience` },
                       { key: 'stg', label: 'Stage', url: `http://${hostIp}:${port}/?output=stage` },
-                      { key: 'led', label: 'LED Wall', url: `http://${hostIp}:${port}/?output=led` },
-                      { key: 'obs', label: 'OBS JSON', url: `http://${hostIp}:${port}/api/obs/state` }
+                      { key: 'led', label: 'LED wall', url: `http://${hostIp}:${port}/?output=led` },
+                      { key: 'obs', label: 'OBS state', url: `http://${hostIp}:${port}/api/obs/state` }
                     ].map(link => (
                       <div
                         key={link.key}
-                        className="flex items-center justify-between gap-2 bg-[#0b101b] border border-slate-800 px-2.5 py-1.5 rounded-lg"
+                        className="flex items-center justify-between gap-3 border-t border-border/70 py-1.5 first:border-t-0"
                       >
-                        <div className="truncate">
-                          <span className="text-slate-400 font-sans font-bold mr-2">{link.label}:</span>
-                          <span className="text-indigo-300">{link.url}</span>
+                        <div className="min-w-0">
+                          <p className="text-2xs text-muted-foreground">{link.label}</p>
+                          <p className="truncate font-mono text-2xs text-foreground">{link.url}</p>
                         </div>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="xs"
                           onClick={() => copyText(link.key, link.url)}
-                          className="px-2 py-0.5 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded text-[9px] font-sans font-bold shrink-0 flex items-center gap-1 transition"
                         >
-                          <Copy className="w-2.5 h-2.5" />
-                          {copiedKey === link.key ? 'Copied!' : 'Copy'}
-                        </button>
+                          {copiedKey === link.key ? 'Copied' : 'Copy'}
+                        </Button>
                       </div>
                     ))}
                   </div>
-                </div>
+                </FieldGroup>
               </div>
             )}
 
-            {/* TAB 5: SHORTCUTS */}
             {activeTab === 'shortcuts' && (
-              <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                <div className="font-bold text-emerald-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                  <Key className="w-4 h-4 text-emerald-400" /> Live Operator Keyboard Shortcuts
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
-                  {[
-                    { keys: 'Space / → / ↓', desc: 'Next Slide (Go Live)' },
-                    { keys: '← / ↑', desc: 'Previous Slide (Go Live)' },
-                    { keys: 'Alt + ↑ / ↓', desc: 'Prev / Next Playlist Item' },
-                    { keys: 'Enter', desc: 'Go Live with Preview Slide' },
-                    { keys: '1 – 9', desc: 'Jump to Slide 1–9' },
-                    { keys: 'Ctrl + K', desc: 'Open Global Search' },
-                    { keys: 'B', desc: 'Toggle Black Screen' },
-                    { keys: 'L', desc: 'Toggle Logo Screen' },
-                    { keys: 'F', desc: 'Toggle Freeze Frame' },
-                    { keys: 'Esc', desc: 'Clear Text Overlay' }
-                  ].map(hk => (
+              <FieldGroup title="Keyboard shortcuts" description="These work in the operator window.">
+                <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
+                  {SHORTCUTS.map(shortcut => (
                     <div
-                      key={hk.keys}
-                      className="flex items-center justify-between gap-2 bg-[#0b101b] border border-slate-800 px-3 py-2 rounded-lg"
+                      key={shortcut.keys}
+                      className="flex items-center justify-between gap-3 border-t border-border/70 py-2"
                     >
-                      <kbd className="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-indigo-300 font-bold text-[10px]">
-                        {hk.keys}
-                      </kbd>
-                      <span className="font-sans text-slate-300 text-[11px]">{hk.desc}</span>
+                      <span className="text-2xs text-muted-foreground">{shortcut.description}</span>
+                      <Kbd className="shrink-0">{shortcut.keys}</Kbd>
                     </div>
                   ))}
                 </div>
-              </div>
+              </FieldGroup>
             )}
 
-            {/* TAB 6: SYSTEM & BACKUP */}
             {activeTab === 'backup' && (
-              <div className="space-y-4">
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-purple-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <HardDrive className="w-4 h-4 text-purple-400" /> Local Storage Diagnostics
+              <div className="space-y-5">
+                <FieldGroup title="Storage" description="Local data on this machine.">
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: 'Used storage', value: `${(storageStats.bytes / 1024).toFixed(1)} KB` },
+                      { label: 'Stored keys', value: String(storageStats.keys) },
+                      { label: 'Imported Bibles', value: String(customBibles.length) }
+                    ].map(item => (
+                      <div key={item.label} className="space-y-0.5">
+                        <p className="text-2xs text-muted-foreground">{item.label}</p>
+                        <p className="tabular text-sm text-foreground">{item.value}</p>
+                      </div>
+                    ))}
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="p-3 bg-[#0b101b] border border-slate-800 rounded-lg">
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Used Storage</div>
-                      <div className="text-sm font-black text-white mt-0.5">
-                        {(storageStats.bytes / 1024).toFixed(1)} KB
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#0b101b] border border-slate-800 rounded-lg">
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Stored Keys</div>
-                      <div className="text-sm font-black text-indigo-300 mt-0.5">
-                        {storageStats.keys}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#0b101b] border border-slate-800 rounded-lg">
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Custom Bibles</div>
-                      <div className="text-sm font-black text-amber-300 mt-0.5">
-                        {customBibles.length}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </FieldGroup>
 
-                <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Database className="w-4 h-4 text-indigo-400" /> Full System Backup &amp; Restore
-                  </div>
-                  <p className="text-slate-400 text-[11px]">
-                    Export all songs, playlists, themes, announcements, custom Bibles, and settings to a portable <code>.json</code> file, or restore from a previous backup.
-                  </p>
+                <Separator />
+
+                <FieldGroup
+                  title="Backup"
+                  description="Songs, playlists, themes, announcements, Bibles and settings in one file."
+                >
                   {backupNotice && (
-                    <div className="p-2 rounded-lg bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 font-semibold text-[11px]">
+                    <p className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-2xs leading-relaxed text-foreground">
                       {backupNotice}
-                    </div>
+                    </p>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleExportFullBackup}
-                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg flex items-center gap-1.5 shadow transition"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Export System Backup (.json)
-                    </button>
-
+                    <Button type="button" variant="secondary" size="sm" onClick={handleExportFullBackup}>
+                      Export backup
+                    </Button>
                     <input
                       ref={backupFileInputRef}
                       type="file"
@@ -1052,41 +985,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onChange={handleImportFullBackup}
                       className="hidden"
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => backupFileInputRef.current?.click()}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold rounded-lg flex items-center gap-1.5 transition"
                     >
-                      <Upload className="w-3.5 h-3.5 text-emerald-400" /> Restore Backup (.json)
-                    </button>
+                      Restore backup
+                    </Button>
                   </div>
-                </div>
+                </FieldGroup>
 
-                <div className="bg-[#121929] border border-rose-500/30 p-4 rounded-xl space-y-2.5">
-                  <div className="font-bold text-rose-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-rose-400" /> Danger Zone
+                <Separator />
+
+                <FieldGroup
+                  title="Reset"
+                  description="Clears local playlists, settings and sample data."
+                >
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Reset application data to original factory defaults?')) {
+                          onResetDefaults();
+                          onClose();
+                        }
+                      }}
+                    >
+                      Reset to factory defaults
+                    </Button>
                   </div>
-                  <p className="text-slate-400 text-[11px]">
-                    Reset all local playlists, custom settings, and sample data back to factory defaults.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm('Reset application data to original factory defaults?')) {
-                        onResetDefaults();
-                        onClose();
-                      }
-                    }}
-                    className="px-4 py-2 bg-rose-600/25 hover:bg-rose-600 border border-rose-500/50 text-rose-200 hover:text-white font-bold rounded-lg transition"
-                  >
-                    Reset to Factory Defaults
-                  </button>
-                </div>
+                </FieldGroup>
               </div>
             )}
           </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter>
+          <Button type="button" variant="default" onClick={onClose}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

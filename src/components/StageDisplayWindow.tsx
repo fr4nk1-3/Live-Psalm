@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Slide, StageDisplayState, AudienceViewMode } from '../types/presentation';
 import { BroadcastService, BroadcastPayload } from '../services/broadcast';
 import { StorageService } from '../services/storage';
-import { Clock as ClockIcon, FileText, ArrowRight, Zap, Timer, BookOpen, Film, Image as ImageIcon } from 'lucide-react';
 import { getFlexibleFontSize, getOutputFontSize } from '../utils/fontSize';
 import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
 
@@ -51,14 +50,14 @@ export const StageDisplayWindow: React.FC = () => {
     farContainerRef,
     farTextRef,
     [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
-    { minPx: 18, maxPx: 140, startVw: 6.5 }
+    { minPx: 22, maxPx: 190, startVw: 9 }
   );
 
   const nearFittedPx = useAutoFitFontSize(
     nearContainerRef,
     nearTextRef,
     [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
-    { minPx: 16, maxPx: 96, startVw: 4.5 }
+    { minPx: 20, maxPx: 150, startVw: 7 }
   );
 
   useEffect(() => {
@@ -183,240 +182,52 @@ export const StageDisplayWindow: React.FC = () => {
   // Show the timer widget if targeted to stage/both AND (running OR paused with time remaining)
   const showTimer   = (countdownTargetScreen === 'both' || countdownTargetScreen === 'stage') && (isRunning || secs !== 0);
 
-  if (stageViewMode === 'far') {
-    const currentSlide = stageState.currentSlide;
-    const isMediaOnly = !!(currentSlide && currentSlide.backgroundUrl && !currentSlide.content?.trim());
-    const isVideo = isVideoMediaSlide(currentSlide);
-    const meta = currentSlide?.bibleMeta;
-    const bookVerseText = meta
-      ? `${meta.book} ${meta.chapter}:${meta.verse}`
-      : (currentSlide?.title || stageState.currentItemTitle || '');
-    const primaryTrans = formatTranslationBadge(meta?.translationId);
-    const parallelTrans = formatTranslationBadge(meta?.parallelTranslationId);
-    const translationBadge = primaryTrans
-      ? (parallelTrans ? `${primaryTrans} + ${parallelTrans}` : primaryTrans)
-      : (currentSlide?.subtitle || '');
+  const currentSlide = stageState.currentSlide;
+  const nextSlide = stageState.nextSlide;
+  const isFar = stageViewMode === 'far';
+  const isMediaOnly = !!(currentSlide && currentSlide.backgroundUrl && !currentSlide.content?.trim());
+  const isVideo = isVideoMediaSlide(currentSlide);
 
-    const farSlideStyle = getOutputFontSize(
-      currentSlide?.content || '',
-      4.8,
-      typeof window !== 'undefined' ? window.screen.width : 1920,
-      'far'
-    );
+  const meta = currentSlide?.bibleMeta;
+  const reference = meta
+    ? `${meta.book} ${meta.chapter}:${meta.verse}`
+    : currentSlide?.title || stageState.currentItemTitle || '';
+  const nextReference = nextSlide?.bibleMeta
+    ? `${nextSlide.bibleMeta.book} ${nextSlide.bibleMeta.chapter}:${nextSlide.bibleMeta.verse}`
+    : nextSlide?.title || '';
 
-    return (
-      <div
-        onClick={() => {
-          if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen?.().catch(() => {});
-          }
-        }}
-        onDoubleClick={() => {
-          if (document.fullscreenElement) {
-            document.exitFullscreen?.().catch(() => {});
-          } else {
-            document.documentElement.requestFullscreen?.().catch(() => {});
-          }
-        }}
-        className="w-screen h-screen bg-gradient-to-b from-[#070b14] via-[#0a101d] to-[#05070e] text-slate-50 select-none px-[3.5vw] py-[2.8vh] flex flex-col justify-between overflow-hidden relative"
-      >
-        {/* Subtle ambient radial glow matching timer state */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-60"
-          style={{
-            background: isOvertime || isWarning
-              ? 'radial-gradient(circle at 82% 10%, rgba(244,63,94,0.14), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.06), transparent 60%)'
-              : isOnTime
-              ? 'radial-gradient(circle at 82% 10%, rgba(16,185,129,0.12), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.06), transparent 60%)'
-              : 'radial-gradient(circle at 82% 10%, rgba(245,158,11,0.10), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.07), transparent 60%)'
-          }}
-        />
+  const primaryTrans = formatTranslationBadge(meta?.translationId);
+  const parallelTrans = formatTranslationBadge(meta?.parallelTranslationId);
+  const translation = primaryTrans ? (parallelTrans ? `${primaryTrans} + ${parallelTrans}` : primaryTrans) : '';
 
-        {/* TOP ELEGANT GLASS BAR: BOOK/VERSE + TRANSLATION ON LEFT, HERO COUNTER ON RIGHT */}
-        <div className="relative z-10 flex items-center justify-between gap-6 px-6 py-4 rounded-3xl bg-white/[0.04] backdrop-blur-md border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.45)] shrink-0">
-          <div className="flex flex-wrap items-center gap-3 min-w-0">
-            {bookVerseText && (
-              <div className="flex items-center gap-3 bg-amber-400/15 border border-amber-400/45 text-amber-200 px-5 py-2 rounded-2xl shadow-[0_4px_20px_rgba(245,158,11,0.15)]">
-                <BookOpen className="w-6 h-6 text-amber-300 shrink-0" />
-                <span className="text-2xl xl:text-3xl font-bold tracking-tight truncate max-w-[38vw]">
-                  {bookVerseText}
-                </span>
-              </div>
-            )}
-            {translationBadge && (
-              <span className="px-4 py-2 rounded-2xl bg-sky-400/15 border border-sky-400/40 text-sky-200 text-lg xl:text-xl font-bold uppercase tracking-widest">
-                {translationBadge}
-              </span>
-            )}
-            {!meta && currentSlide?.sectionLabel && (
-              <span className="px-4 py-2 rounded-2xl bg-emerald-400/15 border border-emerald-400/40 text-emerald-200 text-lg xl:text-xl font-bold uppercase tracking-widest">
-                {currentSlide.sectionLabel}
-              </span>
-            )}
-            {!bookVerseText && !translationBadge && (
-              <span className="text-lg font-bold uppercase tracking-[0.25em] text-slate-400">
-                Stage Display
-              </span>
-            )}
-          </div>
+  const subtitleText = currentSlide?.subtitle || '';
+  const subtitle =
+    subtitleText &&
+    !/^scripture/i.test(subtitleText) &&
+    subtitleText.toLowerCase() !== reference.toLowerCase() &&
+    (showVerseRefOnStage || (currentSlide?.sectionLabel !== 'Scripture' && !currentSlide?.bibleMeta))
+      ? subtitleText
+      : '';
 
-          {/* HERO COUNTER OR CLOCK */}
-          <div className="font-mono shrink-0">
-            {showTimer ? (
-              <div
-                className={`flex items-center gap-4 px-6 py-2.5 rounded-2xl border backdrop-blur-md transition-all ${
-                  isOvertime || isWarning
-                    ? 'bg-rose-500/15 border-rose-400/60 shadow-[0_0_28px_rgba(244,63,94,0.3)]'
-                    : isOnTime
-                    ? 'bg-emerald-500/15 border-emerald-400/50 shadow-[0_0_24px_rgba(16,185,129,0.22)]'
-                    : 'bg-white/[0.05] border-white/15'
-                }`}
-              >
-                <Timer
-                  className={`w-8 h-8 ${
-                    isOvertime || isWarning
-                      ? 'text-rose-300 animate-pulse'
-                      : isOnTime
-                      ? 'text-emerald-300'
-                      : 'text-slate-300'
-                  }`}
-                />
-                <div className="flex flex-col leading-none">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-[0.26em] mb-1 ${
-                      isOvertime || isWarning ? 'text-rose-300' : isOnTime ? 'text-emerald-300' : 'text-slate-400'
-                    }`}
-                  >
-                    {isOvertime ? 'Overtime' : isWarning ? 'Countdown' : isOnTime ? 'Remaining' : 'Paused'}
-                  </span>
-                  <span
-                    className={`text-5xl xl:text-7xl font-black tabular-nums tracking-tight ${
-                      isOvertime || isWarning
-                        ? 'text-rose-300 animate-pulse'
-                        : isOnTime
-                        ? 'text-emerald-300'
-                        : 'text-white'
-                    }`}
-                  >
-                    {formatCountdown(secs)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3.5 bg-amber-400/10 border border-amber-400/35 px-6 py-2.5 rounded-2xl">
-                <ClockIcon className="w-8 h-8 text-amber-300/90" />
-                <span className="text-4xl xl:text-6xl font-black tabular-nums text-amber-200 tracking-tight">
-                  {stageState.clockTime}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+  const timerLabel = isOvertime ? 'Overtime' : isWarning ? 'Time left' : isOnTime ? 'Time left' : 'Paused';
+  const urgent = isOvertime || isWarning;
 
-        {/* STAGE MESSAGE BANNER (IF ACTIVE) */}
-        {stageState.stageMessage && (
-          <div
-            className={`relative z-10 mt-[1.5vh] px-7 py-3 rounded-2xl border flex items-center gap-4 shrink-0 backdrop-blur-md ${
-              stageState.stageMessageFlash
-                ? 'bg-rose-600/90 border-rose-300 text-white animate-pulse shadow-[0_0_32px_rgba(244,63,94,0.5)]'
-                : 'bg-amber-500/15 border-amber-400/50 text-amber-100'
-            }`}
-          >
-            <span className="px-3 py-1 rounded-lg bg-black/35 text-xs font-bold uppercase tracking-widest border border-white/15">
-              Cue
-            </span>
-            <span className="text-2xl xl:text-3xl font-bold tracking-wide">
-              {stageState.stageMessage}
-            </span>
-          </div>
-        )}
+  const itemLabel =
+    stageState.currentItemTitle &&
+    !/^scripture/i.test(stageState.currentItemTitle) &&
+    stageState.currentItemTitle !== reference
+      ? stageState.currentItemTitle
+      : '';
 
-        {/* HERO LIVE SLIDE CARD — ELEGANT FRAMING, FULL FOCUS ON SLIDE */}
-        <div
-          ref={farContainerRef}
-          className="relative z-10 flex-1 min-h-0 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]"
-        >
-          {isMediaOnly && currentSlide?.backgroundUrl ? (
-            <div className="w-full h-full flex items-center justify-center">
-              {isVideo ? (
-                <video
-                  ref={stageVideoRef}
-                  key={currentSlide.backgroundUrl}
-                  src={currentSlide.backgroundUrl}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-full object-contain rounded-2xl"
-                />
-              ) : (
-                <img
-                  key={currentSlide.backgroundUrl}
-                  src={currentSlide.backgroundUrl}
-                  alt={currentSlide.title || 'Stage Media'}
-                  className="w-full h-full object-contain rounded-2xl"
-                />
-              )}
-            </div>
-          ) : currentSlide ? (
-            <div className="w-full h-full flex flex-col items-center justify-center text-center" style={{ maxWidth: farSlideStyle.maxWidth }}>
-              <div
-                ref={farTextRef}
-                className="font-extrabold text-slate-50 whitespace-pre-line w-full"
-                style={{
-                  fontSize: farFittedPx ? `${farFittedPx}px` : farSlideStyle.fontSize,
-                  lineHeight: farSlideStyle.lineHeight,
-                  letterSpacing: '0.015em',
-                  textShadow: '0 6px 28px rgba(0,0,0,0.95)'
-                }}
-              >
-                {currentSlide.content}
-              </div>
-            </div>
-          ) : (
-            <span className="text-slate-500 text-3xl font-bold uppercase tracking-[0.3em]">
-              Output Clear
-            </span>
-          )}
-        </div>
-
-        {/* SUBTLE BOTTOM REFERENCE STRIP: BOOK, VERSE & TRANSLATION */}
-        {(bookVerseText || translationBadge || currentSlide?.subtitle) && (
-          <div className="relative z-10 flex items-center justify-center gap-3 shrink-0">
-            <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-white/[0.04] border border-white/10">
-              {bookVerseText && (
-                <span className="text-lg xl:text-xl font-bold text-amber-200 tracking-wide">
-                  {bookVerseText}
-                </span>
-              )}
-              {bookVerseText && translationBadge && (
-                <span className="text-slate-500">•</span>
-              )}
-              {translationBadge && (
-                <span className="text-base xl:text-lg font-bold text-sky-300 uppercase tracking-widest">
-                  {translationBadge}
-                </span>
-              )}
-              {currentSlide?.subtitle && currentSlide.subtitle !== translationBadge && (
-                <>
-                  <span className="text-slate-500">•</span>
-                  <span className="text-base xl:text-lg font-medium text-slate-300 tracking-wide">
-                    {currentSlide.subtitle}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+  const fitted = isFar ? farFittedPx : nearFittedPx;
+  const textStyle = isFar
+    ? getOutputFontSize(currentSlide?.content || '', 4.8, typeof window !== 'undefined' ? window.screen.width : 1920, 'far')
+    : { ...getFlexibleFontSize(currentSlide?.content || '', 48), maxWidth: '100%' };
 
   return (
     <div
       onClick={() => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen?.().catch(() => {});
-        }
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
       }}
       onDoubleClick={() => {
         if (document.fullscreenElement) {
@@ -425,243 +236,136 @@ export const StageDisplayWindow: React.FC = () => {
           document.documentElement.requestFullscreen?.().catch(() => {});
         }
       }}
-      className="w-screen h-screen bg-[#070b12] text-white select-none p-6 flex flex-col justify-between overflow-hidden"
+      className="flex h-screen w-screen select-none flex-col overflow-hidden bg-[#08080a] font-sans text-white"
     >
-      {/* TOP HEADER: CLOCK OR COUNTDOWN & SERVICE STATUS */}
-      <div className="h-24 bg-[#0f1624] border border-[#26334a] rounded-2xl px-6 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-4">
-          <span className="text-xs font-black uppercase text-[#6366f1] bg-indigo-950/80 px-3.5 py-1.5 rounded-full border border-indigo-500/40 tracking-wider">
-            STAGE CONFIDENCE MONITOR
-          </span>
-          {stageState.currentItemTitle && (
-            <span className="text-base font-extrabold text-slate-200 truncate max-w-sm">
-              {stageState.currentItemTitle}
-            </span>
-          )}
-        </div>
-
-        {/* TIME vs TIMER DISPLAY: MUTUALLY EXCLUSIVE HIGH VISIBILITY */}
-        <div className="font-mono flex items-center">
-          {showTimer ? (
-            /* COUNTDOWN TIMER — colour shifts green → red → blinking red (overtime) */
-            <div className={`flex items-center gap-3 px-6 py-2 rounded-2xl border-2 transition-all ${
-              isOvertime
-                ? 'bg-rose-950/90 border-rose-500/90 shadow-[0_0_24px_rgba(239,68,68,0.6)]'
-                : isWarning
-                ? 'bg-rose-950/90 border-rose-500/90 shadow-[0_0_20px_rgba(239,68,68,0.5)]'
-                : isOnTime
-                ? 'bg-emerald-950/80 border-emerald-500/70 shadow-[0_0_20px_rgba(52,211,153,0.35)]'
-                : 'bg-slate-900/80 border-slate-600/60'  // paused
-            }`}>
-              <Timer className={`w-8 h-8 ${
-                isOvertime || isWarning ? 'text-rose-400 animate-pulse'
-                : isOnTime ? 'text-emerald-400'
-                : 'text-slate-400'
-              }`} />
-              <span className={`text-xs font-black uppercase tracking-widest mr-2 ${
-                isOvertime || isWarning ? 'text-rose-300' : isOnTime ? 'text-emerald-300' : 'text-slate-400'
-              }`}>
-                {isOvertime ? 'OVERTIME:' : isWarning ? 'COUNTDOWN:' : isOnTime ? 'TIMER:' : 'PAUSED:'}
-              </span>
-              <span className={`text-5xl font-black tracking-wider ${
-                isOvertime
-                  ? 'text-rose-400 animate-pulse'
-                  : isWarning
-                  ? 'text-rose-400 animate-pulse'
-                  : isOnTime
-                  ? 'text-emerald-400'
-                  : 'text-slate-300'
-              }`}>
-                {formatCountdown(secs)}
-              </span>
-            </div>
+      {/* Header: what is on, where we are, and the time */}
+      <header className="stage-header flex shrink-0 items-center justify-between gap-[2vw] border-b border-white/10 px-[2vw]">
+        <div className="flex min-w-0 items-baseline gap-[1.2vw]">
+          <span className="stage-label shrink-0 text-white/35">Stage</span>
+          {reference ? (
+            <span className="stage-reference truncate font-semibold text-white/90">{reference}</span>
           ) : (
-            /* CLOCK — shown only when timer is fully off */
-            <div className="flex items-center gap-3 bg-amber-950/40 border border-amber-500/40 px-5 py-2 rounded-2xl">
-              <ClockIcon className="w-6 h-6 text-amber-400" />
-              <span className="text-4xl font-black text-amber-400 tracking-wider">
-                {stageState.clockTime}
-              </span>
-            </div>
+            <span className="stage-reference truncate text-white/50">Nothing live</span>
+          )}
+          {translation && <span className="stage-meta shrink-0 text-white/40">{translation}</span>}
+          {subtitle && subtitle !== translation && subtitle.length <= 40 && (
+            <span className="stage-meta hidden shrink-0 truncate text-white/40 lg:inline">{subtitle}</span>
+          )}
+          {itemLabel && !isFar && (
+            <span className="stage-meta hidden shrink-0 truncate text-white/35 xl:inline">{itemLabel}</span>
           )}
         </div>
-      </div>
 
-      {/* PROPRESENTER STAGE MESSAGE ALERT BANNER */}
+        <div className="flex shrink-0 items-baseline gap-[0.8vw]">
+          <span className="stage-label text-white/35">{showTimer ? timerLabel : 'Time'}</span>
+          <span
+            className={`stage-clock font-mono tabular leading-none tracking-tight ${
+              showTimer && urgent ? 'text-live' : 'text-white/90'
+            }`}
+          >
+            {showTimer ? formatCountdown(secs) : stageState.clockTime}
+          </span>
+        </div>
+      </header>
+
+      {/* Cue message from the operator */}
       {stageState.stageMessage && (
         <div
-          className={`mt-4 px-8 py-4 rounded-2xl border-2 flex items-center justify-between shadow-2xl transition-all ${
+          className={`stage-cue flex shrink-0 items-center gap-[1.2vw] border-b ${
             stageState.stageMessageFlash
-              ? 'bg-rose-600/95 border-white text-white animate-pulse shadow-[0_0_40px_rgba(244,63,94,0.85)]'
-              : 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-[0_0_25px_rgba(245,158,11,0.4)]'
+              ? 'border-live bg-live text-live-foreground'
+              : 'border-live/30 bg-live/10 text-white'
           }`}
         >
-          <div className="flex items-center gap-4">
-            <span className="px-3 py-1 rounded-lg bg-black/40 text-xs font-black uppercase tracking-widest border border-white/20">
-              STAGE MESSAGE
-            </span>
-            <span className="text-3xl font-black tracking-wide">
-              {stageState.stageMessage}
-            </span>
-          </div>
+          <span
+            className={`stage-cue-label shrink-0 ${
+              stageState.stageMessageFlash ? 'text-live-foreground/70' : 'text-live'
+            }`}
+          >
+            Cue
+          </span>
+          <span className="stage-cue-text min-w-0 font-medium">{stageState.stageMessage}</span>
         </div>
       )}
 
-      {/* CENTER: CURRENT LIVE SLIDE DISPLAY */}
-      {(() => {
-        const currentSlide = stageState.currentSlide;
-        const isMediaOnly = !!(currentSlide && currentSlide.backgroundUrl && !currentSlide.content?.trim());
-        const isVideo = isVideoMediaSlide(currentSlide);
-
-        return (
-          <div
-            className={`flex-1 min-h-0 my-4 bg-[#0d1320] border-2 border-emerald-500/80 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col justify-between ${
-              isMediaOnly ? 'p-0 bg-black' : 'p-8'
-            }`}
-          >
-            {/* Header Bar: Floating overlay when displaying full-bleed Video/Picture, standard header for text slides */}
+      {/* Current slide */}
+      <main className="flex min-h-0 flex-1 flex-col">
+        <div
+          ref={isFar ? farContainerRef : nearContainerRef}
+          className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-[3vw] py-[2vh]"
+        >
+          {isMediaOnly && currentSlide?.backgroundUrl ? (
+            <div className="flex h-full w-full items-center justify-center bg-black">
+              {isVideo ? (
+                <video
+                  ref={stageVideoRef}
+                  key={currentSlide.backgroundUrl}
+                  src={currentSlide.backgroundUrl}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <img
+                  key={currentSlide.backgroundUrl}
+                  src={currentSlide.backgroundUrl}
+                  alt={currentSlide.title || 'Stage media'}
+                  className="h-full w-full object-contain"
+                />
+              )}
+            </div>
+          ) : currentSlide ? (
             <div
-              className={
-                isMediaOnly
-                  ? 'absolute top-3 left-4 right-4 z-20 flex items-center justify-between pointer-events-none'
-                  : 'flex items-center justify-between border-b border-slate-800 pb-3'
-              }
+              ref={isFar ? farTextRef : nearTextRef}
+              className={`w-full whitespace-pre-line text-center font-semibold text-white ${
+                isFar ? 'tracking-tight' : 'leading-tight'
+              }`}
+              style={{
+                fontSize: fitted ? `${fitted}px` : textStyle.fontSize,
+                lineHeight: isFar ? textStyle.lineHeight : '1.25',
+                letterSpacing: isFar ? '0.01em' : 'normal',
+                maxWidth: isFar ? textStyle.maxWidth : '100%'
+              }}
             >
-              <span
-                className={`font-black text-xs uppercase tracking-widest text-emerald-400 flex items-center gap-2 ${
-                  isMediaOnly ? 'bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/40 shadow-lg' : ''
-                }`}
-              >
-                {isMediaOnly ? (
-                  isVideo ? (
-                    <>
-                      <Film className="w-4 h-4 text-emerald-400" /> PLAYING VIDEO LIVE
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="w-4 h-4 text-emerald-400" /> DISPLAYING PICTURE LIVE
-                    </>
-                  )
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 fill-current" /> CURRENT SLIDE LIVE
-                  </>
-                )}
-              </span>
-
-              <div className="flex items-center gap-2">
-                {/* Verse reference or Media title badge */}
-                {currentSlide?.title && (showVerseRefOnStage || (currentSlide.sectionLabel !== 'Scripture' && !currentSlide.bibleMeta)) && (
-                  <span className="text-xs font-black text-amber-300 bg-amber-950/90 border border-amber-500/60 px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow">
-                    <BookOpen className="w-4 h-4 text-amber-400" />
-                    {currentSlide.title}
-                  </span>
-                )}
-                {currentSlide?.sectionLabel && (
-                  <span className="text-xs font-black uppercase px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full">
-                    {currentSlide.sectionLabel}
-                  </span>
-                )}
-              </div>
+              {currentSlide.content}
             </div>
-
-            {isMediaOnly && currentSlide?.backgroundUrl ? (
-              /* FULL-SECTION VIDEO OR PICTURE DISPLAY */
-              <div className="w-full h-full flex-1 relative flex items-center justify-center bg-black overflow-hidden">
-                {isVideo ? (
-                  <video
-                    ref={stageVideoRef}
-                    key={currentSlide.backgroundUrl}
-                    src={currentSlide.backgroundUrl}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-contain bg-black"
-                  />
-                ) : (
-                  <img
-                    key={currentSlide.backgroundUrl}
-                    src={currentSlide.backgroundUrl}
-                    alt={currentSlide.title || 'Stage Media'}
-                    className="w-full h-full object-contain bg-black"
-                  />
-                )}
-              </div>
-            ) : (
-              <div className="flex-1 min-h-0 text-center px-4 overflow-hidden flex flex-col gap-3 items-center justify-center">
-                {currentSlide ? (
-                  <>
-                    <div
-                      ref={nearContainerRef}
-                      className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden"
-                    >
-                      <div
-                        ref={nearTextRef}
-                        className="font-extrabold text-white leading-tight whitespace-pre-line tracking-wide drop-shadow w-full"
-                        style={{
-                          ...getFlexibleFontSize(currentSlide.content, 48),
-                          ...(nearFittedPx ? { fontSize: `${nearFittedPx}px` } : {})
-                        }}
-                      >
-                        {currentSlide.content}
-                      </div>
-                    </div>
-                    {/* Bible translation & verse badge — controlled by Stage Monitor setting */}
-                    {currentSlide.subtitle && (showVerseRefOnStage || (currentSlide.sectionLabel !== 'Scripture' && !currentSlide.bibleMeta)) && (
-                      <div className="flex justify-center shrink-0">
-                        <span className="text-xs font-bold text-indigo-300 bg-indigo-950/80 border border-indigo-500/40 px-4 py-1.5 rounded-full tracking-wider uppercase">
-                          📖 {currentSlide.subtitle}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-slate-600 text-2xl font-bold uppercase tracking-widest">
-                    [ OUTPUT CLEAR ]
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* BOTTOM GRID: NEXT SLIDE PREVIEW & SPEAKER NOTES */}
-      <div className="grid grid-cols-2 gap-4 h-40">
-        {/* NEXT SLIDE PREVIEW CARD */}
-        <div className="bg-[#0f1624] border border-blue-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-1 shrink-0">
-            <div className="flex items-center gap-2 text-xs font-black uppercase text-blue-400">
-              <ArrowRight className="w-4 h-4" /> UPCOMING NEXT SLIDE
-            </div>
-            {stageState.nextSlide?.title && (
-              <span className="text-[11px] font-bold text-blue-300 bg-blue-950/80 px-2.5 py-0.5 rounded border border-blue-500/50 flex items-center gap-1">
-                <BookOpen className="w-3 h-3 text-blue-400" />
-                {stageState.nextSlide.title}
-              </span>
-            )}
-          </div>
-          <div className="text-slate-300 font-bold text-center my-auto overflow-y-auto max-h-[90px]">
-            {stageState.nextSlide?.content ? (
-              <div style={getFlexibleFontSize(stageState.nextSlide.content, 16)}>
-                {stageState.nextSlide.content}
-              </div>
-            ) : (
-              <span className="text-slate-600 text-xs font-semibold">End of item</span>
-            )}
-          </div>
+          ) : (
+            <span className="stage-panel-text text-white/30">The screen is clear</span>
+          )}
         </div>
 
-        {/* SPEAKER / PASTOR NOTES CARD */}
-        <div className="bg-[#0f1624] border border-amber-500/50 rounded-xl p-4 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center gap-2 text-xs font-black uppercase text-amber-400 border-b border-slate-800 pb-1">
-            <FileText className="w-4 h-4" /> SPEAKER & STAGE NOTES
+        {/* Next slide and notes, for close viewing */}
+        {!isFar && (
+          <div className="stage-panel grid shrink-0 grid-cols-2 border-t border-white/10">
+            <section className="flex min-h-0 flex-col gap-[1vh] border-r border-white/10 px-[2vw] py-[1.6vh]">
+              <div className="flex items-baseline justify-between gap-[1vw]">
+                <span className="stage-panel-title text-white/35">Next</span>
+                {nextReference && <span className="stage-panel-meta truncate text-white/45">{nextReference}</span>}
+              </div>
+              <div className="stage-panel-text min-h-0 flex-1 overflow-hidden text-white/70">
+                {nextSlide?.content ? (
+                  <p className="whitespace-pre-line">{nextSlide.content}</p>
+                ) : (
+                  <span className="text-white/30">End of this item</span>
+                )}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col gap-[1vh] px-[2vw] py-[1.6vh]">
+              <div className="flex items-baseline justify-between gap-[1vw]">
+                <span className="stage-panel-title text-white/35">Notes</span>
+                {stageState.speakerNotes ? (
+                  <span className="stage-panel-meta text-white/25">Operator and stage only</span>
+                ) : null}
+              </div>
+              <div className="stage-panel-text min-h-0 flex-1 overflow-y-auto whitespace-pre-line text-white/75">
+                {stageState.speakerNotes || <span className="text-white/30">No notes for this item</span>}
+              </div>
+            </section>
           </div>
-          <div className="text-amber-200/90 text-sm font-medium line-clamp-3 my-auto">
-            {stageState.speakerNotes || <span className="text-slate-600 text-xs italic">No notes attached</span>}
-          </div>
-        </div>
-      </div>
+        )}
+      </main>
     </div>
   );
 };

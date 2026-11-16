@@ -254,9 +254,9 @@ export const ObsOutputWindow: React.FC = () => {
             lowerThirdAnnouncement ? 'pb-24' : 'pb-12'
           } flex flex-col items-center justify-end animate-slide-fade`}
         >
-          <div className="w-full max-w-5xl bg-[#090d18]/90 border-l-8 border-indigo-500 px-8 py-6 rounded-2xl shadow-2xl text-center border border-slate-700/80">
+          <div className="w-full max-w-5xl bg-[#090d18]/90 border-l-2 border-white/25 px-8 py-6 rounded-2xl shadow-2xl text-center border border-slate-700/80">
             {(liveSlide.title || liveSlide.sectionLabel) && (
-              <span className="text-sm font-black uppercase text-indigo-400 tracking-widest block mb-1.5">
+              <span className="text-sm font-black uppercase text-white/60 tracking-widest block mb-1.5">
                 {liveSlide.title || liveSlide.sectionLabel}
               </span>
             )}
@@ -270,7 +270,7 @@ export const ObsOutputWindow: React.FC = () => {
               {liveSlide.content}
             </div>
             {liveSlide.subtitle && (
-              <div className="text-sm text-indigo-300 font-bold mt-2 tracking-wide">
+              <div className="text-sm text-white/60 font-bold mt-2 tracking-wide">
                 {liveSlide.subtitle}
               </div>
             )}
@@ -280,9 +280,9 @@ export const ObsOutputWindow: React.FC = () => {
 
       {/* OBS CRAWL LINE TICKER OVERLAY */}
       {lowerThirdAnnouncement && (
-        <div className="absolute bottom-4 left-0 right-0 z-30 bg-[#070b15]/95 border-y-2 border-purple-500/80 shadow-2xl flex items-center overflow-hidden h-14 animate-slide-fade">
-          <div className="h-full px-5 bg-gradient-to-r from-purple-700 to-indigo-700 flex items-center gap-2 text-white font-black text-xs uppercase tracking-wider shrink-0 z-10">
-            <Megaphone className="w-4 h-4 text-amber-300 animate-pulse" />
+        <div className="absolute bottom-4 left-0 right-0 z-30 bg-[#070b15]/95 border-y border-white/15 flex items-center overflow-hidden h-14 animate-slide-fade">
+          <div className="h-full px-5 bg-black/70 flex items-center gap-2 text-white font-black text-xs uppercase tracking-wider shrink-0 z-10">
+            <Megaphone className="w-4 h-4 text-amber-300 " />
             <span>ANNOUNCEMENT</span>
           </div>
 
@@ -300,7 +300,7 @@ export const ObsOutputWindow: React.FC = () => {
             >
               <span>{lowerThirdAnnouncement.content}</span>
               {lowerThirdAnnouncement.subtitle && (
-                <span className="text-purple-300 text-base font-bold">
+                <span className="text-white/70 text-base font-bold">
                   — {lowerThirdAnnouncement.subtitle}
                 </span>
               )}

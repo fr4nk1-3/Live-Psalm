@@ -1,7 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, Check, Book, Star, Clock } from 'lucide-react';
+import { Search, X, Check, MoreHorizontal } from 'lucide-react';
 import { StorageService, CustomBibleTranslation } from '../services/storage';
 import { OnlineBibleVersion } from '../services/onlineBibleApi';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { EmptyState } from './ui/primitives';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from './ui/dialog';
 
 interface BibleVersionModalProps {
   isOpen: boolean;
@@ -60,6 +85,14 @@ const loadStringArray = (key: string, fallback: string[] = []): string[] => {
   }
 };
 
+interface BibleVersionEntry {
+  id: string;
+  name: string;
+  abbreviation: string;
+  category: LanguageGroup;
+  sourceType: string;
+}
+
 export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
   isOpen,
   onClose,
@@ -76,11 +109,13 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
     loadStringArray(FAVORITE_KEY, ['bible-eng-nkjv', 'bible-eng-kjv', 'bible-swahili-suv'])
   );
+  const [pendingId, setPendingId] = useState<string>(selectedTranslation);
 
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
       setCategoryFilter('ALL');
+      setPendingId(selectedTranslation);
     }
   }, [isOpen]);
 
@@ -97,14 +132,7 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
   const preloadedManifest = StorageService.getPreloadedManifestList();
 
   const allVersions = useMemo(() => {
-    const items: {
-      id: string;
-      name: string;
-      abbreviation: string;
-      category: LanguageGroup;
-      flag: string;
-      sourceType: string;
-    }[] = [];
+    const items: BibleVersionEntry[] = [];
 
     for (const m of preloadedManifest) {
       const cat = getBibleLanguageGroup(m.name, m.abbreviation, m.id);
@@ -113,7 +141,6 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
         name: m.name,
         abbreviation: m.abbreviation,
         category: cat,
-        flag: cat === 'English' ? '🇬🇧' : '🇰🇪',
         sourceType: 'Offline'
       });
     }
@@ -126,7 +153,6 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
           name: cb.name,
           abbreviation: cb.abbreviation,
           category: cat,
-          flag: cat === 'English' ? '🇬🇧' : '🇰🇪',
           sourceType: 'Custom'
         });
       }
@@ -139,7 +165,6 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
           name: `${ov.version}`,
           abbreviation: (ov as any).abbreviation || 'API',
           category: 'API Online',
-          flag: '🌐',
           sourceType: 'API Online'
         });
       }
@@ -150,8 +175,7 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const toggleFavorite = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleFavorite = (id: string) => {
     setFavoriteIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [id, ...prev];
       try {
@@ -188,70 +212,92 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
     ? allVersions.filter(v => favoriteIds.includes(v.id) || recentIds.includes(v.id))
     : [];
 
-  const languageSections: { title: string; lang: LanguageGroup; items: typeof allVersions }[] = [
-    { title: '🇬🇧 English', lang: 'English', items: filtered.filter(v => v.category === 'English') },
-    { title: '🇰🇪 Swahili', lang: 'Swahili', items: filtered.filter(v => v.category === 'Swahili') },
-    { title: '🇰🇪 Luo', lang: 'Luo', items: filtered.filter(v => v.category === 'Luo') },
-    { title: '🇰🇪 Kikuyu', lang: 'Kikuyu', items: filtered.filter(v => v.category === 'Kikuyu') },
-    { title: '🇰🇪 Kalenjin', lang: 'Kalenjin', items: filtered.filter(v => v.category === 'Kalenjin') },
-    { title: '🇰🇪 Kamba', lang: 'Kamba', items: filtered.filter(v => v.category === 'Kamba') },
-    { title: '🇰🇪 Maasai', lang: 'Maasai', items: filtered.filter(v => v.category === 'Maasai') },
-    { title: '🌐 API Online', lang: 'API Online', items: filtered.filter(v => v.category === 'API Online') }
+  const languageSections: { title: string; lang: LanguageGroup; items: BibleVersionEntry[] }[] = [
+    { title: 'English', lang: 'English', items: filtered.filter(v => v.category === 'English') },
+    { title: 'Swahili', lang: 'Swahili', items: filtered.filter(v => v.category === 'Swahili') },
+    { title: 'Luo', lang: 'Luo', items: filtered.filter(v => v.category === 'Luo') },
+    { title: 'Kikuyu', lang: 'Kikuyu', items: filtered.filter(v => v.category === 'Kikuyu') },
+    { title: 'Kalenjin', lang: 'Kalenjin', items: filtered.filter(v => v.category === 'Kalenjin') },
+    { title: 'Kamba', lang: 'Kamba', items: filtered.filter(v => v.category === 'Kamba') },
+    { title: 'Maasai', lang: 'Maasai', items: filtered.filter(v => v.category === 'Maasai') },
+    { title: 'API online', lang: 'API Online', items: filtered.filter(v => v.category === 'API Online') }
   ];
 
+  const languages: LanguageGroup[] = ['English', 'Swahili', 'Luo', 'Kikuyu', 'Kalenjin', 'Kamba', 'Maasai'];
   const isParallel = mode === 'parallel';
 
-  return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none animate-fadeIn"
-    >
+  const renderVersionRow = (v: BibleVersionEntry, keyPrefix?: string) => {
+    const isSelected = pendingId === v.id;
+    const isFav = favoriteIds.includes(v.id);
+    return (
       <div
-        className={`bg-[#0f1624] border rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[86vh] animate-scaleUp ${
-          isParallel ? 'border-purple-500/50' : 'border-amber-500/50'
-        }`}
-        onClick={(e) => e.stopPropagation()}
+        key={keyPrefix ? `${keyPrefix}-${v.id}` : v.id}
+        className={cn(
+          'group flex items-center border-t border-border/70 pr-1 transition-colors first:border-t-0',
+          isSelected ? 'bg-accent' : 'hover:bg-accent/60'
+        )}
       >
-        {/* Modal Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
-                isParallel
-                  ? 'bg-purple-500/15 border-purple-500/40 text-purple-300'
-                  : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-              }`}
+        <button
+          type="button"
+          onClick={() => setPendingId(v.id)}
+          aria-pressed={isSelected}
+          className="flex min-w-0 flex-1 items-center gap-3 py-1.5 pl-3 pr-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <span className="w-14 shrink-0 truncate font-mono text-2xs text-muted-foreground">
+            {v.abbreviation}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{v.name}</span>
+          <span className="shrink-0 text-2xs text-muted-foreground">{v.sourceType}</span>
+          {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />}
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Options for ${v.name}`}
+              className={cn(
+                'shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+                isFav && 'opacity-100'
+              )}
             >
-              <Book className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                <span>{isParallel ? 'Select Parallel Translation' : 'Select Primary Bible Version'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold">
-                  {allVersions.length}
-                </span>
-              </h2>
-              <p className="text-[11px] text-slate-400 truncate">
-                Search by name, abbreviation, or language — star favorites for 1-click access.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuCheckboxItem checked={isFav} onCheckedChange={() => toggleFavorite(v.id)}>
+              Favorite
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
 
-        {/* Search & Wrapped Language Pills */}
-        <div className="p-4 bg-[#0b101b] border-b border-[#26334a] space-y-2.5 shrink-0">
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>{isParallel ? 'Select parallel version' : 'Select Bible version'}</DialogTitle>
+          <DialogDescription>
+            {isParallel
+              ? 'Choose the version shown alongside the primary reading.'
+              : 'Sets the version used for readings and search.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="shrink-0 space-y-2 border-b border-border px-4 py-3">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
               type="text"
-              placeholder="Search Bible (e.g. NKJV, KJV, SUV, Kikuyu, Luo, Maasai) — press Enter to select..."
+              placeholder="Search by name, abbreviation or language"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -260,189 +306,106 @@ export const BibleVersionModal: React.FC<BibleVersionModalProps> = ({
                   handlePickVersion(filtered[0].id);
                 }
               }}
-              className={`w-full bg-[#121929] border border-slate-700 rounded-xl pl-9 pr-9 py-2 text-xs text-white placeholder-slate-500 outline-none ${
-                isParallel ? 'focus:border-purple-500' : 'focus:border-amber-500'
-              }`}
+              aria-label="Search Bible versions"
+              className="pl-8 pr-8"
               autoFocus
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                <X className="w-4 h-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter('ALL')}
-              className={`px-2.5 py-1 rounded-lg border transition ${
-                categoryFilter === 'ALL'
-                  ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                  : 'bg-[#121929] border-slate-800 text-slate-400 hover:text-white'
-              }`}
+          <div className="flex items-center gap-2">
+            <span className="text-2xs text-muted-foreground">Language</span>
+            <Select
+              value={categoryFilter}
+              onValueChange={(value) => setCategoryFilter(value as 'ALL' | LanguageGroup)}
             >
-              All ({allVersions.length})
-            </button>
-            {(['English', 'Swahili', 'Luo', 'Kikuyu', 'Kalenjin', 'Kamba', 'Maasai'] as LanguageGroup[]).map(lang => {
-              const count = allVersions.filter(v => v.category === lang).length;
-              if (count === 0) return null;
-              return (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => setCategoryFilter(lang)}
-                  className={`px-2.5 py-1 rounded-lg border transition flex items-center gap-1 ${
-                    categoryFilter === lang
-                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
-                      : 'bg-[#121929] border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>{lang === 'English' ? '🇬🇧' : '🇰🇪'} {lang}</span>
-                  <span className="text-[10px] opacity-70">({count})</span>
-                </button>
-              );
-            })}
-            {apiBibleEnabled && (
-              <button
-                type="button"
-                onClick={() => setCategoryFilter('API Online')}
-                className={`px-2.5 py-1 rounded-lg border transition flex items-center gap-1 ${
-                  categoryFilter === 'API Online'
-                    ? 'bg-sky-500/20 border-sky-400 text-sky-200'
-                    : 'bg-[#121929] border-slate-800 text-sky-400 hover:text-white'
-                }`}
-              >
-                <span>🌐 API</span>
-                <span className="text-[10px] opacity-70">
-                  ({allVersions.filter(v => v.category === 'API Online').length})
-                </span>
-              </button>
-            )}
+              <SelectTrigger className="h-7 w-[200px] text-xs" aria-label="Language filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All languages ({allVersions.length})</SelectItem>
+                {languages.map(lang => {
+                  const count = allVersions.filter(v => v.category === lang).length;
+                  if (count === 0) return null;
+                  return (
+                    <SelectItem key={lang} value={lang}>
+                      {lang} ({count})
+                    </SelectItem>
+                  );
+                })}
+                {apiBibleEnabled && (
+                  <SelectItem value="API Online">
+                    API online ({allVersions.filter(v => v.category === 'API Online').length})
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <span className="ml-auto text-2xs text-muted-foreground">
+              {filtered.length} {filtered.length === 1 ? 'version' : 'versions'}
+            </span>
           </div>
         </div>
 
-        {/* Version List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Quick Picks (Favorites & Recent) */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
           {pinnedQuickVersions.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 border-b border-slate-800 pb-1">
-                <Clock className="w-3 h-3 text-amber-400" />
-                <span>Favorites &amp; Recent</span>
+            <section className="pt-3">
+              <div className="flex items-baseline justify-between px-3">
+                <p className="text-2xs text-muted-foreground">Favorites and recent</p>
+                <p className="tabular text-2xs text-muted-foreground">{pinnedQuickVersions.length}</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {pinnedQuickVersions.map(v => {
-                  const isSel = selectedTranslation === v.id;
-                  const isFav = favoriteIds.includes(v.id);
-                  return (
-                    <div
-                      key={`quick-${v.id}`}
-                      onClick={() => handlePickVersion(v.id)}
-                      className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-2 group ${
-                        isSel
-                          ? isParallel
-                            ? 'bg-purple-950/50 border-purple-400 text-white'
-                            : 'bg-amber-950/50 border-amber-400 text-white'
-                          : 'bg-[#121929] border-slate-800 hover:border-amber-500/50 text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-md text-[10px] font-black uppercase shrink-0">
-                          {v.abbreviation}
-                        </span>
-                        <span className="font-bold text-xs truncate">{v.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => toggleFavorite(v.id, e)}
-                          className={`p-1 rounded hover:bg-slate-800 transition ${
-                            isFav ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
-                          }`}
-                          title={isFav ? 'Remove from favorites' : 'Pin to favorites'}
-                        >
-                          <Star className={`w-3 h-3 ${isFav ? 'fill-current' : ''}`} />
-                        </button>
-                        {isSel && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+              <div className="mt-1">{pinnedQuickVersions.map(v => renderVersionRow(v, 'quick'))}</div>
+            </section>
           )}
 
-          {/* Language Sections */}
           {languageSections.map(sec => {
             if (sec.items.length === 0) return null;
             if (categoryFilter !== 'ALL' && categoryFilter !== sec.lang) return null;
             return (
-              <div key={sec.lang} className="space-y-2">
-                <div className="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center justify-between border-b border-slate-800 pb-1">
-                  <span>{sec.title}</span>
-                  <span className="text-slate-500">{sec.items.length} versions</span>
+              <section key={sec.lang} className="pt-3">
+                <div className="flex items-baseline justify-between px-3">
+                  <p className="text-2xs text-muted-foreground">{sec.title}</p>
+                  <p className="tabular text-2xs text-muted-foreground">{sec.items.length}</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {sec.items.map(v => {
-                    const isSel = selectedTranslation === v.id;
-                    const isFav = favoriteIds.includes(v.id);
-                    return (
-                      <div
-                        key={v.id}
-                        onClick={() => handlePickVersion(v.id)}
-                        className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-2 group ${
-                          isSel
-                            ? isParallel
-                              ? 'bg-purple-950/50 border-purple-400 text-white shadow'
-                              : 'bg-amber-950/50 border-amber-400 text-white shadow'
-                            : 'bg-[#121929] border-slate-800 hover:border-amber-500/50 hover:bg-[#172136] text-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-md text-[10px] font-black uppercase shrink-0">
-                            {v.abbreviation}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-xs truncate group-hover:text-amber-300 transition">
-                              {v.name}
-                            </div>
-                            <div className="text-[10px] text-slate-400">{v.sourceType}</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => toggleFavorite(v.id, e)}
-                            className={`p-1 rounded hover:bg-slate-800 transition ${
-                              isFav ? 'text-amber-400' : 'text-slate-600 opacity-0 group-hover:opacity-100 hover:text-amber-300'
-                            }`}
-                            title={isFav ? 'Remove from favorites' : 'Pin to favorites'}
-                          >
-                            <Star className={`w-3.5 h-3.5 ${isFav ? 'fill-current' : ''}`} />
-                          </button>
-                          {isSel && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                <div className="mt-1">{sec.items.map(v => renderVersionRow(v))}</div>
+              </section>
             );
           })}
 
           {filtered.length === 0 && (
-            <div className="text-center py-10 text-slate-500 text-xs">
-              No Bible versions found matching "{searchQuery}".
-            </div>
+            <EmptyState
+              title="No versions found"
+              description={
+                searchQuery
+                  ? `No version matches "${searchQuery}". Try a different name or abbreviation.`
+                  : 'No versions are available for this language.'
+              }
+            />
           )}
         </div>
-      </div>
-    </div>
+
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            disabled={!pendingId}
+            onClick={() => pendingId && handlePickVersion(pendingId)}
+          >
+            Use version
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

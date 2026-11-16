@@ -212,7 +212,7 @@ function createMainWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: 'Live Psalms — Worship Media & Presentation Control',
+    title: 'Live Psalms',
     icon: getIconPath(),
     autoHideMenuBar: true,
     webPreferences: {
@@ -220,7 +220,7 @@ function createMainWindow() {
       contextIsolation: false,
       webSecurity: false
     },
-    backgroundColor: '#090d14'
+    backgroundColor: '#0e0e10'
   });
 
   mainWindow.setMenuBarVisibility(false);

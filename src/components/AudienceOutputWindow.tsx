@@ -507,27 +507,27 @@ export const AudienceOutputWindow: React.FC = () => {
 
       {/* ── LOGO SCREEN ── */}
       {!emergency.isBlack && emergency.isLogo && (
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex flex-col items-center justify-center z-40 text-center px-[8vw]">
+        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-40 text-center px-[8vw]">
           {churchProfile.logoUrl ? (
             <img
               src={churchProfile.logoUrl}
               alt={churchProfile.name}
               style={{ maxHeight: `${(churchProfile as any).logoSize ?? 35}vh`, maxWidth: '80vw' }}
-              className="object-contain mb-[4vh] drop-shadow-2xl animate-pulse w-auto"
+              className="object-contain mb-[4vh] drop-shadow-2xl  w-auto"
             />
           ) : (
-            <div className="p-[3vw] bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-[3vw] shadow-2xl mb-[3vh]">
-              <Flame style={{ width: '8vw', height: '8vw' }} className="text-white animate-pulse" />
+            <div className="p-[3vw] bg-neutral-800 rounded-[3vw] shadow-2xl mb-[3vh]">
+              <Flame style={{ width: '8vw', height: '8vw' }} className="text-white " />
             </div>
           )}
           <h1
-            className="font-extrabold tracking-wider bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent uppercase"
+            className="font-extrabold tracking-wider text-white uppercase"
             style={{ fontSize: 'clamp(1.5rem, 4vw, 5rem)' }}
           >
             {churchProfile.name || 'GRACE COMMUNITY CHURCH'}
           </h1>
           <p
-            className="text-indigo-300 font-semibold mt-[1.5vh] uppercase tracking-widest"
+            className="text-white/60 font-semibold mt-[1.5vh] uppercase tracking-widest"
             style={{ fontSize: 'clamp(0.75rem, 1.5vw, 1.5rem)' }}
           >
             {churchProfile.tagline || 'Welcome To Worship'}
@@ -584,7 +584,7 @@ export const AudienceOutputWindow: React.FC = () => {
           {showFullSlideCountdown && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-[6vw] animate-slide-fade">
               <div
-                className="font-black uppercase tracking-[0.28em] text-indigo-200 bg-indigo-950/75 px-[3vw] py-[1vh] rounded-full border border-indigo-400/50 mb-[3vh] max-w-[88vw] truncate"
+                className="font-black uppercase tracking-[0.28em] text-white/70 bg-white/10 px-[3vw] py-[1vh] rounded-full border border-white/15 mb-[3vh] max-w-[88vw] truncate"
                 style={{ fontSize: 'clamp(0.8rem, 1.9vw, 2.1rem)' }}
               >
                 {countdownState.remaining < 0
@@ -594,9 +594,9 @@ export const AudienceOutputWindow: React.FC = () => {
               <div
                 className={`font-mono font-black tracking-wider drop-shadow-[0_8px_30px_rgba(0,0,0,0.95)] tabular-nums ${
                   countdownState.remaining < 0
-                    ? 'text-rose-400 animate-pulse'
+                    ? 'text-rose-400 '
                     : countdownState.remaining <= 60
-                    ? 'text-amber-300 animate-pulse'
+                    ? 'text-amber-300 '
                     : 'text-white'
                 }`}
                 style={{
@@ -682,7 +682,7 @@ export const AudienceOutputWindow: React.FC = () => {
                       className={`font-black uppercase tracking-[0.25em] mb-[2vh] rounded-full inline-block shrink-0 ${
                         isFarMode
                           ? 'text-amber-200 bg-black/90 px-[2.6vw] py-[0.9vh] border-2 border-amber-400/80 shadow-[0_8px_28px_rgba(0,0,0,0.95)]'
-                          : 'text-indigo-300 bg-indigo-950/60 px-[2vw] py-[0.6vh] border border-indigo-500/40'
+                          : 'text-white/60 bg-black/80 px-[2vw] py-[0.6vh] border border-white/15'
                       }`}
                       style={{ fontSize: isFarMode ? 'clamp(1rem, 2.1vw, 2.2rem)' : 'clamp(0.55rem, 1.1vw, 1.1rem)' }}
                     >
@@ -725,7 +725,7 @@ export const AudienceOutputWindow: React.FC = () => {
                       className={`mt-[2.5vh] tracking-wider uppercase shrink-0 ${
                         isFarMode
                           ? 'font-black text-amber-300 drop-shadow-[0_4px_14px_rgba(0,0,0,1)]'
-                          : 'font-bold text-indigo-200 opacity-90'
+                          : 'font-bold text-white/70 opacity-90'
                       }`}
                       style={{ fontSize: isFarMode ? 'clamp(1.1rem, 2.4vw, 2.6rem)' : 'clamp(0.7rem, 1.4vw, 1.4rem)' }}
                     >
@@ -765,19 +765,19 @@ export const AudienceOutputWindow: React.FC = () => {
           {/* ── LOWER THIRD ANNOUNCEMENT CRAWL ── */}
           {lowerThirdAnnouncement && (
             <div
-              className="absolute bottom-0 left-0 right-0 z-30 bg-[#070b15]/95 border-t-[0.3vh] border-purple-500/80 shadow-2xl backdrop-blur-md flex items-center overflow-hidden animate-slide-fade"
+              className="absolute bottom-0 left-0 right-0 z-30 bg-[#070b15]/95 border-t border-white/15 flex items-center overflow-hidden animate-slide-fade"
               style={{ height: '10vh', minHeight: '60px' }}
             >
               {/* Badge */}
               <div
-                className="h-full px-[2.5vw] bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 flex items-center gap-[1vw] text-white font-black uppercase tracking-wider shrink-0 border-r border-purple-400/40"
+                className="h-full px-[2.5vw] bg-black/70 flex items-center gap-[1vw] text-white font-black uppercase tracking-wider shrink-0 border-r border-white/10"
                 style={{ fontSize: 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
               >
-                <Megaphone style={{ width: '2vw', height: '2vw', minWidth: 16 }} className="text-amber-300 animate-pulse" />
+                <Megaphone style={{ width: '2vw', height: '2vw', minWidth: 16 }} className="text-amber-300 " />
                 <span>ANNOUNCEMENT</span>
                 {lowerThirdAnnouncement.title && (
                   <span
-                    className="font-extrabold text-purple-200 bg-purple-950/80 px-[1vw] py-[0.3vh] rounded-full border border-purple-400/40"
+                    className="font-semibold text-white/80 bg-white/10 px-[1vw] py-[0.3vh] rounded-full border border-white/10"
                     style={{ fontSize: 'clamp(0.55rem, 1vw, 1rem)' }}
                   >
                     {lowerThirdAnnouncement.title}
@@ -801,7 +801,7 @@ export const AudienceOutputWindow: React.FC = () => {
                 >
                   <span>{lowerThirdAnnouncement.content}</span>
                   {lowerThirdAnnouncement.subtitle && (
-                    <span className="text-purple-300 font-bold">
+                    <span className="text-white/70 font-bold">
                       — {lowerThirdAnnouncement.subtitle}
                     </span>
                   )}

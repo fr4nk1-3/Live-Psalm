@@ -1,39 +1,35 @@
 import React from 'react';
 import { Theme, Slide, MediaAsset, PlaylistItem } from '../types/presentation';
 import { StorageService } from '../services/storage';
-import {
-  Sliders,
-  Type,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Image as ImageIcon,
-  FileText,
-  Sparkles,
-  Layers,
-  Lock,
-  Film,
-  Globe,
-  X
-} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Field, FieldGroup } from './ui/field';
+import { Slider } from './ui/slider';
+import { Switch } from './ui/switch';
+import { Separator } from './ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface InspectorPanelProps {
   theme: Theme;
   onUpdateTheme: (updated: Partial<Theme>) => void;
   activeSlide: Slide | null;
-  /** The currently selected playlist item (for item-level BG info) */
   activeItem?: PlaylistItem | null;
   onUpdateSlide: (updated: Partial<Slide>) => void;
   mediaList: MediaAsset[];
   speakerNotes: string;
   onUpdateSpeakerNotes: (notes: string) => void;
-  /** Currently active global video background URL */
   globalVideoBgUrl?: string | null;
-  /** Clears the global video background */
   onClearGlobalVideoBg?: () => void;
-  /** Clears the item-level video background of the active item */
   onClearItemVideoBg?: () => void;
+  open?: boolean;
+  onClose?: () => void;
 }
+
+const FONT_STACK = ['Inter', 'Cinzel', 'Outfit', 'Montserrat', 'Playfair Display'];
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   theme,
@@ -46,347 +42,307 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   onUpdateSpeakerNotes,
   globalVideoBgUrl,
   onClearGlobalVideoBg,
-  onClearItemVideoBg
+  onClearItemVideoBg,
+  open = false,
+  onClose
 }) => {
+  const images = mediaList.filter(m => m.type !== 'video');
+  const videos = mediaList.filter(m => m.type === 'video');
+  const isScripture = activeSlide?.sectionLabel === 'Scripture';
+
+  const backgroundValue = activeSlide?.backgroundUrl || '__default__';
+
   return (
-    <div className="w-56 xl:w-64 2xl:w-72 bg-[#0f1624] border-l border-[#26334a] flex flex-col h-full min-h-0 select-none shrink-0 transition-[width] duration-150">
-      {/* Pinned Panel Header */}
-      <div className="px-3 py-2.5 border-b border-[#26334a] bg-[#131b2c] flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 text-[11px] font-black text-slate-200 uppercase tracking-wider">
-          <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Inspector &amp; Theme</span>
-        </div>
-        {activeSlide && (
-          <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[9px] font-bold text-slate-300 uppercase truncate max-w-[90px]">
-            {activeSlide.sectionLabel || 'Slide'}
-          </span>
-        )}
-      </div>
+    <Sheet open={open} onOpenChange={next => !next && onClose?.()}>
+      <SheetContent className="w-[352px]">
+        <SheetHeader>
+          <SheetTitle>Slide settings</SheetTitle>
+          <SheetDescription>
+            {activeSlide
+              ? `${activeSlide.sectionLabel || 'Slide'} · ${activeItem?.title ?? 'No item selected'}`
+              : 'Select a slide to adjust its text, type and background.'}
+          </SheetDescription>
+        </SheetHeader>
 
-      {/* Scrollable Inspector Body */}
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
-        {/* TYPOGRAPHY SECTION */}
-        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-2.5 text-xs">
-          <div className="font-bold text-indigo-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-            <Type className="w-3.5 h-3.5" /> Typography &amp; Style
-          </div>
-
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-              Font Family
-            </label>
-            <select
-              value={theme.fontFamily}
-              onChange={(e) => onUpdateTheme({ fontFamily: e.target.value })}
-              className="w-full bg-[#0b101b] border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-white font-semibold outline-none text-xs"
-            >
-              {['Inter', 'Cinzel', 'Outfit', 'Montserrat', 'Playfair Display'].map(f => (
-                <option key={f} value={f}>{f}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-slate-400 font-bold uppercase">
-                Font Size
-              </label>
-              <span className="text-[10px] font-mono font-bold text-indigo-300">
-                {theme.fontSize}px
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={24}
-                max={200}
-                value={theme.fontSize}
-                onChange={(e) => onUpdateTheme({ fontSize: parseInt(e.target.value, 10) })}
-                className="flex-1 accent-indigo-500 cursor-pointer"
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+          {/* Content */}
+          <FieldGroup title="Content">
+            {!activeSlide ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Nothing is selected. Choose a slide in the service or preview it first.
+              </p>
+            ) : isScripture ? (
+              <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2">
+                <p className="text-xs text-foreground">Scripture text is read-only</p>
+                <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                  Verse text comes from {StorageService.getTranslationAbbreviation(activeItem?.bibleMeta?.translationId || '') || 'the selected translation'}.
+                  Change the passage from the Bible tab.
+                </p>
+              </div>
+            ) : (
+              <Textarea
+                value={activeSlide.content}
+                onChange={e => onUpdateSlide({ content: e.target.value })}
+                placeholder="Slide text"
+                className="h-32"
+                aria-label="Slide text"
               />
-              <input
-                type="number"
-                min={24}
-                max={300}
-                value={theme.fontSize}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 8) onUpdateTheme({ fontSize: v });
-                }}
-                className="w-14 bg-[#0b101b] border border-slate-700 focus:border-indigo-500 rounded-lg px-1.5 py-1 text-white font-bold text-center outline-none text-xs"
-              />
-            </div>
-          </div>
+            )}
+          </FieldGroup>
 
-          {/* Text Align Buttons */}
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-              Text Alignment
-            </label>
-            <div className="grid grid-cols-3 gap-1 bg-[#0b101b] p-1 rounded-lg border border-slate-700">
-              {[
-                { id: 'left', icon: AlignLeft },
-                { id: 'center', icon: AlignCenter },
-                { id: 'right', icon: AlignRight }
-              ].map(align => (
-                <button
-                  key={align.id}
-                  type="button"
-                  onClick={() => onUpdateTheme({ align: align.id as any })}
-                  className={`py-1.5 flex items-center justify-center rounded-md transition ${
-                    theme.align === align.id
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <align.icon className="w-3.5 h-3.5" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Text Color & Accent Color */}
-          <div className="grid grid-cols-2 gap-2 pt-0.5">
-            <div>
-              <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                Text Color
-              </label>
-              <label className="flex items-center gap-2 bg-[#0b101b] border border-slate-700 hover:border-slate-600 rounded-lg px-2 py-1.5 cursor-pointer">
-                <input
-                  type="color"
-                  value={theme.textColor}
-                  onChange={(e) => onUpdateTheme({ textColor: e.target.value })}
-                  className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
-                />
-                <span className="text-[10px] font-mono text-slate-300 uppercase truncate">
-                  {theme.textColor}
-                </span>
-              </label>
-            </div>
-            <div>
-              <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                Accent Color
-              </label>
-              <label className="flex items-center gap-2 bg-[#0b101b] border border-slate-700 hover:border-slate-600 rounded-lg px-2 py-1.5 cursor-pointer">
-                <input
-                  type="color"
-                  value={theme.accentColor}
-                  onChange={(e) => onUpdateTheme({ accentColor: e.target.value })}
-                  className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
-                />
-                <span className="text-[10px] font-mono text-slate-300 uppercase truncate">
-                  {theme.accentColor}
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* BACKGROUND & SCRIM OVERLAY SECTION */}
-        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-2.5 text-xs">
-          <div className="font-bold text-sky-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-            <ImageIcon className="w-3.5 h-3.5" /> Background Overlay
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-slate-400 font-bold uppercase">
-                Dark Scrim Opacity
-              </label>
-              <span className="text-[10px] font-mono font-bold text-sky-300">
-                {Math.round(theme.scrimOpacity * 100)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={theme.scrimOpacity}
-              onChange={(e) => onUpdateTheme({ scrimOpacity: parseFloat(e.target.value) })}
-              className="w-full accent-sky-500 cursor-pointer"
-            />
-          </div>
-
-          {/* Slide-specific Text & Background Override */}
           {activeSlide && (
-            <div className="space-y-2.5 pt-2 border-t border-slate-800">
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                  Edit Slide Content
-                </label>
-                {activeSlide.sectionLabel === 'Scripture' ? (
-                  <div className="p-2.5 bg-[#0b101b] border border-amber-500/30 rounded-lg text-amber-300 text-[11px] font-semibold flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>Scripture text is locked for Bible verses</span>
+            <>
+              <Separator />
+
+              {/* Type */}
+              <FieldGroup title="Type">
+                <Field label="Font">
+                  <Select value={theme.fontFamily} onValueChange={value => onUpdateTheme({ fontFamily: value })}>
+                    <SelectTrigger aria-label="Font family">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_STACK.map(font => (
+                        <SelectItem key={font} value={font}>
+                          <span style={{ fontFamily: font }}>{font}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field
+                  label="Size"
+                  action={
+                    <span className="tabular text-2xs text-muted-foreground">{theme.fontSize} px</span>
+                  }
+                >
+                  <div className="flex items-center gap-2">
+                    <Slider
+                      value={[theme.fontSize]}
+                      min={24}
+                      max={200}
+                      step={1}
+                      onValueChange={([value]) => onUpdateTheme({ fontSize: value })}
+                      aria-label="Font size"
+                    />
+                    <Input
+                      type="number"
+                      min={8}
+                      max={300}
+                      value={theme.fontSize}
+                      onChange={e => {
+                        const value = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(value) && value >= 8) onUpdateTheme({ fontSize: value });
+                      }}
+                      className="tabular h-7 w-14 shrink-0 px-1 text-center text-xs"
+                      aria-label="Font size in pixels"
+                    />
                   </div>
-                ) : (
-                  <textarea
-                    value={activeSlide.content}
-                    onChange={(e) => onUpdateSlide({ content: e.target.value })}
-                    className="w-full h-24 bg-[#0b101b] border border-slate-700 focus:border-indigo-500 rounded-lg p-2.5 text-white outline-none text-xs font-sans resize-none leading-relaxed"
-                    placeholder="Edit slide text..."
+                </Field>
+
+                <Field label="Alignment">
+                  <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background/60 p-0.5">
+                    {(['left', 'center', 'right'] as const).map(align => (
+                      <button
+                        key={align}
+                        type="button"
+                        onClick={() => onUpdateTheme({ align })}
+                        aria-pressed={theme.align === align}
+                        className={cn(
+                          'h-6 rounded-sm text-2xs font-medium capitalize transition-colors',
+                          theme.align === align
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {align}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Text colour">
+                    <ColorField
+                      value={theme.textColor}
+                      onChange={value => onUpdateTheme({ textColor: value })}
+                      label="Text colour"
+                    />
+                  </Field>
+                  <Field label="Accent colour">
+                    <ColorField
+                      value={theme.accentColor}
+                      onChange={value => onUpdateTheme({ accentColor: value })}
+                      label="Accent colour"
+                    />
+                  </Field>
+                </div>
+              </FieldGroup>
+
+              <Separator />
+
+              {/* Background */}
+              <FieldGroup title="Background">
+                <Field label="Image or video">
+                  <Select
+                    value={backgroundValue}
+                    onValueChange={value => {
+                      if (value === '__default__') {
+                        onUpdateSlide({ backgroundUrl: undefined, backgroundType: undefined });
+                        return;
+                      }
+                      const asset = mediaList.find(m => m.url === value);
+                      const isVideo =
+                        asset?.type === 'video' ||
+                        /\.(mp4|webm|mov)$/i.test(value) ||
+                        value.startsWith('data:video');
+                      onUpdateSlide({ backgroundUrl: value, backgroundType: isVideo ? 'video' : 'image' });
+                    }}
+                  >
+                    <SelectTrigger aria-label="Slide background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Theme default</SelectItem>
+                      {images.length > 0 && (
+                        <>
+                          <SelectGroupLabel>Images</SelectGroupLabel>
+                          {images.map(asset => (
+                            <SelectItem key={asset.id} value={asset.url}>
+                              {asset.id === 'media-logo-main' || asset.type === 'logo'
+                                ? StorageService.getLogoDisplayName()
+                                : asset.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {videos.length > 0 && (
+                        <>
+                          <SelectGroupLabel>Motion loops</SelectGroupLabel>
+                          {videos.map(asset => (
+                            <SelectItem key={asset.id} value={asset.url}>
+                              {asset.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field
+                  label="Dark overlay"
+                  action={<span className="tabular text-2xs text-muted-foreground">{Math.round(theme.scrimOpacity * 100)}%</span>}
+                  hint="Darkens the background so text stays readable."
+                >
+                  <Slider
+                    value={[theme.scrimOpacity]}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onValueChange={([value]) => onUpdateTheme({ scrimOpacity: value })}
+                    aria-label="Background overlay opacity"
                   />
-                )}
-              </div>
+                </Field>
 
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                  Slide Background
-                </label>
-                <select
-                  value={activeSlide.backgroundUrl || ''}
-                  onChange={(e) => {
-                    const url = e.target.value || undefined;
-                    if (!url) {
-                      onUpdateSlide({ backgroundUrl: undefined, backgroundType: undefined });
-                      return;
-                    }
-                    const asset = mediaList.find(m => m.url === url);
-                    const isVideo =
-                      asset?.type === 'video' ||
-                      (url &&
-                        (url.endsWith('.mp4') ||
-                          url.endsWith('.webm') ||
-                          url.endsWith('.mov') ||
-                          url.startsWith('data:video')));
-                    onUpdateSlide({
-                      backgroundUrl: url,
-                      backgroundType: isVideo ? 'video' : 'image'
-                    });
-                  }}
-                  className="w-full bg-[#0b101b] border border-slate-700 focus:border-sky-500 rounded-lg px-2.5 py-1.5 text-white font-semibold outline-none text-xs"
-                >
-                  <option value="">Default Theme Background</option>
-                  {mediaList.filter(m => m.type !== 'video').length > 0 && (
-                    <optgroup label="Images & Logos">
-                      {mediaList
-                        .filter(m => m.type !== 'video')
-                        .map(m => {
-                          const displayName =
-                            m.id === 'media-logo-main' || m.type === 'logo'
-                              ? StorageService.getLogoDisplayName()
-                              : m.name;
-                          return (
-                            <option key={m.id} value={m.url}>
-                              {displayName}
-                            </option>
-                          );
-                        })}
-                    </optgroup>
-                  )}
-                  {mediaList.filter(m => m.type === 'video').length > 0 && (
-                    <optgroup label="Motion Videos">
-                      {mediaList
-                        .filter(m => m.type === 'video')
-                        .map(m => (
-                          <option key={m.id} value={m.url}>
-                            {m.name}
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                </select>
-                {activeSlide.backgroundType === 'video' && (
-                  <p className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-                    <Film className="w-3 h-3" /> Video loop active behind slide
-                  </p>
-                )}
-              </div>
-            </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label>Lower-third layout</Label>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                      Anchor text to the bottom of the screen.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={theme.lowerThirdStyle}
+                    onCheckedChange={value => onUpdateTheme({ lowerThirdStyle: value })}
+                    aria-label="Lower-third layout"
+                  />
+                </div>
+              </FieldGroup>
+
+              {(globalVideoBgUrl || activeItem?.videoBackgroundUrl) && (
+                <>
+                  <Separator />
+                  <FieldGroup title="Active motion layers">
+                    {globalVideoBgUrl && (
+                      <LayerRow
+                        label="Whole service"
+                        detail="Loops behind every slide"
+                        onClear={onClearGlobalVideoBg}
+                      />
+                    )}
+                    {activeItem?.videoBackgroundUrl && (
+                      <LayerRow label={activeItem.title} detail="Loops behind this item" onClear={onClearItemVideoBg} />
+                    )}
+                  </FieldGroup>
+                </>
+              )}
+
+              <Separator />
+            </>
           )}
+
+          {/* Notes */}
+          <FieldGroup title="Speaker notes" description="Visible to the operator and stage display only.">
+            <Textarea
+              value={speakerNotes}
+              onChange={e => onUpdateSpeakerNotes(e.target.value)}
+              placeholder="Notes for this item…"
+              className="h-24"
+              aria-label="Speaker notes"
+            />
+          </FieldGroup>
         </div>
-
-        {/* LOWER THIRD STYLING SECTION */}
-        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-1.5 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" /> Lower Third Mode
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={theme.lowerThirdStyle}
-              onClick={() => onUpdateTheme({ lowerThirdStyle: !theme.lowerThirdStyle })}
-              className={`w-9 h-5 rounded-full transition-colors p-0.5 flex items-center shrink-0 ${
-                theme.lowerThirdStyle ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'
-              }`}
-              title="Toggle broadcast lower-third mode"
-            >
-              <span className="w-4 h-4 rounded-full bg-white shadow" />
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-400 leading-relaxed">
-            Renders text as a broadcast lower-third overlay at the bottom of the screen.
-          </p>
-        </div>
-
-        {/* VIDEO BACKGROUND STATUS SECTION */}
-        {(globalVideoBgUrl || activeItem?.videoBackgroundUrl) && (
-          <div className="bg-[#121929] border border-sky-700/50 p-3 rounded-xl space-y-2 text-xs">
-            <div className="font-bold text-sky-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-              <Film className="w-3.5 h-3.5 text-sky-400" /> Active Video BGs
-            </div>
-
-            {globalVideoBgUrl && (
-              <div className="flex items-center gap-2 p-2 bg-emerald-950/40 border border-emerald-700/50 rounded-lg">
-                <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-black text-emerald-300 text-[10px] uppercase tracking-wider">
-                    Global BG
-                  </div>
-                  <div className="text-slate-400 text-[9px] truncate" title={globalVideoBgUrl}>
-                    Loops behind entire service
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClearGlobalVideoBg}
-                  className="shrink-0 p-1 bg-rose-900/70 hover:bg-rose-700 text-rose-300 hover:text-white rounded transition"
-                  title="Clear global video background"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {activeItem?.videoBackgroundUrl && (
-              <div className="flex items-center gap-2 p-2 bg-indigo-950/40 border border-indigo-700/50 rounded-lg">
-                <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-black text-indigo-300 text-[10px] uppercase tracking-wider">
-                    Item BG
-                  </div>
-                  <div className="text-slate-400 text-[9px] truncate">
-                    {activeItem.title}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClearItemVideoBg}
-                  className="shrink-0 p-1 bg-rose-900/70 hover:bg-rose-700 text-rose-300 hover:text-white rounded transition"
-                  title="Clear item video background"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SPEAKER NOTES SECTION */}
-        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-2 text-xs">
-          <div className="font-bold text-amber-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-            <FileText className="w-3.5 h-3.5" /> Speaker / Stage Notes
-          </div>
-          <textarea
-            placeholder="Enter notes visible only to operator & stage display..."
-            value={speakerNotes}
-            onChange={(e) => onUpdateSpeakerNotes(e.target.value)}
-            className="w-full h-24 bg-[#0b101b] border border-slate-700 focus:border-amber-500 rounded-lg p-2.5 text-slate-200 outline-none text-xs resize-none leading-relaxed"
-          />
-        </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 };
+
+function ColorField({
+  value,
+  onChange,
+  label
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex h-8 items-center gap-2 rounded-md border border-input bg-background/60 px-1.5">
+      <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm border border-border">
+        <input
+          type="color"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          aria-label={label}
+          className="absolute -left-2 -top-2 h-8 w-8 cursor-pointer border-0 bg-transparent p-0"
+        />
+      </span>
+      <span className="tabular truncate text-2xs uppercase text-muted-foreground">{value}</span>
+    </div>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2 py-1.5 text-2xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{children}</div>
+  );
+}
+const SelectGroupLabel = GroupLabel;
+
+function LayerRow({ label, detail, onClear }: { label: string; detail: string; onClear?: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-2">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-foreground">{label}</p>
+        <p className="text-2xs text-muted-foreground">{detail}</p>
+      </div>
+      {onClear && (
+        <Button variant="ghost" size="xs" onClick={onClear} className="shrink-0 text-muted-foreground hover:text-destructive">
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+}

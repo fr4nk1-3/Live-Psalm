@@ -1,19 +1,17 @@
 import React from 'react';
-import { 
-  Tv, 
-  MonitorPlay, 
-  Search, 
-  Settings, 
-  Zap, 
-  BookOpen, 
-  Download, 
-  Upload, 
-  Flame, 
-  Save, 
-  Sliders,
-  Radio,
-  Layers
-} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Kbd } from './ui/primitives';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 
 interface HeaderProps {
   serviceTitle: string;
@@ -53,179 +51,142 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSlideDesigner
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [displayCount, setDisplayCount] = React.useState<number>(1);
+  const [displayCount, setDisplayCount] = React.useState(1);
 
   React.useEffect(() => {
     try {
       if ((window as any).require) {
         const { ipcRenderer } = (window as any).require('electron');
-        ipcRenderer.invoke('get-connected-displays').then((displays: any[]) => {
-          if (Array.isArray(displays)) {
-            setDisplayCount(displays.length);
-          }
-        }).catch(() => {});
+        ipcRenderer
+          .invoke('get-connected-displays')
+          .then((displays: any[]) => {
+            if (Array.isArray(displays)) setDisplayCount(displays.length);
+          })
+          .catch(() => {});
       }
-    } catch (e) {
-      // Browser preview mode fallback
+    } catch {
+      /* Browser preview mode */
     }
   }, []);
 
+  const activeOutputs = [isAudienceActive, isStageActive, isLedActive].filter(Boolean).length;
+
   return (
-    <header className="h-14 bg-[#0d131f] border-b border-[#26334a] px-3.5 flex items-center justify-between gap-3 select-none shrink-0 z-30">
-      {/* Brand & Project Title */}
-      <div className="flex items-center gap-2.5 shrink-0">
-        <img
-          src="./logo.png"
-          alt="Live Psalms"
-          className="w-8 h-8 rounded-lg object-cover shadow-md shrink-0 border border-slate-700/80"
-        />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-sm tracking-wide bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent whitespace-nowrap">
-              LIVE PSALMS
-            </span>
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider whitespace-nowrap">
-              PRO
-            </span>
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
+      {/* Identity */}
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+        <img src="./logo.png" alt="" className="h-6 w-6 shrink-0 rounded-[5px] object-cover" />
+        <div className="min-w-0 leading-tight">
+          <div className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-[13px] font-semibold tracking-tight text-foreground">Live Psalms</span>
             <span
-              className={`hidden lg:flex text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider items-center gap-1 whitespace-nowrap ${
-                displayCount > 1
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
-                  : 'bg-slate-800/90 text-slate-400 border-slate-700'
-              }`}
-              title={displayCount > 1 ? `${displayCount} displays connected` : 'Single display (Borderless mode)'}
+              className={cn(
+                'hidden items-center gap-1 whitespace-nowrap text-2xs md:inline-flex',
+                isSaved ? 'text-muted-foreground' : 'text-warning'
+              )}
+              aria-live="polite"
             >
-              <Tv className={`w-2.5 h-2.5 ${displayCount > 1 ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span>{displayCount > 1 ? `${displayCount} Screens` : '1 Screen'}</span>
+              <span
+                className={cn('h-1 w-1 rounded-full', isSaved ? 'bg-muted-foreground/60' : 'bg-warning')}
+                aria-hidden
+              />
+              {isSaved ? 'Saved' : 'Saving'}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium leading-tight mt-0.5">
-            <span className="truncate max-w-[175px] text-slate-300">{serviceTitle}</span>
-            <span className="text-slate-600">•</span>
-            {isSaved ? (
-              <span className="flex items-center gap-1 text-[10px] text-emerald-400 whitespace-nowrap">
-                <Save className="w-2.5 h-2.5" /> Saved
-              </span>
-            ) : (
-              <span className="text-[10px] text-amber-400 font-semibold whitespace-nowrap">Saving...</span>
-            )}
+          <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+            <span className="max-w-[220px] truncate">{serviceTitle}</span>
+            <span aria-hidden>·</span>
+            <span className="tabular whitespace-nowrap">
+              {displayCount > 1 ? `${displayCount} screens` : '1 screen'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Global Search Bar Trigger */}
-      <div className="flex-1 min-w-[100px] max-w-xs 2xl:max-w-md">
+      {/* Command field */}
+      <div className="flex min-w-0 flex-1 justify-center px-2">
         <button
+          type="button"
           onClick={onOpenSearch}
-          className="w-full h-8 px-2.5 bg-[#162032] hover:bg-[#1e2b42] border border-[#26334a] hover:border-indigo-500/50 rounded-lg text-slate-400 hover:text-slate-200 flex items-center justify-between gap-2 text-xs transition-all shadow-inner group"
+          className={cn(
+            'group flex h-8 w-full max-w-[420px] items-center gap-2 rounded-md border border-border bg-background/70 px-2.5 text-left',
+            'text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground'
+          )}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <Search className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="truncate">Search Songs, Scriptures, Media...</span>
-          </div>
-          <kbd className="hidden xl:inline-block px-1.5 py-0.5 text-[9px] font-semibold bg-[#0d131f] border border-[#26334a] rounded text-slate-400 shrink-0">
-            Ctrl K
-          </kbd>
+          <span className="flex-1 truncate">Search songs, scripture, media</span>
+          <span className="hidden shrink-0 items-center gap-0.5 sm:flex">
+            <Kbd>Ctrl</Kbd>
+            <Kbd>K</Kbd>
+          </span>
         </button>
       </div>
 
-      {/* Quick Action Tools */}
-      <div className="flex items-center gap-1 xl:gap-1.5 shrink-0 overflow-x-auto max-w-full">
-        <button
-          onClick={onOpenQuickMode}
-          className="h-8 px-2.5 bg-[#182338] hover:bg-indigo-600/20 border border-[#26334a] hover:border-indigo-500/40 rounded-lg text-indigo-300 font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap"
-          title="Quick presentation mode"
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>Quick Mode</span>
-        </button>
+      {/* Actions */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary" size="sm" className="gap-2">
+              Outputs
+              <span
+                className={cn(
+                  'tabular rounded-sm px-1 text-[10px]',
+                  activeOutputs > 0 ? 'bg-live/20 text-live' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {activeOutputs}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>Program outputs</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem checked={isAudienceActive} onSelect={onOpenAudienceOutput}>
+              Audience screen
+              <span className="ml-auto pl-2 text-2xs text-muted-foreground">Projector / main</span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={isStageActive} onSelect={onOpenStageOutput}>
+              Stage display
+              <span className="ml-auto pl-2 text-2xs text-muted-foreground">Confidence monitor</span>
+            </DropdownMenuCheckboxItem>
+            {onOpenLedOutput && (
+              <DropdownMenuCheckboxItem checked={isLedActive} onSelect={onOpenLedOutput}>
+                LED wall
+                <span className="ml-auto pl-2 text-2xs text-muted-foreground">Wide format</span>
+              </DropdownMenuCheckboxItem>
+            )}
+            {onOpenStreaming && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onOpenStreaming}>Streaming setup…</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <button
-          onClick={onOpenSermonMode}
-          className="h-8 px-2.5 bg-[#182338] hover:bg-purple-600/20 border border-[#26334a] hover:border-purple-500/40 rounded-lg text-purple-300 font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap"
-          title="Sermon Outline Builder"
-        >
-          <BookOpen className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-          <span>Sermon Mode</span>
-        </button>
-
-        <button
-          onClick={onOpenSlideDesigner}
-          className="h-8 px-2.5 bg-[#182338] hover:bg-emerald-600/20 border border-[#26334a] hover:border-emerald-500/40 rounded-lg text-emerald-300 font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap"
-          title="Interactive Visual Slide Designer"
-        >
-          <Sliders className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>Slide Canvas</span>
-        </button>
-
-        {/* Display Output Windows Controls */}
-        <div className="h-5 w-px bg-[#26334a] mx-0.5" />
-
-        <button
-          onClick={onOpenAudienceOutput}
-          className={`h-8 px-2.5 rounded-lg border font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap ${
-            isAudienceActive
-              ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-[0_0_12px_rgba(239,68,68,0.28)]'
-              : 'bg-[#182338] border-[#26334a] text-slate-300 hover:border-slate-500'
-          }`}
-          title={isAudienceActive ? 'Click to Disable & Close Audience Output' : 'Open Audience Screen (Projector / Main Output)'}
-        >
-          <Tv className={`w-3.5 h-3.5 shrink-0 ${isAudienceActive ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
-          <span>Audience</span>
-          <span className={`w-1.5 h-1.5 rounded-full ${isAudienceActive ? 'bg-rose-500 glow-live' : 'bg-slate-600'}`} />
-        </button>
-
-        <button
-          onClick={onOpenStageOutput}
-          className={`h-8 px-2.5 rounded-lg border font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap ${
-            isStageActive
-              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.28)]'
-              : 'bg-[#182338] border-[#26334a] text-slate-300 hover:border-slate-500'
-          }`}
-          title={isStageActive ? 'Click to Disable & Close Stage Display' : 'Open Stage Display (Confidence Monitor for Worship Leaders / Pastors)'}
-        >
-          <MonitorPlay className={`w-3.5 h-3.5 shrink-0 ${isStageActive ? 'text-amber-400' : 'text-slate-400'}`} />
-          <span>Stage</span>
-          <span className={`w-1.5 h-1.5 rounded-full ${isStageActive ? 'bg-amber-500' : 'bg-slate-600'}`} />
-        </button>
-
-        {onOpenLedOutput && (
-          <button
-            onClick={onOpenLedOutput}
-            className={`h-8 px-2.5 rounded-lg border font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap ${
-              isLedActive
-                ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-[0_0_12px_rgba(56,189,248,0.28)]'
-                : 'bg-[#182338] border-[#26334a] text-slate-300 hover:border-slate-500'
-            }`}
-            title={isLedActive ? 'Click to Disable & Close LED Wall Output' : 'Open LED Wall Display Output'}
-          >
-            <Layers className={`w-3.5 h-3.5 shrink-0 ${isLedActive ? 'text-sky-400' : 'text-slate-400'}`} />
-            <span>LED Wall</span>
-            <span className={`w-1.5 h-1.5 rounded-full ${isLedActive ? 'bg-sky-500' : 'bg-slate-600'}`} />
-          </button>
-        )}
-
-        {onOpenStreaming && (
-          <button
-            onClick={onOpenStreaming}
-            className="h-8 px-2.5 bg-[#182338] hover:bg-rose-600/20 border border-[#26334a] hover:border-rose-500/50 rounded-lg text-rose-300 font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap"
-            title="Live Stream to YouTube, Twitch, or Facebook Live"
-          >
-            <Radio className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span>Stream</span>
-          </button>
-        )}
-
-        <div className="h-5 w-px bg-[#26334a] mx-0.5" />
-
-        {/* Import / Export & Settings */}
-        <button
-          onClick={onExportPackage}
-          className="h-8 w-8 flex items-center justify-center bg-[#182338] hover:bg-[#23314d] border border-[#26334a] rounded-lg text-slate-300 hover:text-white transition"
-          title="Export Service Package (.worshipflow)"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              More
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuLabel>Presenting</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={onOpenQuickMode}>
+              Quick present
+              <DropdownMenuShortcut>Q</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpenSermonMode}>Sermon outline</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpenSlideDesigner}>Slide canvas</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Service file</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>Import service…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onExportPackage}>Export service…</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onOpenSettings}>
+              Settings
+              <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <input
           type="file"
@@ -234,21 +195,6 @@ export const Header: React.FC<HeaderProps> = ({
           accept=".worshipflow,.json"
           className="hidden"
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="h-8 w-8 flex items-center justify-center bg-[#182338] hover:bg-[#23314d] border border-[#26334a] rounded-lg text-slate-300 hover:text-white transition"
-          title="Import Service Package (.worshipflow)"
-        >
-          <Upload className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={onOpenSettings}
-          className="h-8 w-8 flex items-center justify-center bg-[#182338] hover:bg-[#23314d] border border-[#26334a] rounded-lg text-slate-300 hover:text-white transition"
-          title="Application Settings"
-        >
-          <Settings className="w-3.5 h-3.5" />
-        </button>
       </div>
     </header>
   );

@@ -5,53 +5,41 @@
  * Falls back gracefully if ffmpeg is not installed, showing setup instructions.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  X, Radio, Youtube, Twitch, Facebook, Play, Square, Settings,
-  CheckCircle2, AlertTriangle, Info, Copy, ExternalLink, ChevronDown, ChevronRight,
-  Wifi, Eye, EyeOff, RefreshCw
-} from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Field, FieldGroup } from './ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Badge } from './ui/badge';
+import { ListHeader } from './ui/primitives';
 
 // Platform configurations
 const PLATFORMS = {
   youtube: {
     id: 'youtube',
     name: 'YouTube Live',
-    icon: Youtube,
-    color: '#ff0000',
-    colorClass: 'text-red-500',
-    bgClass: 'bg-red-950/30 border-red-700/50',
-    activeClass: 'bg-red-600',
     rtmpBase: 'rtmp://a.rtmp.youtube.com/live2',
     keyPlaceholder: 'xxxx-xxxx-xxxx-xxxx-xxxx',
-    keyHelp: 'Go to YouTube Studio → Go Live → Stream Key',
+    keyHelp: 'YouTube Studio → Go Live → Stream key',
     docsUrl: 'https://support.google.com/youtube/answer/2907883',
     quality: '1080p' as const,
   },
   twitch: {
     id: 'twitch',
     name: 'Twitch',
-    icon: Twitch,
-    color: '#9146ff',
-    colorClass: 'text-purple-400',
-    bgClass: 'bg-purple-950/30 border-purple-700/50',
-    activeClass: 'bg-purple-600',
     rtmpBase: 'rtmp://live.twitch.tv/live',
     keyPlaceholder: 'live_xxxxxxxxxxxxxxxxxxxxxxxxxx',
-    keyHelp: 'Twitch Dashboard → Settings → Stream → Primary Stream Key',
+    keyHelp: 'Twitch Dashboard → Settings → Stream → Primary stream key',
     docsUrl: 'https://dashboard.twitch.tv/u/YOUR_USERNAME/settings/stream',
     quality: '720p60' as const,
   },
   facebook: {
     id: 'facebook',
     name: 'Facebook Live',
-    icon: Facebook,
-    color: '#1877f2',
-    colorClass: 'text-blue-400',
-    bgClass: 'bg-blue-950/30 border-blue-700/50',
-    activeClass: 'bg-blue-600',
     rtmpBase: 'rtmps://live-api-s.facebook.com:443/rtmp',
     keyPlaceholder: 'FB-xxxxxxxxxxxxxxxxxxxx-x-xxxxxxxxxx',
-    keyHelp: 'Facebook → Create a live video → Use Stream Key',
+    keyHelp: 'Facebook → Create a live video → Use stream key',
     docsUrl: 'https://www.facebook.com/live/producer',
     quality: '720p' as const,
   },
@@ -85,6 +73,15 @@ function getIpc() {
     }
   } catch (e) {}
   return null;
+}
+
+/** Log lines carry their own level marker; colour is state, never decoration. */
+function logLineClass(line: string): string {
+  if (line.startsWith('✅')) return 'text-success';
+  if (line.startsWith('❌')) return 'text-destructive';
+  if (line.startsWith('⚠')) return 'text-warning';
+  if (line.startsWith('▶')) return 'text-foreground';
+  return 'text-muted-foreground';
 }
 
 export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose }) => {
@@ -236,288 +233,231 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   if (!isOpen) return null;
 
   const platform = PLATFORMS[activePlatform];
-  const PlatformIcon = platform.icon;
   const keyConfig = getKey(activePlatform);
   const rtmpUrl = getRtmpUrl(activePlatform);
   const qualityObj = QUALITY_OPTIONS.find(q => q.value === (keyConfig.quality || '1080p')) || QUALITY_OPTIONS[1];
+  const keyVisible = Boolean(showKey[activePlatform]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#0a0f1e] border border-[#26334a] rounded-2xl shadow-2xl w-[820px] max-h-[90vh] flex flex-col overflow-hidden">
+    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="h-[min(88vh,40rem)] max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Streaming</DialogTitle>
+          <DialogDescription>Send the audience output to a live platform over RTMP.</DialogDescription>
+        </DialogHeader>
 
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-[#26334a]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-rose-700 to-pink-700 rounded-xl shadow-lg">
-              <Radio className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-white font-black text-lg">Live Streaming</h2>
-              <p className="text-slate-400 text-xs">Stream directly to YouTube, Twitch, or Facebook Live</p>
-            </div>
-          </div>
-
-          {/* Stream status indicator */}
-          {isStreaming && streamingPlatform && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/20 border border-rose-500/60 rounded-full">
-              <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse" />
-              <span className="text-rose-300 font-black text-sm uppercase tracking-wider">LIVE</span>
-              <span className="text-rose-300 font-mono text-sm">{elapsed}</span>
-              <span className="text-rose-400 text-xs">{PLATFORMS[streamingPlatform].name}</span>
-            </div>
+        {/* Connection status */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-5 py-2">
+          <Badge variant={isStreaming ? 'live' : 'outline'}>{isStreaming ? 'Live' : 'Idle'}</Badge>
+          {isStreaming && streamingPlatform ? (
+            <>
+              <span className="text-2xs text-muted-foreground">{PLATFORMS[streamingPlatform].name}</span>
+              <span className="tabular font-mono text-2xs text-muted-foreground">{elapsed}</span>
+            </>
+          ) : (
+            <span className="text-2xs text-muted-foreground">No stream is running.</span>
           )}
-
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white transition rounded-lg hover:bg-white/5">
-            <X className="w-5 h-5" />
-          </button>
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-2xs text-muted-foreground">ffmpeg</span>
+            <Badge
+              variant={
+                ffmpegStatus === 'available' ? 'success' : ffmpegStatus === 'missing' ? 'warning' : 'muted'
+              }
+            >
+              {ffmpegStatus === 'checking' ? 'Checking' : ffmpegStatus === 'available' ? 'Ready' : 'Not found'}
+            </Badge>
+          </span>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Platform Sidebar */}
-          <div className="w-48 border-r border-[#26334a] flex flex-col p-3 gap-1 shrink-0">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 px-2">Platform</div>
-            {(Object.keys(PLATFORMS) as PlatformId[]).map(pid => {
-              const p = PLATFORMS[pid];
-              const Icon = p.icon;
-              const isActive = activePlatform === pid;
-              const isLive = isStreaming && streamingPlatform === pid;
-              return (
-                <button
-                  key={pid}
-                  onClick={() => setActivePlatform(pid)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition ${
-                    isActive
-                      ? `bg-white/10 border border-white/20 text-white`
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${p.colorClass}`} />
-                  <span className="text-xs font-bold flex-1">{p.name}</span>
-                  {isLive && (
-                    <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse shrink-0" />
-                  )}
-                </button>
-              );
-            })}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* Destination */}
+            <FieldGroup title="Destination" description={platform.keyHelp}>
+              <Tabs value={activePlatform} onValueChange={value => setActivePlatform(value as PlatformId)}>
+                <TabsList className="w-full">
+                  {(Object.keys(PLATFORMS) as PlatformId[]).map(pid => (
+                    <TabsTrigger key={pid} value={pid}>
+                      {PLATFORMS[pid].name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
 
-            <div className="mt-auto">
-              {/* ffmpeg status */}
-              <div className={`mt-3 p-2 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 ${
-                ffmpegStatus === 'available'
-                  ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-700/40'
-                  : ffmpegStatus === 'missing'
-                  ? 'bg-amber-950/60 text-amber-400 border border-amber-700/40'
-                  : 'bg-slate-800 text-slate-400'
-              }`}>
-                {ffmpegStatus === 'checking' && <RefreshCw className="w-3 h-3 animate-spin" />}
-                {ffmpegStatus === 'available' && <CheckCircle2 className="w-3 h-3" />}
-                {ffmpegStatus === 'missing' && <AlertTriangle className="w-3 h-3" />}
-                <span>
-                  {ffmpegStatus === 'checking' ? 'Checking...' :
-                   ffmpegStatus === 'available' ? 'ffmpeg ready' : 'ffmpeg not found'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-            {/* Platform header */}
-            <div className={`flex items-center gap-3 p-4 rounded-xl border ${platform.bgClass}`}>
-              <PlatformIcon className={`w-8 h-8 ${platform.colorClass}`} />
-              <div>
-                <div className="text-white font-black text-base">{platform.name}</div>
-                <div className="text-slate-400 text-xs">{platform.keyHelp}</div>
-              </div>
-              <a
-                href={platform.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-white transition"
+              <Field
+                label="Stream key"
+                htmlFor="stream-key"
+                action={
+                  <span className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() =>
+                        setShowKey(prev => ({ ...prev, [activePlatform]: !prev[activePlatform] }))
+                      }
+                    >
+                      {keyVisible ? 'Hide' : 'Show'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => copyToClipboard(keyConfig.key, `key-${activePlatform}`)}
+                    >
+                      {copied === `key-${activePlatform}` ? 'Copied' : 'Copy'}
+                    </Button>
+                  </span>
+                }
               >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Get Key</span>
-              </a>
-            </div>
-
-            {/* Stream Key */}
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
-                Stream Key *
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type={showKey[activePlatform] ? 'text' : 'password'}
+                <Input
+                  id="stream-key"
+                  type={keyVisible ? 'text' : 'password'}
                   value={keyConfig.key}
                   onChange={e => updateKey(activePlatform, 'key', e.target.value)}
                   placeholder={platform.keyPlaceholder}
-                  className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2.5 text-white font-mono text-sm outline-none pr-20"
                   autoComplete="off"
+                  className="font-mono text-xs"
                 />
-                <div className="absolute right-2 flex items-center gap-1">
-                  <button
-                    onClick={() => setShowKey(prev => ({ ...prev, [activePlatform]: !prev[activePlatform] }))}
-                    className="p-1.5 text-slate-500 hover:text-white transition"
-                  >
-                    {showKey[activePlatform] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => copyToClipboard(keyConfig.key, `key-${activePlatform}`)}
-                    className="p-1.5 text-slate-500 hover:text-white transition"
-                    title="Copy stream key"
-                  >
-                    {copied === `key-${activePlatform}`
-                      ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      : <Copy className="w-4 h-4" />
-                    }
-                  </button>
-                </div>
-              </div>
-            </div>
+              </Field>
 
-            {/* Stream Quality */}
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
-                Stream Quality
-              </label>
-              <div className="grid grid-cols-5 gap-2">
-                {QUALITY_OPTIONS.map(q => (
-                  <button
-                    key={q.value}
-                    onClick={() => updateKey(activePlatform, 'quality', q.value)}
-                    className={`py-2 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
-                      (keyConfig.quality || '1080p') === q.value
-                        ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
-                        : 'bg-[#0d1320] border-slate-700 text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    {q.label}
-                  </button>
+              <Field
+                label="RTMP endpoint"
+                action={
+                  <Button variant="ghost" size="xs" onClick={() => copyToClipboard(rtmpUrl, 'rtmp')}>
+                    {copied === 'rtmp' ? 'Copied' : 'Copy'}
+                  </Button>
+                }
+                hint="Read-only. The stream key is appended to this address."
+              >
+                <div className="break-all rounded-md border border-border bg-muted/30 px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
+                  {rtmpUrl}
+                </div>
+              </Field>
+
+              <Field
+                label="Custom server"
+                htmlFor="stream-custom-rtmp"
+                hint={`Leave blank to use the ${platform.name} default.`}
+              >
+                <Input
+                  id="stream-custom-rtmp"
+                  type="text"
+                  value={keyConfig.customRtmp}
+                  onChange={e => updateKey(activePlatform, 'customRtmp', e.target.value)}
+                  placeholder="rtmp://your-server/live"
+                  className="font-mono text-xs"
+                />
+              </Field>
+
+              <Button variant="ghost" size="xs" asChild className="w-fit px-0">
+                <a href={platform.docsUrl} target="_blank" rel="noopener noreferrer">
+                  Where to find the stream key
+                </a>
+              </Button>
+            </FieldGroup>
+
+            {/* Encoding */}
+            <FieldGroup title="Encoding">
+              <Field label="Quality" hint="Higher presets need more upload bandwidth.">
+                <Select
+                  value={keyConfig.quality || '1080p'}
+                  onValueChange={value => updateKey(activePlatform, 'quality', value)}
+                >
+                  <SelectTrigger aria-label="Stream quality">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUALITY_OPTIONS.map(q => (
+                      <SelectItem key={q.value} value={q.value}>
+                        {q.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label="Output" hint="Captured from the audience output window.">
+                <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
+                  {qualityObj.res} · {qualityObj.fps} fps · {qualityObj.bitrate} kbps
+                </div>
+              </Field>
+            </FieldGroup>
+          </div>
+
+          {/* ffmpeg missing instructions */}
+          {ffmpegStatus === 'missing' && (
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <h3 className="text-xs font-medium text-foreground">ffmpeg is not installed</h3>
+              <p className="text-2xs leading-relaxed text-muted-foreground">
+                Install ffmpeg to stream from the app, then restart Live Psalms. Until then, copy the
+                RTMP endpoint into OBS.
+              </p>
+              <div className="space-y-1">
+                {[
+                  { os: 'Windows', cmd: 'winget install ffmpeg' },
+                  { os: 'macOS', cmd: 'brew install ffmpeg' },
+                  { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
+                ].map(({ os, cmd }) => (
+                  <div key={os} className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 text-2xs text-muted-foreground">{os}</span>
+                    <code className="min-w-0 flex-1 truncate rounded-sm border border-border bg-background px-2 py-1 font-mono text-2xs text-foreground">
+                      {cmd}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => copyToClipboard(cmd, `cmd-${os}`)}
+                      className="shrink-0"
+                    >
+                      {copied === `cmd-${os}` ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
                 ))}
               </div>
-              <div className="text-[10px] text-slate-500 flex gap-4">
-                <span>Resolution: {qualityObj.res}</span>
-                <span>FPS: {qualityObj.fps}</span>
-                <span>Bitrate: {qualityObj.bitrate} kbps</span>
-              </div>
-            </div>
+            </section>
+          )}
 
-            {/* RTMP URL Preview */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                  RTMP Endpoint (read-only)
-                </label>
-                <button
-                  onClick={() => copyToClipboard(rtmpUrl, 'rtmp')}
-                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white transition"
-                >
-                  {copied === 'rtmp' ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  Copy
-                </button>
+          {/* Stream log */}
+          {streamLog.length > 0 && (
+            <section className="space-y-2">
+              <ListHeader>Log</ListHeader>
+              <div className="h-28 overflow-y-auto rounded-md border border-border bg-background p-2 font-mono text-2xs">
+                {streamLog.map((line, i) => (
+                  <div key={i} className={logLineClass(line)}>
+                    {line}
+                  </div>
+                ))}
               </div>
-              <div className="bg-[#0a0f1e] border border-slate-800 rounded-lg px-3 py-2 font-mono text-[11px] text-slate-400 break-all">
-                {rtmpUrl}
-              </div>
-            </div>
-
-            {/* Custom RTMP override */}
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
-                Custom RTMP Server (optional override)
-              </label>
-              <input
-                type="text"
-                value={keyConfig.customRtmp}
-                onChange={e => updateKey(activePlatform, 'customRtmp', e.target.value)}
-                placeholder={`Leave blank to use ${platform.name} default`}
-                className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2.5 text-white font-mono text-sm outline-none"
-              />
-            </div>
-
-            {/* ffmpeg missing instructions */}
-            {ffmpegStatus === 'missing' && (
-              <div className="bg-amber-950/40 border border-amber-700/50 rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2 text-amber-300 font-black text-sm">
-                  <AlertTriangle className="w-4 h-4" />
-                  ffmpeg not detected — Manual OBS Setup Required
-                </div>
-                <p className="text-amber-200/80 text-xs leading-relaxed">
-                  Live Psalms uses <strong>ffmpeg</strong> to stream directly from the app. 
-                  Install it, or use OBS with the RTMP URL above.
-                </p>
-                <div className="space-y-1">
-                  {[
-                    { os: 'Windows', cmd: 'winget install ffmpeg' },
-                    { os: 'macOS', cmd: 'brew install ffmpeg' },
-                    { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
-                  ].map(({ os, cmd }) => (
-                    <div key={os} className="flex items-center gap-2">
-                      <span className="text-amber-400 text-[10px] font-black w-20 shrink-0">{os}</span>
-                      <code className="flex-1 bg-black/50 px-2 py-1 rounded text-[11px] text-amber-100 font-mono">{cmd}</code>
-                      <button onClick={() => copyToClipboard(cmd, `cmd-${os}`)} className="text-slate-500 hover:text-white transition">
-                        {copied === `cmd-${os}` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-amber-200/60 text-[10px]">After installing, restart Live Psalms for ffmpeg to be detected.</p>
-              </div>
-            )}
-
-            {/* Stream log */}
-            {streamLog.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">Stream Log</label>
-                <div className="bg-black/70 border border-slate-800 rounded-lg p-3 h-28 overflow-y-auto font-mono text-[10px] text-slate-300 space-y-0.5">
-                  {streamLog.map((line, i) => (
-                    <div key={i} className={
-                      line.startsWith('✅') ? 'text-emerald-400' :
-                      line.startsWith('❌') ? 'text-rose-400' :
-                      line.startsWith('⚠') ? 'text-amber-400' :
-                      line.startsWith('▶') ? 'text-sky-400' :
-                      line.startsWith('⏹') ? 'text-slate-500' : 'text-slate-400'
-                    }>
-                      {line}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+            </section>
+          )}
         </div>
 
-        {/* Footer — Start/Stop Stream */}
-        <div className="border-t border-[#26334a] p-4 flex items-center justify-between gap-4">
-          <div className="text-[11px] text-slate-500 max-w-sm">
+        <DialogFooter className="justify-between gap-4">
+          <p className="max-w-sm text-2xs leading-relaxed text-muted-foreground">
             {ffmpegStatus === 'available'
-              ? 'Streaming captures the audience output window. Ensure it is open before going live.'
-              : 'Install ffmpeg to enable in-app streaming. Or copy the RTMP URL for OBS.'}
-          </div>
-
-          <div className="flex items-center gap-3">
+              ? 'Captures the audience output window. Open it before you go live.'
+              : 'Install ffmpeg to stream from the app, or copy the RTMP endpoint for OBS.'}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
             {isStreaming && streamingPlatform === activePlatform ? (
-              <button
-                onClick={stopStream}
-                className="flex items-center gap-2 px-6 py-2.5 bg-rose-700 hover:bg-rose-600 text-white font-black rounded-xl transition shadow-lg"
-              >
-                <Square className="w-4 h-4 fill-white" />
-                Stop Stream
-              </button>
+              <Button variant="secondary" size="sm" onClick={stopStream}>
+                Stop stream
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="default"
+                size="sm"
                 onClick={startStream}
-                disabled={!keyConfig.key.trim() || ffmpegStatus === 'missing' || (isStreaming && streamingPlatform !== activePlatform)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-xl transition shadow-lg"
+                disabled={
+                  !keyConfig.key.trim() ||
+                  ffmpegStatus === 'missing' ||
+                  (isStreaming && streamingPlatform !== activePlatform)
+                }
               >
-                <Radio className="w-4 h-4" />
-                Go Live on {platform.name}
-              </button>
+                Go live
+              </Button>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

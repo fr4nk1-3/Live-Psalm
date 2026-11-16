@@ -1,39 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  PlaylistItem,
-  ItemType,
-  Slide
-} from '../types/presentation';
+import React, { useEffect, useRef, useState } from 'react';
+import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { PlaylistItem, ItemType, Slide } from '../types/presentation';
 import { StorageService } from '../services/storage';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { EmptyState } from './ui/primitives';
 import {
-  Plus,
-  Trash2,
-  Copy,
-  Music,
-  Book,
-  Film,
-  Megaphone,
-  Clock,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  ChevronsUpDown,
-  FolderPlus,
-  ArrowUp,
-  ArrowDown,
-  Bookmark,
-  Radio,
-  Timer,
-  Pencil,
-  GripVertical,
-  Minus
-} from 'lucide-react';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 
 interface PlaylistPanelProps {
   playlist: PlaylistItem[];
   activeItemId: string | null;
+  /** Select an item for preview without taking it to air. */
+  onPreviewItem?: (item: PlaylistItem) => void;
   onSelectItem: (item: PlaylistItem) => void;
   onSelectSlideInItem?: (item: PlaylistItem, slide: Slide) => void;
+  onPreviewSlideInItem?: (item: PlaylistItem, slide: Slide) => void;
   onAddItem: (type: ItemType) => void;
   onRemoveItem: (id: string) => void;
   onDuplicateItem: (id: string) => void;
@@ -45,31 +33,52 @@ interface PlaylistPanelProps {
   liveSlideId?: string | null;
 }
 
-const shortSectionTag = (label?: string, fallbackIdx?: number): string => {
-  if (!label) return `${(fallbackIdx ?? 0) + 1}`;
-  const lower = label.toLowerCase();
-  if (lower.startsWith('verse ')) return `V${label.slice(6).trim()}`;
-  if (lower === 'chorus') return 'CH';
-  if (lower.startsWith('chorus ')) return `C${label.slice(7).trim()}`;
-  if (lower === 'pre-chorus') return 'PC';
-  if (lower === 'bridge') return 'BR';
-  if (lower === 'intro') return 'IN';
-  if (lower === 'outro') return 'OUT';
-  if (lower === 'scripture') return 'SCR';
-  if (lower === 'slide') return `${(fallbackIdx ?? 0) + 1}`;
-  return label.slice(0, 4).toUpperCase();
+const SECTION_TAGS: Record<string, string> = {
+  chorus: 'CH',
+  'pre-chorus': 'PC',
+  bridge: 'BR',
+  intro: 'IN',
+  outro: 'OUT',
+  scripture: 'SCR',
+  slide: 'SL'
 };
 
-const shortBibleId = (id?: string | null): string => {
-  if (!id) return '';
-  return StorageService.getTranslationAbbreviation(id);
+const sectionTag = (label?: string, fallbackIdx = 0): string => {
+  if (!label) return String(fallbackIdx + 1).padStart(2, '0');
+  const lower = label.toLowerCase();
+  if (lower.startsWith('verse ')) return `V${label.slice(6).trim()}`;
+  if (lower.startsWith('chorus ')) return `C${label.slice(7).trim()}`;
+  return SECTION_TAGS[lower] ?? label.slice(0, 3).toUpperCase();
 };
+
+const translationAbbr = (id?: string | null): string => (id ? StorageService.getTranslationAbbreviation(id) : '');
+
+const ADD_ITEMS: { type: ItemType; label: string; hint: string }[] = [
+  { type: 'header', label: 'Section heading', hint: 'Divide the service into parts' },
+  { type: 'song', label: 'Song', hint: 'Worship set from your library' },
+  { type: 'bible', label: 'Scripture', hint: 'A Bible passage' },
+  { type: 'media', label: 'Media', hint: 'Image or video slide' },
+  { type: 'sermon', label: 'Sermon deck', hint: 'Outline with slides' },
+  { type: 'announcement', label: 'Announcement', hint: 'Notice for the screens' },
+  { type: 'countdown', label: 'Countdown', hint: 'Timer before the service' }
+];
+
+const TEMPLATES = [
+  'Sunday Service',
+  'Midweek Service',
+  'Youth Worship Night',
+  'Funeral Service',
+  'Wedding Ceremony',
+  'Conference Event'
+];
 
 export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   playlist,
   activeItemId,
+  onPreviewItem,
   onSelectItem,
   onSelectSlideInItem,
+  onPreviewSlideInItem,
   onAddItem,
   onRemoveItem,
   onDuplicateItem,
@@ -80,51 +89,30 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   liveItemId,
   liveSlideId
 }) => {
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState<string>('');
-
-  const headerActionsRef = useRef<HTMLDivElement>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (headerActionsRef.current && !headerActionsRef.current.contains(e.target as Node)) {
-        setShowAddMenu(false);
-        setShowTemplateMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
-
-  // Keep active playlist item scrolled into view when navigating via keyboard
   useEffect(() => {
     if (activeItemId && itemRefs.current[activeItemId]) {
       itemRefs.current[activeItemId]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [activeItemId]);
 
-  const toggleExpandItem = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const anyExpanded = playlist.some(item => expandedIds[item.id]);
-  const handleToggleExpandAll = () => {
+  const toggleExpandAll = () => {
     if (anyExpanded) {
       setExpandedIds({});
-    } else {
-      const next: Record<string, boolean> = {};
-      playlist.forEach(item => {
-        if (item.slides.length > 0) next[item.id] = true;
-      });
-      setExpandedIds(next);
+      return;
     }
+    const next: Record<string, boolean> = {};
+    playlist.forEach(item => {
+      if (item.slides.length > 0) next[item.id] = true;
+    });
+    setExpandedIds(next);
   };
 
   const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -134,583 +122,409 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
     const currentIndex = playlist.findIndex(item => item.id === activeItemId);
 
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
-      const nextIdx = currentIndex < 0 ? 0 : Math.min(playlist.length - 1, currentIndex + 1);
-      onSelectItem(playlist[nextIdx]);
-    } else if (e.key === 'ArrowUp') {
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      const nextIdx = currentIndex < 0 ? 0 : Math.min(playlist.length - 1, Math.max(0, currentIndex + step));
+      const item = playlist[nextIdx];
+      if (item) (onPreviewItem ?? onSelectItem)(item);
+      return;
+    }
+    if (e.key === 'ArrowRight' && activeItemId) {
       e.preventDefault();
-      e.stopPropagation();
-      const prevIdx = currentIndex < 0 ? 0 : Math.max(0, currentIndex - 1);
-      onSelectItem(playlist[prevIdx]);
-    } else if (e.key === 'ArrowRight' && activeItemId) {
-      e.preventDefault();
-      e.stopPropagation();
       setExpandedIds(prev => ({ ...prev, [activeItemId]: true }));
-    } else if (e.key === 'ArrowLeft' && activeItemId) {
+      return;
+    }
+    if (e.key === 'ArrowLeft' && activeItemId) {
       e.preventDefault();
-      e.stopPropagation();
       setExpandedIds(prev => ({ ...prev, [activeItemId]: false }));
-    } else if ((e.key === 'Enter' || e.key === ' ') && currentIndex >= 0) {
+      return;
+    }
+    if (e.key === 'Enter' && currentIndex >= 0) {
       e.preventDefault();
-      e.stopPropagation();
       onSelectItem(playlist[currentIndex]);
     }
   };
 
-  const getItemIcon = (type: ItemType) => {
-    switch (type) {
-      case 'song': return <Music className="w-4 h-4 text-emerald-400 shrink-0" />;
-      case 'bible': return <Book className="w-4 h-4 text-amber-400 shrink-0" />;
-      case 'media': return <Film className="w-4 h-4 text-sky-400 shrink-0" />;
-      case 'announcement': return <Megaphone className="w-4 h-4 text-purple-400 shrink-0" />;
-      case 'countdown': return <Clock className="w-4 h-4 text-rose-400 shrink-0" />;
-      case 'sermon': return <FileText className="w-4 h-4 text-indigo-400 shrink-0" />;
-      default: return <FileText className="w-4 h-4 text-slate-400 shrink-0" />;
+  const startEditing = (e: React.MouseEvent | undefined, item: PlaylistItem) => {
+    e?.stopPropagation();
+    setEditingId(item.id);
+    setEditingTitle(item.title);
+  };
+
+  const commitEditing = () => {
+    if (editingId) {
+      if (onRenameItem && editingTitle.trim()) onRenameItem(editingId, editingTitle.trim());
+      setEditingId(null);
     }
   };
 
+  const dragHandlers = (index: number) => ({
+    draggable: true,
+    onDragStart: () => setDragIndex(index),
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverIndex(index);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragIndex !== null && dragIndex !== index) onMoveItem(dragIndex, index);
+      setDragIndex(null);
+      setDragOverIndex(null);
+    },
+    onDragEnd: () => {
+      setDragIndex(null);
+      setDragOverIndex(null);
+    }
+  });
+
   return (
-    <div className="w-56 xl:w-64 2xl:w-72 bg-[#0f1624] border-r border-[#26334a] flex flex-col h-full min-h-0 select-none shrink-0 transition-[width] duration-150">
-      {/* Panel Header */}
-      <div className="p-2.5 border-b border-[#26334a] bg-[#131b2c] space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-black text-[11px] uppercase tracking-wider text-slate-200 whitespace-nowrap">
-            Service Playlist
-          </span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800/90 text-slate-300 font-bold border border-slate-700 shrink-0">
-            {playlist.length} {playlist.length === 1 ? 'item' : 'items'}
-          </span>
+    <aside className="panel w-[292px] shrink-0 border-l border-border">
+      <div className="panel-header">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="panel-title">Service</h2>
+          <span className="tabular text-2xs text-muted-foreground">{playlist.length}</span>
         </div>
 
-        {/* Uniform Action Bar */}
-        <div ref={headerActionsRef} className="grid grid-cols-3 gap-1.5 relative">
-          <button
-            type="button"
-            onClick={handleToggleExpandAll}
-            disabled={playlist.length === 0}
-            className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border flex items-center justify-center gap-1 transition disabled:opacity-35 ${
-              anyExpanded
-                ? 'bg-indigo-600/25 border-indigo-400/60 text-indigo-200 hover:bg-indigo-600/35'
-                : 'bg-[#0f1624] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
-            title={anyExpanded ? 'Collapse all slide previews' : 'Expand all slide previews'}
-          >
-            <ChevronsUpDown className="w-3 h-3 shrink-0" />
-            <span>{anyExpanded ? 'Collapse' : 'Slides'}</span>
-          </button>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowTemplateMenu(prev => !prev);
-                setShowAddMenu(false);
-              }}
-              className={`w-full py-1.5 px-2 rounded-lg text-[10px] font-bold border flex items-center justify-center gap-1 transition ${
-                showTemplateMenu
-                  ? 'bg-slate-800 border-slate-600 text-white'
-                  : 'bg-[#0f1624] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-              title="Load a service template"
-            >
-              <FolderPlus className="w-3 h-3 shrink-0 text-amber-400" />
-              <span>Template</span>
-            </button>
-            {showTemplateMenu && (
-              <div className="absolute left-0 top-9 w-48 bg-[#182234] border border-[#26334a] rounded-lg shadow-2xl py-1 z-50 text-xs text-slate-200">
-                <div className="px-3 py-1 font-semibold text-slate-400 text-[10px] uppercase border-b border-slate-700">
-                  Service Templates
-                </div>
-                {[
-                  'Sunday Service',
-                  'Midweek Service',
-                  'Youth Worship Night',
-                  'Funeral Service',
-                  'Wedding Ceremony',
-                  'Conference Event'
-                ].map(tmpl => (
-                  <button
-                    key={tmpl}
-                    onClick={() => {
-                      onLoadTemplate(tmpl);
-                      setShowTemplateMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 hover:text-indigo-200 transition"
-                  >
-                    {tmpl}
-                  </button>
-                ))}
-                {onClearPlaylist && playlist.length > 0 && (
-                  <div className="border-t border-slate-700 mt-1 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowTemplateMenu(false);
-                        if (window.confirm('Clear all items from the current service playlist?')) {
-                          onClearPlaylist();
-                        }
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-rose-400 hover:bg-rose-600/20 hover:text-rose-200 font-semibold transition flex items-center gap-1.5"
-                    >
-                      <Trash2 className="w-3 h-3" /> Clear Playlist
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddMenu(prev => !prev);
-                setShowTemplateMenu(false);
-              }}
-              className="w-full py-1.5 px-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 shadow transition border border-indigo-500"
-            >
-              <Plus className="w-3 h-3 shrink-0" />
-              <span>Add</span>
-            </button>
-            {showAddMenu && (
-              <div className="absolute right-0 top-9 w-44 bg-[#182234] border border-[#26334a] rounded-lg shadow-2xl py-1 z-50 text-xs">
-                {[
-                  { type: 'header', label: 'Section Header', icon: Minus },
-                  { type: 'song', label: 'Worship Song', icon: Music },
-                  { type: 'bible', label: 'Scripture Verse', icon: Book },
-                  { type: 'media', label: 'Background / Media', icon: Film },
-                  { type: 'announcement', label: 'Announcement', icon: Megaphone },
-                  { type: 'countdown', label: 'Countdown Timer', icon: Clock },
-                  { type: 'sermon', label: 'Sermon Deck', icon: FileText }
-                ].map(item => (
-                  <button
-                    key={item.type}
-                    onClick={() => {
-                      onAddItem(item.type as ItemType);
-                      setShowAddMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 text-slate-200 flex items-center gap-2 transition"
-                  >
-                    <item.icon className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="flex items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="xs" variant="secondary">
+                Add
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Add to service</DropdownMenuLabel>
+              {ADD_ITEMS.map(item => (
+                <DropdownMenuItem key={item.type} onSelect={() => onAddItem(item.type)}>
+                  <span className="flex flex-1 flex-col gap-0.5">
                     <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                    <span className="text-2xs text-muted-foreground">{item.hint}</span>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-xs" variant="ghost" aria-label="Service options">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={toggleExpandAll} disabled={playlist.length === 0}>
+                {anyExpanded ? 'Collapse all slides' : 'Expand all slides'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Service templates</DropdownMenuLabel>
+              {TEMPLATES.map(template => (
+                <DropdownMenuItem key={template} onSelect={() => onLoadTemplate(template)}>
+                  {template}
+                </DropdownMenuItem>
+              ))}
+              {onClearPlaylist && playlist.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                    onSelect={() => {
+                      if (window.confirm('Remove every item from this service?')) onClearPlaylist();
+                    }}
+                  >
+                    Clear service
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Playlist Items Scrollable List (focusable for keyboard navigation) */}
       <div
         tabIndex={0}
         onKeyDown={handleListKeyDown}
-        aria-label="Service Playlist Items"
-        className="flex-1 overflow-y-auto p-2 space-y-1.5 outline-none focus:ring-1 focus:ring-inset focus:ring-indigo-500/40"
+        aria-label="Service order"
+        className="min-h-0 flex-1 overflow-y-auto outline-none"
       >
         {playlist.length === 0 ? (
-          <div className="h-40 flex flex-col items-center justify-center text-center p-4 text-slate-500 text-xs">
-            <p>Service playlist is empty.</p>
-            <p className="mt-1 text-slate-600">Click "+ Add" or load a template above.</p>
-          </div>
+          <EmptyState
+            title="No service yet"
+            description="Add songs, scripture and media to build the order of service."
+            className="py-14"
+            action={
+              <Button size="xs" onClick={() => onAddItem('song')}>
+                Add a first item
+              </Button>
+            }
+          />
         ) : (
-          playlist.map((item, index) => {
-            const isSelected = item.id === activeItemId;
-            const isLive = item.id === liveItemId;
-            const isExpanded = !!expandedIds[item.id];
-            const isHeader = item.type === 'header';
-            const isDragTarget = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
+          <ul className="py-1">
+            {playlist.map((item, index) => {
+              const isSelected = item.id === activeItemId;
+              const isLive = item.id === liveItemId;
+              const isExpanded = !!expandedIds[item.id];
+              const isDragTarget = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
+              const bibleAbbr = translationAbbr(item.bibleMeta?.translationId);
+              const parallelAbbr = translationAbbr(item.bibleMeta?.parallelTranslationId);
+              const hasVideoBg = Boolean(item.videoBackgroundUrl) || item.slides.some(s => s.backgroundType === 'video');
 
-            const startEditingTitle = (e?: React.MouseEvent) => {
-              e?.stopPropagation();
-              setEditingId(item.id);
-              setEditingTitle(item.title);
-            };
-
-            const commitEditingTitle = () => {
-              if (editingId === item.id) {
-                if (onRenameItem && editingTitle.trim()) {
-                  onRenameItem(item.id, editingTitle);
-                }
-                setEditingId(null);
-              }
-            };
-
-            if (isHeader) {
-              return (
-                <div
-                  key={item.id}
-                  draggable
-                  onDragStart={() => setDragIndex(index)}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    setDragOverIndex(index);
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    if (dragIndex !== null && dragIndex !== index) {
-                      onMoveItem(dragIndex, index);
-                    }
-                    setDragIndex(null);
-                    setDragOverIndex(null);
-                  }}
-                  onDragEnd={() => {
-                    setDragIndex(null);
-                    setDragOverIndex(null);
-                  }}
-                  onClick={() => onSelectItem(item)}
-                  className={`group flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg border transition cursor-grab active:cursor-grabbing ${
-                    isDragTarget
-                      ? 'border-indigo-400 bg-indigo-950/50'
-                      : isSelected
-                      ? 'bg-slate-800/90 border-indigo-500/60'
-                      : 'bg-[#0b101b] border-slate-800/80 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <GripVertical className="w-3 h-3 text-slate-600 shrink-0" />
+              if (item.type === 'header') {
+                return (
+                  <li
+                    key={item.id}
+                    {...dragHandlers(index)}
+                    onClick={() => (onPreviewItem ? onPreviewItem(item) : onSelectItem(item))}
+                    className={cn(
+                      'group relative mx-1 mb-1 mt-3 flex items-center gap-2 rounded-sm px-2 py-1.5 first:mt-1',
+                      'cursor-grab active:cursor-grabbing',
+                      isSelected ? 'bg-accent/70' : 'hover:bg-accent/40',
+                      isDragTarget && 'ring-1 ring-ring'
+                    )}
+                  >
+                    <span className="h-3 w-px bg-border" aria-hidden />
                     {editingId === item.id ? (
                       <input
-                        type="text"
                         autoFocus
                         value={editingTitle}
                         onClick={e => e.stopPropagation()}
                         onChange={e => setEditingTitle(e.target.value)}
-                        onBlur={commitEditingTitle}
+                        onBlur={commitEditing}
                         onKeyDown={e => {
                           e.stopPropagation();
-                          if (e.key === 'Enter') commitEditingTitle();
+                          if (e.key === 'Enter') commitEditing();
                           if (e.key === 'Escape') setEditingId(null);
                         }}
-                        className="w-full bg-[#141d2e] border border-indigo-500 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white outline-none"
+                        className="h-6 min-w-0 flex-1 rounded-sm border border-ring bg-background px-1.5 text-2xs font-semibold uppercase tracking-[0.08em] outline-none"
                       />
                     ) : (
                       <span
-                        onDoubleClick={startEditingTitle}
-                        className="text-[10px] font-black uppercase tracking-widest text-indigo-300 truncate"
-                        title="Double-click to rename section"
+                        onDoubleClick={e => startEditing(e, item)}
+                        className="min-w-0 flex-1 truncate text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
                       >
                         {item.title}
                       </span>
                     )}
-                  </div>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
-                    {onRenameItem && (
-                      <button
-                        type="button"
-                        onClick={startEditingTitle}
-                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded"
-                        title="Rename section"
-                      >
-                        <Pencil className="w-2.5 h-2.5" />
-                      </button>
+                    <ItemMenu
+                      item={item}
+                      index={index}
+                      total={playlist.length}
+                      onMoveItem={onMoveItem}
+                      onRename={onRenameItem ? () => startEditing(undefined, item) : undefined}
+                      onDuplicate={onDuplicateItem}
+                      onRemove={onRemoveItem}
+                    />
+                  </li>
+                );
+              }
+
+              return (
+                <li key={item.id} className="relative">
+                  {isDragTarget && <span className="absolute inset-x-1 top-0 h-px bg-foreground" aria-hidden />}
+                  <div
+                    ref={el => {
+                      itemRefs.current[item.id] = el;
+                    }}
+                    {...dragHandlers(index)}
+                    onClick={() => (onPreviewItem ?? onSelectItem)(item)}
+                    className={cn(
+                      'list-row mx-1 cursor-pointer rounded-sm',
+                      isSelected && 'bg-accent text-accent-foreground',
+                      isLive && 'pl-[6px]',
+                      isDragTarget && 'opacity-60'
                     )}
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onRemoveItem(item.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded"
-                      title="Remove section header"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            }
+                    data-active={isSelected}
+                  >
+                    <span
+                      className={cn('absolute inset-y-1 left-0 w-[2px] rounded-full', isLive ? 'bg-live' : 'bg-transparent')}
+                      aria-hidden
+                    />
+                    <span className="tabular w-5 shrink-0 text-2xs text-muted-foreground">{index + 1}</span>
 
-            const hasVideoBg =
-              Boolean(item.videoBackgroundUrl) ||
-              item.slides.some(s => s.backgroundType === 'video');
-            const hasAutoAdvance =
-              typeof item.autoAdvanceSeconds === 'number' && item.autoAdvanceSeconds > 0;
-            const hasRememberedSlide =
-              item.type === 'bible' && Boolean(item.lastViewedSlideId);
-            const primaryBibleAbbr = shortBibleId(item.bibleMeta?.translationId);
-            const parallelBibleAbbr = shortBibleId(item.bibleMeta?.parallelTranslationId);
-
-            return (
-              <div
-                key={item.id}
-                ref={el => {
-                  itemRefs.current[item.id] = el;
-                }}
-                draggable={editingId !== item.id}
-                onDragStart={() => setDragIndex(index)}
-                onDragOver={e => {
-                  e.preventDefault();
-                  setDragOverIndex(index);
-                }}
-                onDrop={e => {
-                  e.preventDefault();
-                  if (dragIndex !== null && dragIndex !== index) {
-                    onMoveItem(dragIndex, index);
-                  }
-                  setDragIndex(null);
-                  setDragOverIndex(null);
-                }}
-                onDragEnd={() => {
-                  setDragIndex(null);
-                  setDragOverIndex(null);
-                }}
-                className={`rounded-lg border transition overflow-hidden ${
-                  isDragTarget
-                    ? 'border-indigo-400 ring-1 ring-indigo-400/60 bg-indigo-950/60'
-                    : isLive
-                    ? 'bg-rose-950/35 border-rose-500/80 shadow-[0_0_10px_rgba(239,68,68,0.18)]'
-                    : isSelected
-                    ? 'bg-indigo-950/50 border-indigo-500/70 text-white'
-                    : 'bg-[#141d2e]/80 border-slate-800/80 hover:bg-[#1c273e] hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                {/* Item Row (Single-click = Go Live immediately) */}
-                <div
-                  onClick={() => onSelectItem(item)}
-                  className="group relative px-2 py-1.5 flex items-center justify-between gap-1.5 cursor-pointer"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    {/* Expand/Collapse Slide Preview Chevron */}
-                    {item.slides.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={e => toggleExpandItem(item.id, e)}
-                        className="p-0.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded transition shrink-0"
-                        title={isExpanded ? 'Collapse slides preview' : 'Expand slides preview'}
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-indigo-300" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    ) : (
-                      <span className="w-4 shrink-0" />
-                    )}
-
-                    {/* Reorder Arrows (Hover) */}
-                    <div className="hidden group-hover:flex flex-col shrink-0">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={e => {
-                          e.stopPropagation();
-                          onMoveItem(index, index - 1);
-                        }}
-                        className="p-0.5 text-slate-500 hover:text-white disabled:opacity-20"
-                        title="Move up"
-                      >
-                        <ArrowUp className="w-2.5 h-2.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === playlist.length - 1}
-                        onClick={e => {
-                          e.stopPropagation();
-                          onMoveItem(index, index + 1);
-                        }}
-                        className="p-0.5 text-slate-500 hover:text-white disabled:opacity-20"
-                        title="Move down"
-                      >
-                        <ArrowDown className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-
-                    <span className="text-[10px] font-mono font-bold text-slate-500 min-w-[14px] group-hover:hidden shrink-0">
-                      {index + 1}
-                    </span>
-
-                    {getItemIcon(item.type)}
-
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
                         {editingId === item.id ? (
                           <input
-                            type="text"
                             autoFocus
                             value={editingTitle}
                             onClick={e => e.stopPropagation()}
                             onChange={e => setEditingTitle(e.target.value)}
-                            onBlur={commitEditingTitle}
+                            onBlur={commitEditing}
                             onKeyDown={e => {
                               e.stopPropagation();
-                              if (e.key === 'Enter') commitEditingTitle();
+                              if (e.key === 'Enter') commitEditing();
                               if (e.key === 'Escape') setEditingId(null);
                             }}
-                            className="w-full bg-[#0b101b] border border-indigo-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white outline-none"
+                            className="h-6 min-w-0 flex-1 rounded-sm border border-ring bg-background px-1.5 text-xs outline-none"
                           />
                         ) : (
                           <span
-                            onDoubleClick={startEditingTitle}
-                            className="font-semibold text-xs truncate"
-                            title="Double-click to rename"
+                            onDoubleClick={e => onRenameItem && startEditing(e, item)}
+                            className="truncate text-xs font-medium"
+                            title={onRenameItem ? 'Double-click to rename' : item.title}
                           >
                             {item.title}
                           </span>
                         )}
-                        {isLive && (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 bg-rose-600 text-white rounded shrink-0">
-                            <Radio className="w-2.5 h-2.5 animate-pulse" />
-                            LIVE
-                          </span>
-                        )}
+                        {isLive && <span className="state-label shrink-0 text-live">Live</span>}
                       </div>
 
-                      {/* Quick Cues & Indicators Row */}
-                      <div className="flex items-center gap-1 mt-0.5 whitespace-nowrap overflow-hidden">
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                      <div className="mt-0.5 flex items-center gap-1.5 truncate text-2xs text-muted-foreground">
+                        <span className="tabular">
                           {item.slides.length} {item.slides.length === 1 ? 'slide' : 'slides'}
                         </span>
-
-                        {primaryBibleAbbr && (
-                          <span className="px-1 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold text-amber-300 shrink-0">
-                            {parallelBibleAbbr ? `${primaryBibleAbbr}+${parallelBibleAbbr}` : primaryBibleAbbr}
-                          </span>
+                        {bibleAbbr && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>{parallelAbbr ? `${bibleAbbr} + ${parallelAbbr}` : bibleAbbr}</span>
+                          </>
                         )}
-
-                        {hasAutoAdvance && (
-                          <span
-                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-semibold text-emerald-300"
-                            title={`Auto-advance every ${item.autoAdvanceSeconds}s`}
-                          >
-                            <Timer className="w-2.5 h-2.5" />
-                            {item.autoAdvanceSeconds}s
-                          </span>
+                        {typeof item.autoAdvanceSeconds === 'number' && item.autoAdvanceSeconds > 0 && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span className="tabular">auto {item.autoAdvanceSeconds}s</span>
+                          </>
                         )}
-
-                        {item.type === 'countdown' && (
-                          <span
-                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] font-semibold text-rose-300"
-                            title="Countdown cue"
-                          >
-                            <Clock className="w-2.5 h-2.5" />
-                            TIMER
-                          </span>
-                        )}
-
                         {hasVideoBg && (
-                          <span
-                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-sky-500/15 border border-sky-500/30 text-[9px] font-semibold text-sky-300"
-                            title="Has video background cue"
-                          >
-                            <Film className="w-2.5 h-2.5" />
-                            BG
-                          </span>
-                        )}
-
-                        {hasRememberedSlide && (
-                          <span
-                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-indigo-500/15 border border-indigo-500/30 text-[9px] font-semibold text-indigo-300"
-                            title="Remembers last viewed verse"
-                          >
-                            <Bookmark className="w-2.5 h-2.5" />
-                          </span>
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>motion background</span>
+                          </>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Quick Item Actions (floating pill on hover so title never squeezes) */}
-                  <div className="hidden group-hover:flex items-center gap-0.5 absolute right-1.5 top-1.5 bg-[#121929]/95 border border-slate-700/80 rounded-md px-1 py-0.5 shadow-lg z-10">
-                    {onRenameItem && (
-                      <button
-                        type="button"
-                        onClick={startEditingTitle}
-                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded"
-                        title="Rename item"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onDuplicateItem(item.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded"
-                      title="Duplicate item"
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onRemoveItem(item.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded"
-                      title="Remove item"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Collapsible Inline Slides Preview */}
-                {isExpanded && item.slides.length > 0 && (
-                  <div className="border-t border-slate-800/80 bg-[#0b101b]/90 px-2 py-1.5 space-y-1 max-h-52 overflow-y-auto">
-                    {item.slides.map((slide, sIdx) => {
-                      const isSlideLive = isLive && liveSlideId === slide.id;
-                      const isRemembered = item.lastViewedSlideId === slide.id;
-                      const snippet = (slide.title || slide.content || 'Empty slide')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-
-                      return (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {item.slides.length > 0 && (
                         <button
-                          key={slide.id}
                           type="button"
                           onClick={e => {
                             e.stopPropagation();
-                            if (onSelectSlideInItem) {
-                              onSelectSlideInItem(item, slide);
-                            } else {
-                              onSelectItem(item);
-                            }
+                            setExpandedIds(prev => ({ ...prev, [item.id]: !prev[item.id] }));
                           }}
-                          className={`w-full text-left px-2 py-1 rounded flex items-center gap-1.5 text-[11px] transition ${
-                            isSlideLive
-                              ? 'bg-rose-600/25 border border-rose-500/60 text-white'
-                              : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
-                          }`}
-                          title="Click to Go Live with this slide"
+                          aria-label={isExpanded ? 'Hide slides' : 'Show slides'}
+                          aria-expanded={isExpanded}
+                          className="flex h-6 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
                         >
-                          <span
-                            className={`px-1 py-0.2 rounded text-[9px] font-bold font-mono shrink-0 ${
-                              isSlideLive
-                                ? 'bg-rose-600 text-white'
-                                : 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {shortSectionTag(slide.sectionLabel, sIdx)}
-                          </span>
-                          <span className="truncate flex-1">{snippet}</span>
-                          {isRemembered && !isSlideLive && (
-                            <Bookmark className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-                          )}
-                          {isSlideLive && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse shrink-0" />
-                          )}
+                          <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', isExpanded && 'rotate-90')} />
                         </button>
-                      );
-                    })}
+                      )}
+                      <ItemMenu
+                        item={item}
+                        index={index}
+                        total={playlist.length}
+                        onMoveItem={onMoveItem}
+                        onRename={onRenameItem ? () => startEditing(undefined, item) : undefined}
+                        onDuplicate={onDuplicateItem}
+                        onRemove={onRemoveItem}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })
+
+                  {isExpanded && item.slides.length > 0 && (
+                    <div className="mx-1 mb-1 border-l border-border pb-1 pl-[26px] pr-1">
+                      {item.slides.map((slide, sIdx) => {
+                        const isSlideLive = isLive && liveSlideId === slide.id;
+                        const snippet = (slide.title || slide.content || 'Untitled slide').replace(/\s+/g, ' ').trim();
+
+                        return (
+                          <button
+                            key={slide.id}
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (onPreviewSlideInItem) onPreviewSlideInItem(item, slide);
+                              else if (onSelectSlideInItem) onSelectSlideInItem(item, slide);
+                              else (onPreviewItem ?? onSelectItem)(item);
+                            }}
+                            onDoubleClick={e => {
+                              e.stopPropagation();
+                              if (onSelectSlideInItem) onSelectSlideInItem(item, slide);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-2xs transition-colors',
+                              isSlideLive ? 'text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'w-8 shrink-0 text-2xs tabular',
+                                isSlideLive ? 'font-semibold text-live' : 'text-muted-foreground/70'
+                              )}
+                            >
+                              {sectionTag(slide.sectionLabel, sIdx)}
+                            </span>
+                            <span className="truncate">{snippet}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
-      {/* Keyboard / Workflow Hint Footer */}
-      <div className="px-3 py-1.5 border-t border-[#26334a] bg-[#0c121e] text-[10px] text-slate-500 flex items-center justify-between">
-        <span>Click: Go Live</span>
-        <span>Alt+↑/↓: Item • →/←: Slides</span>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-2xs text-muted-foreground">
+        <span>Click to preview · Enter to take live</span>
+        <span className="tabular">↑↓ navigate</span>
       </div>
-    </div>
+    </aside>
   );
 };
+
+function ItemMenu({
+  item,
+  index,
+  total,
+  onMoveItem,
+  onRename,
+  onDuplicate,
+  onRemove
+}: {
+  item: PlaylistItem;
+  index: number;
+  total: number;
+  onMoveItem: (from: number, to: number) => void;
+  onRename?: () => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Options for ${item.title}`}
+          onClick={e => e.stopPropagation()}
+          className="flex h-6 w-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {onRename && <DropdownMenuItem onSelect={onRename}>Rename</DropdownMenuItem>}
+        <DropdownMenuItem onSelect={() => onDuplicate(item.id)}>Duplicate</DropdownMenuItem>
+        <DropdownMenuItem disabled={index === 0} onSelect={() => onMoveItem(index, index - 1)}>
+          Move up
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={index >= total - 1} onSelect={() => onMoveItem(index, index + 1)}>
+          Move down
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          onSelect={() => onRemove(item.id)}
+        >
+          Remove
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/* Kept for reference by callers that relied on the previous export shape. */
+export type { PlaylistPanelProps };

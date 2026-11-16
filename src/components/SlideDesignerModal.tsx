@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Slide, Theme, MediaAsset, SectionTag } from '../types/presentation';
 import {
-  Sliders,
-  X,
-  Check,
-  Lock,
-  Play,
-  Film,
-  Image as ImageIcon,
-  Ban,
-  Grid,
-  Palette
-} from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Field, FieldGroup } from './ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
+import { Separator } from './ui/separator';
+import { EmptyState } from './ui/primitives';
 
 interface SlideDesignerModalProps {
   isOpen: boolean;
@@ -42,6 +47,9 @@ const SECTION_TAGS: SectionTag[] = [
   'Slide',
   'Scripture'
 ];
+
+/** Neutral stage black used when a solid background colour is enabled but unpicked. */
+const DEFAULT_SOLID_COLOR = 'rgb(9 9 11)';
 
 const isVideoAssetUrl = (url?: string, type?: string) => {
   if (type === 'video') return true;
@@ -91,22 +99,23 @@ export const SlideDesignerModal: React.FC<SlideDesignerModalProps> = ({
 
   if (!activeSlide) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-        <div className="w-full max-w-md bg-[#0f1624] border border-[#26334a] rounded-2xl p-6 text-center space-y-3 shadow-2xl">
-          <Sliders className="w-8 h-8 text-emerald-400 mx-auto" />
-          <div className="text-sm font-black text-white">No Slide Selected</div>
-          <p className="text-xs text-slate-400">
-            Select a slide from the Service Playlist or Center Grid first to open it in the Visual Slide Canvas.
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition"
-          >
-            Got It
-          </button>
-        </div>
-      </div>
+      <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Slide designer</DialogTitle>
+            <DialogDescription>No slide is selected.</DialogDescription>
+          </DialogHeader>
+          <EmptyState
+            title="Select a slide first"
+            description="Choose a slide in the service or the preview to open it here."
+          />
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     );
   }
 
@@ -114,6 +123,15 @@ export const SlideDesignerModal: React.FC<SlideDesignerModalProps> = ({
   const effectiveBgUrl =
     backgroundType === 'color' ? undefined : backgroundUrl || activeTheme.backgroundUrl;
   const effectiveIsVideo = isVideoAssetUrl(effectiveBgUrl, backgroundType);
+
+  const backgroundSource =
+    backgroundType === 'color'
+      ? '__solid__'
+      : backgroundUrl
+      ? media.some(m => m.url === backgroundUrl)
+        ? backgroundUrl
+        : '__custom__'
+      : '__default__';
 
   const handleSelectMediaAsset = (asset: MediaAsset | null) => {
     if (!asset) {
@@ -125,6 +143,22 @@ export const SlideDesignerModal: React.FC<SlideDesignerModalProps> = ({
     setBackgroundUrl(asset.url);
     setBackgroundType(asset.type === 'video' ? 'video' : 'image');
     setBackgroundColor('');
+  };
+
+  const handleBackgroundSource = (value: string) => {
+    if (value === '__default__') {
+      handleSelectMediaAsset(null);
+      return;
+    }
+    if (value === '__solid__') {
+      setBackgroundColor(backgroundColor || DEFAULT_SOLID_COLOR);
+      setBackgroundType('color');
+      setBackgroundUrl('');
+      return;
+    }
+    if (value === '__custom__') return;
+    const asset = media.find(m => m.url === value);
+    if (asset) handleSelectMediaAsset(asset);
   };
 
   const handleSave = (goLive: boolean) => {
@@ -144,7 +178,8 @@ export const SlideDesignerModal: React.FC<SlideDesignerModalProps> = ({
               ? 'video'
               : 'image'
             : undefined,
-        backgroundColor: backgroundType === 'color' ? backgroundColor || '#0f172a' : undefined
+        backgroundColor:
+          backgroundType === 'color' ? backgroundColor || DEFAULT_SOLID_COLOR : undefined
       },
       { goLive, applyBgToItem }
     );
@@ -152,330 +187,287 @@ export const SlideDesignerModal: React.FC<SlideDesignerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-5xl bg-[#0f1624] border border-emerald-500/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-xs animate-zoom-in">
-        {/* Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center">
-              <Sliders className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div>
-              <h2 className="font-black text-sm text-white uppercase tracking-wider">
-                Visual Slide Canvas
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                16:9 live composition preview with theme typography, media backgrounds, and safe guides.
-              </p>
-            </div>
-          </div>
+    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="h-[min(88vh,42rem)] max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Slide designer</DialogTitle>
+          <DialogDescription>Text, background and safe guides for this slide.</DialogDescription>
+        </DialogHeader>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowSafeGuides(v => !v)}
-              className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 transition ${
-                showSafeGuides
-                  ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-              }`}
-              title="Toggle 16:9 title-safe broadcast guides"
-            >
-              <Grid className="w-3.5 h-3.5" /> Safe Guides
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Main Editor Grid */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-          {/* Left: 16:9 Canvas Stage */}
-          <div className="lg:col-span-7 bg-[#070a11] p-5 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-[#26334a]">
-            <div
-              className="relative w-full rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex items-center justify-center p-8"
-              style={{
-                aspectRatio: '16 / 9',
-                backgroundColor:
-                  backgroundType === 'color'
-                    ? backgroundColor || '#0f172a'
-                    : '#000000'
-              }}
-            >
-              {effectiveBgUrl &&
-                (effectiveIsVideo ? (
-                  <video
-                    src={effectiveBgUrl}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  <img
-                    src={effectiveBgUrl}
-                    alt="Canvas BG"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ))}
-
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          {/* Preview pane */}
+          <div className="flex min-h-0 flex-col overflow-y-auto border-b border-border bg-background p-5 lg:w-7/12 lg:min-w-0 lg:border-b-0 lg:border-r">
+            <div className="my-auto w-full space-y-3">
               <div
-                className="absolute inset-0"
-                style={{ backgroundColor: `rgba(0,0,0,${activeTheme.scrimOpacity})` }}
-              />
-
-              {/* Broadcast Safe Area Guide */}
-              {showSafeGuides && (
-                <div className="absolute inset-4 border border-dashed border-emerald-400/35 rounded-lg pointer-events-none z-10">
-                  <span className="absolute -top-2.5 left-2 px-1 bg-black/70 text-[8px] font-mono text-emerald-300/80 uppercase">
-                    Title Safe (16:9)
-                  </span>
-                </div>
-              )}
-
-              {/* Live Slide Content */}
-              <div
-                className="relative z-20 max-w-xl w-full flex flex-col"
+                className="relative flex w-full items-center justify-center overflow-hidden rounded-md border border-border bg-black p-8"
                 style={{
-                  textAlign: activeTheme.align || 'center',
-                  alignItems:
-                    activeTheme.align === 'left'
-                      ? 'flex-start'
-                      : activeTheme.align === 'right'
-                      ? 'flex-end'
-                      : 'center'
+                  aspectRatio: '16 / 9',
+                  ...(backgroundType === 'color'
+                    ? { backgroundColor: backgroundColor || DEFAULT_SOLID_COLOR }
+                    : {})
                 }}
               >
-                {title && (
-                  <div
-                    className="text-[11px] font-black uppercase tracking-widest mb-3 px-3 py-1 rounded-full border inline-block"
-                    style={{
-                      color: activeTheme.accentColor || '#a5b4fc',
-                      borderColor: `${activeTheme.accentColor || '#6366f1'}66`,
-                      backgroundColor: 'rgba(15, 23, 42, 0.78)'
-                    }}
-                  >
-                    {title}
+                {effectiveBgUrl &&
+                  (effectiveIsVideo ? (
+                    <video
+                      src={effectiveBgUrl}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={effectiveBgUrl}
+                      alt="Slide background"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ))}
+
+                <div
+                  className="absolute inset-0"
+                  style={{ backgroundColor: `rgba(0,0,0,${activeTheme.scrimOpacity})` }}
+                />
+
+                {showSafeGuides && (
+                  <div className="pointer-events-none absolute inset-4 z-10 rounded-sm border border-dashed border-white/25">
+                    <span className="absolute -top-2.5 left-2 bg-black/60 px-1 text-2xs text-white/60">
+                      Title safe 16:9
+                    </span>
                   </div>
                 )}
 
                 <div
-                  className="font-extrabold text-xl sm:text-2xl leading-snug whitespace-pre-line drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)]"
+                  className="relative z-20 flex w-full max-w-xl flex-col"
                   style={{
-                    fontFamily: activeTheme.fontFamily,
-                    color: activeTheme.textColor || '#ffffff'
+                    textAlign: activeTheme.align || 'center',
+                    alignItems:
+                      activeTheme.align === 'left'
+                        ? 'flex-start'
+                        : activeTheme.align === 'right'
+                        ? 'flex-end'
+                        : 'center'
                   }}
                 >
-                  {content || 'Slide text preview...'}
-                </div>
-
-                {subtitle && (
-                  <div
-                    className="text-xs font-bold mt-3 uppercase tracking-wider"
-                    style={{ color: activeTheme.accentColor || '#6ee7b7' }}
-                  >
-                    {subtitle}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="w-full flex items-center justify-between text-[10px] text-slate-500 mt-2.5 px-1">
-              <span>Theme: {activeTheme.name} ({activeTheme.fontFamily})</span>
-              <span>Section: {sectionLabel}</span>
-            </div>
-          </div>
-
-          {/* Right: Structured Inspector */}
-          <div className="lg:col-span-5 bg-[#0f1624] p-4 space-y-3 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Section Tag
-                </label>
-                <select
-                  disabled={isScriptureSlide}
-                  value={sectionLabel}
-                  onChange={e => setSectionLabel(e.target.value as SectionTag)}
-                  className="w-full bg-[#0b101b] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-white font-semibold outline-none disabled:opacity-50"
-                >
-                  {SECTION_TAGS.map(tag => (
-                    <option key={tag} value={tag}>
-                      {tag}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Badge Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="Optional badge..."
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  className="w-full bg-[#0b101b] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-white outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                Main Body Text / Lyrics
-              </label>
-              {isScriptureSlide ? (
-                <div className="p-2.5 bg-[#0b101b] border border-amber-500/30 rounded-lg text-amber-300 text-[11px] font-semibold flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>Scripture text is locked for Bible slides to preserve accuracy.</span>
-                </div>
-              ) : (
-                <textarea
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  className="w-full h-24 bg-[#0b101b] border border-slate-700 focus:border-emerald-500 rounded-lg p-2.5 text-white outline-none resize-none leading-relaxed"
-                  placeholder="Enter slide lyrics or message..."
-                />
-              )}
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                Subtitle / Reference / Credit
-              </label>
-              <input
-                type="text"
-                placeholder="Optional subtitle..."
-                value={subtitle}
-                onChange={e => setSubtitle(e.target.value)}
-                className="w-full bg-[#0b101b] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-white outline-none"
-              />
-            </div>
-
-            {/* Visual Background Picker */}
-            <div className="bg-[#121929] border border-slate-800 rounded-xl p-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-300 uppercase flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-sky-400" /> Slide Background
-                </label>
-                <label className="flex items-center gap-1.5 bg-[#0b101b] border border-slate-700 rounded-md px-2 py-0.5 cursor-pointer text-[10px] text-slate-300">
-                  <Palette className="w-3 h-3 text-purple-400" />
-                  <span>Solid</span>
-                  <input
-                    type="color"
-                    value={backgroundColor || '#0f172a'}
-                    onChange={e => {
-                      setBackgroundColor(e.target.value);
-                      setBackgroundType('color');
-                      setBackgroundUrl('');
-                    }}
-                    className="w-4 h-4 bg-transparent border-0 p-0 cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5 max-h-28 overflow-y-auto pr-1">
-                <button
-                  type="button"
-                  onClick={() => handleSelectMediaAsset(null)}
-                  className={`h-12 rounded-lg border flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition ${
-                    !backgroundUrl && backgroundType !== 'color'
-                      ? 'border-emerald-400 bg-emerald-950/30 text-emerald-200'
-                      : 'border-slate-800 bg-[#0b101b] text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <Ban className="w-3.5 h-3.5" /> Theme Default
-                </button>
-
-                {media.map(m => {
-                  const isSel = backgroundType !== 'color' && backgroundUrl === m.url;
-                  const isVid = m.type === 'video';
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => handleSelectMediaAsset(m)}
-                      className={`relative h-12 rounded-lg overflow-hidden border transition ${
-                        isSel
-                          ? 'border-emerald-400 ring-1 ring-emerald-400/50'
-                          : 'border-slate-800 opacity-75 hover:opacity-100'
-                      }`}
-                      title={m.name}
+                  {title && (
+                    <div
+                      className="mb-3 inline-block rounded-sm border px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.08em]"
+                      style={{
+                        color: activeTheme.accentColor,
+                        borderColor: activeTheme.accentColor,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)'
+                      }}
                     >
-                      {isVid ? (
-                        <video src={m.url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-black/75 px-1 py-0.5 flex items-center gap-0.5">
-                        {isVid && <Film className="w-2.5 h-2.5 text-sky-400 shrink-0" />}
-                        <span className="text-[8px] font-bold text-white truncate">{m.name}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                      {title}
+                    </div>
+                  )}
+
+                  <div
+                    className="whitespace-pre-line text-xl font-semibold leading-snug sm:text-2xl"
+                    style={{
+                      fontFamily: activeTheme.fontFamily,
+                      color: activeTheme.textColor
+                    }}
+                  >
+                    {content || 'Slide text preview...'}
+                  </div>
+
+                  {subtitle && (
+                    <div
+                      className="mt-3 text-xs font-medium uppercase tracking-[0.08em]"
+                      style={{ color: activeTheme.accentColor }}
+                    >
+                      {subtitle}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <input
-                type="text"
-                placeholder="Or paste custom image/video URL..."
-                value={backgroundUrl}
-                onChange={e => {
-                  const val = e.target.value;
-                  setBackgroundUrl(val);
-                  setBackgroundType(val.trim() ? (isVideoAssetUrl(val) ? 'video' : 'image') : undefined);
-                }}
-                className="w-full bg-[#0b101b] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-slate-300 text-[11px] outline-none"
-              />
+              <div className="flex items-center justify-between gap-3 text-2xs text-muted-foreground">
+                <span className="truncate">
+                  {activeTheme.name} · {activeTheme.fontFamily}
+                </span>
+                <span className="truncate">{sectionLabel}</span>
+              </div>
+            </div>
+          </div>
 
-              <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer pt-0.5">
-                <input
-                  type="checkbox"
-                  checked={applyBgToItem}
-                  onChange={e => setApplyBgToItem(e.target.checked)}
-                  className="accent-emerald-500"
+          {/* Controls pane */}
+          <div className="min-h-0 space-y-4 overflow-y-auto p-5 lg:w-5/12 lg:min-w-0">
+            <FieldGroup title="Text">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Section" htmlFor="slide-section">
+                  <Select
+                    disabled={isScriptureSlide}
+                    value={sectionLabel}
+                    onValueChange={value => setSectionLabel(value as SectionTag)}
+                  >
+                    <SelectTrigger id="slide-section" aria-label="Slide section">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SECTION_TAGS.map(tag => (
+                        <SelectItem key={tag} value={tag}>
+                          {tag}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label="Badge title" htmlFor="slide-title">
+                  <Input
+                    id="slide-title"
+                    type="text"
+                    placeholder="Optional"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Body" htmlFor="slide-body">
+                {isScriptureSlide ? (
+                  <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2">
+                    <p className="text-xs text-foreground">Scripture text is read-only</p>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                      Verse text comes from the selected translation. Change the passage from the
+                      Bible tab.
+                    </p>
+                  </div>
+                ) : (
+                  <Textarea
+                    id="slide-body"
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    placeholder="Slide text"
+                    className="h-28"
+                  />
+                )}
+              </Field>
+
+              <Field label="Subtitle" htmlFor="slide-subtitle">
+                <Input
+                  id="slide-subtitle"
+                  type="text"
+                  placeholder="Optional reference or credit"
+                  value={subtitle}
+                  onChange={e => setSubtitle(e.target.value)}
                 />
-                <span>Apply this background to all slides in current item</span>
-              </label>
+              </Field>
+            </FieldGroup>
+
+            <Separator />
+
+            <FieldGroup title="Background">
+              <Field label="Source">
+                <Select value={backgroundSource} onValueChange={handleBackgroundSource}>
+                  <SelectTrigger aria-label="Slide background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">Theme default</SelectItem>
+                    <SelectItem value="__solid__">Solid colour</SelectItem>
+                    {media
+                      .filter(asset => asset.url)
+                      .map(asset => (
+                        <SelectItem key={asset.id} value={asset.url}>
+                          {asset.name}
+                        </SelectItem>
+                      ))}
+                    {backgroundSource === '__custom__' && (
+                      <SelectItem value="__custom__">Custom URL</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {backgroundType === 'color' && (
+                <Field label="Solid colour" hint="Replaces the image for this slide.">
+                  <div className="flex h-8 items-center gap-2 rounded-md border border-input bg-background/60 px-1.5">
+                    <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm border border-border">
+                      <input
+                        type="color"
+                        value={backgroundColor || DEFAULT_SOLID_COLOR}
+                        onChange={e => {
+                          setBackgroundColor(e.target.value);
+                          setBackgroundType('color');
+                          setBackgroundUrl('');
+                        }}
+                        aria-label="Solid background colour"
+                        className="absolute -left-2 -top-2 h-8 w-8 cursor-pointer border-0 bg-transparent p-0"
+                      />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground">
+                      {backgroundColor}
+                    </span>
+                  </div>
+                </Field>
+              )}
+
+              <Field label="Custom URL" htmlFor="slide-bg-url">
+                <Input
+                  id="slide-bg-url"
+                  type="text"
+                  placeholder="Paste an image or video URL"
+                  value={backgroundUrl}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setBackgroundUrl(val);
+                    setBackgroundType(
+                      val.trim() ? (isVideoAssetUrl(val) ? 'video' : 'image') : undefined
+                    );
+                  }}
+                  className="font-mono text-xs"
+                />
+              </Field>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>Apply to every slide</Label>
+                  <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                    Uses this background for all slides in the item.
+                  </p>
+                </div>
+                <Switch
+                  checked={applyBgToItem}
+                  onCheckedChange={setApplyBgToItem}
+                  aria-label="Apply background to every slide in the item"
+                />
+              </div>
+            </FieldGroup>
+
+            <Separator />
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label>Title safe guides</Label>
+                <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                  Shows the 16:9 safe area over the preview.
+                </p>
+              </div>
+              <Switch
+                checked={showSafeGuides}
+                onCheckedChange={setShowSafeGuides}
+                aria-label="Show title safe guides"
+              />
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 bg-[#131b2c] border-t border-[#26334a] flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-2 text-slate-400 hover:text-white font-semibold"
-          >
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleSave(false)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold rounded-xl flex items-center gap-1.5 transition"
-            >
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Save Slide
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSave(true)}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black uppercase tracking-wider rounded-xl shadow flex items-center gap-1.5 transition"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" /> Save &amp; Go Live
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => handleSave(false)}>
+            Save slide
+          </Button>
+          <Button variant="default" size="sm" onClick={() => handleSave(true)}>
+            Save and go live
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

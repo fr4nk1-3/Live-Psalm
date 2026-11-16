@@ -1,159 +1,112 @@
-<h1 align="center">
-  📖 Live Psalms
-</h1>
+# Live Psalms
 
-<p align="center">
-  <strong>A powerful, offline-first Church Presentation & Bible Study application for Windows</strong>
-</p>
+A desktop worship presentation system for Windows and Linux. It runs a service
+from a song library, an offline Bible and a media vault, and drives a projector,
+a stage monitor and an LED wall from one operator screen.
 
-<p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square&logo=windows" />
-  <img alt="Built with Electron" src="https://img.shields.io/badge/built%20with-Electron-47848F?style=flat-square&logo=electron" />
-  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square" />
-</p>
+Built with Electron, React and TypeScript. Everything works offline.
 
----
+## What it does
 
-## ✨ Features
+**Run a service.** Build an order of service from songs, scripture, media,
+announcements and countdowns. Items reorder by drag, sections divide the service
+into parts, and each item keeps its own speaker notes.
 
-### 🎤 Live Presentation
-- **Multi-display output** — Project to a second screen, LED wall, stage display, or OBS virtual camera simultaneously
-- **Sermon Mode** — Distraction-free mode for preachers with large text and auto-scrolling
-- **Slide Designer** — Customise background, fonts, and colours for every slide
-- **Quick Presentation** — Instantly display any verse without leaving the main view
-- **Stage Display** — Separate output for the stage monitor showing current + next slide
+**Preview before you project.** Selecting an item loads it into Preview only.
+Nothing reaches the screen until you press Go live, Enter, or double-click a
+slide. Preview and Program sit side by side with the current slide, the next
+slide and a slide strip for the selected item.
 
-### 📖 Bible
-- **45 preloaded Bible translations** — all offline, no internet required
-- **Language-grouped version picker** — browse by Swahili, Luo, Kikuyu, Kalenjin, Kamba, Maasai, or English
-- **Global search** — search any word or phrase across the entire Bible instantly
-- **Optional API Online** — connect to additional online versions via the API Bible service
+**Project to several outputs.** The audience screen, a stage confidence display
+and an LED wall can each be opened independently. Outputs carry the live slide,
+the countdown, speaker notes to the stage, and lower-third announcements.
 
-### 🎵 Songs & Media
-- **Song library** — import and manage your church's song catalogue
-- **Custom slides** — create announcement, countdown, and media slides
-- **Playlist builder** — organise your service order with drag-and-drop
+**Read the Bible offline.** 45 translations ship with the app, including
+Swahili, Luo, Kikuyu, Kalenjin, Kamba and Maasai. A second translation can run
+in parallel on the same screen, and full-text search works across the library.
 
-### 💾 Import & Export
-- **Import custom Bibles** — load your own `.json` or `.xml` Bible files
-- **Import songs** — support for OpenLyrics XML and plain-text formats
-- **Broadcast service** — stream slide content to connected devices on the same network
+**Design slides in place.** Font, size, alignment, colours, background image or
+motion loop, overlay strength and lower-third layout are edited from the Slide
+settings panel without leaving the workspace.
 
----
+**Work in the dark.** The interface is deliberately neutral and quiet so the
+projected image stays the brightest thing in the room. Colour is used only for
+program state: red for live, steel blue for preview.
 
-## 🌍 Preloaded Bible Translations (45 total)
+## Interface
 
-### 🇰🇪 Kenyan Languages
-| Language | Translations |
-|----------|-------------|
-| **Swahili** | Biblia Takatifu (SUV), Habari Njema (RSUV) |
-| **Luo** | Muma Mutakatifu 1985, 2015, 2020 |
-| **Kikuyu** | Ibuku Rĩa Ngai 2013, 2014, 2019 |
-| **Kalenjin** | Baibil Noet Standard, 2019, Revised |
-| **Kamba** | Mbivilia Standard, Mbivilia (MBV) |
-| **Maasai** | Bibilia 1970, 2020, Standard, MBS |
+The operator screen has four regions:
 
-### 🇬🇧 English (28 translations)
-KJV, NKJV, NIV, ESV, NLT, NASB, AMP, AMPC, BSB, CSB, TPT, GNT, HCSB, NET, NIrV, NRSV, ASV, Darby, ERV, EASY, GW, LSB, MEV, NASU, RSV, TLB, Tyndale 1537, YLT
+| Region | Purpose |
+| --- | --- |
+| Top bar | Service identity, save state, search, outputs, service file |
+| Library (left) | Songs, Bible, ticker announcements, media and themes |
+| Workspace (middle) | Preview and Program monitors, slide strip, operator tools |
+| Service (right) | Order of service, live indicator, item actions |
+| Bottom bar | Transport, transition, countdown, screen overrides |
 
----
+Slide settings open as a panel from the workspace toolbar. Dialogs (settings,
+Bible version picker, song editor, search, streaming) follow the same visual
+system; `docs/design-system.md` records the rules.
 
-## 📦 Download
+## Keyboard
 
-Go to the [**Releases**](https://github.com/fr4nk1-3/Live-Psalm/releases) page to download the latest version:
+| Key | Action |
+| --- | --- |
+| `Ctrl` `K` | Search songs, scripture, media and the service |
+| `Enter` | Take the previewed slide live |
+| `Up` / `Down` | Previous / next slide |
+| `Alt` `Up` / `Alt` `Down` | Previous / next service item |
+| `B` | Black out the screen |
+| `Esc` | Clear the live slide text |
+| `L` | Show the logo |
+| `F` | Freeze the current frame |
+
+## Downloads
+
+Builds are published on the
+[releases page](https://github.com/fr4nk1-3/Live-Psalm/releases):
 
 | File | Description |
-|------|-------------|
-| `LivePsalms-Setup.exe` | Windows Installer — installs to Program Files with Start Menu shortcut |
-| `LivePsalms-Windows-Portable.exe` | Portable — no installation needed, just double-click and run |
+| --- | --- |
+| `LivePsalms-Setup.exe` | Windows installer |
+| `LivePsalms-Windows-Portable.exe` | Windows portable build |
+| `LivePsalms-Ubuntu-amd64.deb` | Debian/Ubuntu package |
 
-> **Requirements**: Windows 10 or later (64-bit)
+Windows 10 or later, or a recent 64-bit Linux distribution.
 
----
-
-## 🛠️ Development Setup
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) v20+
-- [Git](https://git-scm.com/)
-
-### Install & Run
+## Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/fr4nk1-3/Live-Psalm.git
-cd Live-Psalm
-
-# Install dependencies
 npm install
-
-# Start in development mode
-npm run dev
+npm run dev          # Vite dev server
+npm run build        # Typecheck and build the web assets
+npm run build:win    # Windows installer and portable build
+npm run build:deb    # Ubuntu package
 ```
 
-### Build for Production
+Requires Node.js 20 or later.
 
-```bash
-# Build the web assets only
-npm run build
-
-# Build Windows Portable exe
-npm run build:win -- --win portable
-
-# Build Windows Installer (requires Wine on Linux)
-npm run build:win -- --win nsis
-```
-
----
-
-## 🏗️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Desktop Shell | [Electron](https://www.electronjs.org/) v32 |
-| UI Framework | [React](https://react.dev/) 18 + TypeScript |
-| Build Tool | [Vite](https://vitejs.dev/) 5 |
-| Styling | Tailwind CSS |
-| Icons | [Lucide React](https://lucide.dev/) |
-| Packaging | [electron-builder](https://www.electron.build/) |
-
----
-
-## 📁 Project Structure
+## Project layout
 
 ```
-Live Psalms/
-├── electron/               # Electron main process
-├── src/
-│   ├── components/         # UI components
-│   │   ├── BibleVersionModal.tsx     # Language-grouped version picker
-│   │   ├── BibleBookVerseModal.tsx   # Book & verse selector
-│   │   ├── GlobalSearchModal.tsx     # Full-Bible search
-│   │   ├── LibraryTabs.tsx           # Songs, Bibles, Media library
-│   │   ├── SettingsModal.tsx         # App settings
-│   │   └── ...
-│   ├── data/
-│   │   └── bibles/         # 45 preloaded Bible JSON files + manifest
-│   ├── services/
-│   │   ├── storage.ts      # Bible loading & app persistence
-│   │   ├── importer.ts     # Bible & song import logic
-│   │   ├── onlineBibleApi.ts  # API Bible integration
-│   │   └── broadcast.ts    # Network broadcast service
-│   └── App.tsx             # Root application
-├── package.json
-└── vite.config.ts
+electron/                 Electron main process, output windows, IPC
+src/
+  components/             Operator interface
+  components/ui/          Shared interface primitives (shadcn/ui style)
+  data/bibles/            45 offline translations and a manifest
+  services/               Storage, Bible loading, import, broadcast, media vault
+  lib/                    Utilities
+  App.tsx                 Application shell and service state
+docs/design-system.md     Interface rules
 ```
 
----
+## Keyboard-first notes
 
-## 🤝 Contributing
+The playlist is focusable: arrow keys move between items, `ArrowRight` and
+`ArrowLeft` expand or collapse the slide list, and `Enter` takes the selected
+item live. All operator shortcuts are suspended while a dialog is open.
 
-Pull requests are welcome! For major changes, please open an issue first to discuss what you'd like to change.
+## License
 
----
-
-## 📄 License
-
-MIT © [Live Psalms](https://github.com/fr4nk1-3/Live-Psalm)
+MIT

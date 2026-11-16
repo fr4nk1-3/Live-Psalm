@@ -31,6 +31,12 @@ import {
 } from 'lucide-react';
 import { getFlexibleFontSize } from '../utils/fontSize';
 import { StorageService } from '../services/storage';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { EmptyState } from './ui/primitives';
 
 const WORKSPACE_QUICK_BIBLE_VERSIONS = [
   { id: 'bible-eng-nkjv', abbr: 'NKJV' },
@@ -76,6 +82,20 @@ interface CenterWorkspaceProps {
   onClearLiveSlide?: () => void;
   onApplyBackground?: (media: MediaAsset, scope: 'global' | 'item' | 'slide', targetSlide?: Slide) => void;
   onClearBackground?: () => void;
+  /** Opens the slide settings sheet. */
+  onOpenInspector?: () => void;
+}
+
+function LayerChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-6 rounded-sm border border-border bg-background/60 px-1.5 text-2xs text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
+    >
+      {label}
+    </button>
+  );
 }
 
 const SECTION_TAGS: SectionTag[] = [
@@ -211,6 +231,10 @@ const SlideCanvas: React.FC<{
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
+  const baseFontPx = isFarPreview ? 30 : isLive ? 22 : 18;
+  const { fontSize: scaledFontPx, lineHeight } = getFlexibleFontSize(slide?.content || '', baseFontPx);
+  const fontScale = parseFloat(scaledFontPx) / baseFontPx;
+
   return (
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
       {/* Background layer */}
@@ -223,7 +247,7 @@ const SlideCanvas: React.FC<{
             loop={!isPureForegroundVideo}
             muted
             playsInline
-            className={`absolute inset-0 w-full h-full ${
+            className={`absolute inset-0 h-full w-full ${
               isPureForegroundVideo ? 'object-contain opacity-100' : `object-cover ${isLive ? 'opacity-70' : 'opacity-45'}`
             }`}
           />
@@ -231,70 +255,64 @@ const SlideCanvas: React.FC<{
           <img
             src={bgUrl}
             alt=""
-            className={`absolute inset-0 w-full h-full ${
+            className={`absolute inset-0 h-full w-full ${
               isPureImageSlide ? 'object-contain opacity-100' : `object-cover ${isLive ? 'opacity-65' : 'opacity-40'}`
             }`}
           />
         ))}
-      {!bgUrl && <div className="absolute inset-0 bg-gradient-to-br from-[#0d1320] via-[#111827] to-[#0d1320]" />}
-      {/* Scrim (skip when playing pure foreground video clip or pure image slide) */}
+      {!bgUrl && <div className="absolute inset-0 bg-neutral-950" />}
+
+      {/* Scrim (skipped for full-frame media so the asset plays cleanly) */}
       {!isPureMediaSlide && (
         <div
           className="absolute inset-0"
           style={{
             backgroundColor: isFarPreview
-              ? `rgba(2,6,23,${Math.max(theme.scrimOpacity ?? 0.45, 0.88)})`
+              ? `rgba(0,0,0,${Math.max(theme.scrimOpacity ?? 0.45, 0.88)})`
               : `rgba(0,0,0,${theme.scrimOpacity ?? 0.45})`
           }}
         />
       )}
 
-      {/* Live Video Timecode Pill */}
+      {/* Foreground video timecode */}
       {isPureForegroundVideo && liveTimecode && liveTimecode.duration > 0 && (
-        <div className="absolute bottom-2 left-2 z-30 px-2 py-0.5 bg-black/80 border border-amber-500/40 rounded text-[9px] font-mono font-bold text-amber-300 flex items-center gap-1.5">
-          <Film className="w-2.5 h-2.5 text-amber-400" />
-          <span>
-            {fmtSec(liveTimecode.current)} / {fmtSec(liveTimecode.duration)}
-          </span>
+        <div className="absolute bottom-2 left-2 z-30 rounded-sm border border-white/15 bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white/75">
+          {fmtSec(liveTimecode.current)} / {fmtSec(liveTimecode.duration)}
         </div>
       )}
 
-      {/* Text content (skip for pure video or pure image slides so the media is shown cleanly without the filename) */}
-      <div className="relative z-10 w-full h-full flex flex-col items-center justify-center px-6 text-center">
+      {/* Slide text */}
+      <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-[6%] text-center">
         {slide ? (
           isPureMediaSlide ? null : (
             <>
               {slide.title && (
                 <div
-                  className={`font-black uppercase tracking-[0.25em] mb-1.5 px-3 py-0.5 rounded-full border ${
-                    isFarPreview
-                      ? 'text-[10px] text-amber-200 bg-black/90 border-amber-400/70'
-                      : 'text-[9px] text-indigo-300/80 bg-indigo-950/50 border-indigo-500/20'
-                  }`}
+                  className="mb-[0.6em] whitespace-nowrap rounded-sm border border-white/15 bg-black/45 px-[0.8em] py-[0.15em] font-medium tracking-[0.08em] text-white/70"
+                  style={{ fontSize: `clamp(8px, ${(fontScale * 3.4).toFixed(2)}cqh, 14px)` }}
                 >
                   {slide.title}
                 </div>
               )}
               <div
-                className={`${isFarPreview ? 'font-black' : 'font-extrabold'} text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] whitespace-pre-line leading-tight`}
+                className="whitespace-pre-line font-semibold text-white"
                 style={{
                   fontFamily: theme.fontFamily,
-                  ...getFlexibleFontSize(slide.content, isFarPreview ? 30 : isLive ? 22 : 18),
+                  fontSize: `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
+                  lineHeight,
                   textAlign: theme.align,
-                  letterSpacing: isFarPreview ? '0.02em' : (theme.letterSpacing || 'normal'),
+                  letterSpacing: isFarPreview ? '0.02em' : theme.letterSpacing || 'normal',
                   textTransform: theme.textTransform || 'none',
-                  textShadow: isFarPreview ? '0 3px 12px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,1)' : undefined
+                  textShadow: '0 2px 10px rgba(0,0,0,0.85)',
+                  maxWidth: '88%'
                 }}
               >
                 {slide.content}
               </div>
               {slide.subtitle && (
                 <div
-                  className={`mt-1.5 tracking-wider ${
-                    isFarPreview
-                      ? 'text-[11px] text-amber-300 font-black uppercase'
-                      : 'text-[9px] text-indigo-200/70 font-semibold'
-                  }`}
+                  className="mt-[0.5em] text-white/70"
+                  style={{ fontSize: `clamp(8px, ${(fontScale * 3.6).toFixed(2)}cqh, 15px)` }}
                 >
                   {slide.subtitle}
                 </div>
@@ -302,13 +320,7 @@ const SlideCanvas: React.FC<{
             </>
           )
         ) : (
-          <span
-            className={`text-[10px] font-bold uppercase tracking-widest ${
-              isLive ? 'text-rose-500/50' : 'text-slate-600'
-            }`}
-          >
-            {isLive ? 'OUTPUT CLEAR' : 'NO SLIDE SELECTED'}
-          </span>
+          <span className="text-[11px] text-white/25">{isLive ? 'Output clear' : 'No slide selected'}</span>
         )}
       </div>
     </div>
@@ -341,7 +353,8 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   onUpdateItemSlides,
   onClearLiveSlide,
   onApplyBackground,
-  onClearBackground
+  onClearBackground,
+  onOpenInspector
 }) => {
   const slideGridContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -641,35 +654,26 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   );
 
   return (
-    <div className="flex-1 min-w-0 min-h-0 bg-[#1a1a1a] flex flex-col h-full overflow-hidden select-none">
-      {/* ═══════════════════════════════════════════════════════════════
-          OBS / PROPRESENTER DUAL MONITOR SECTION
-      ══════════════════════════════════════════════════════════════ */}
-      <div className="bg-[#1a1a1a] border-b border-[#333] p-2.5 xl:p-3 shrink-0">
-        <div className="flex gap-2.5 xl:gap-3">
-          {/* ─── PREVIEW MONITOR (left) ─── */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <div className="flex items-center gap-1.5">
-                <Eye className="w-3 h-3 text-[#5b9bd5]" />
-                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-[#5b9bd5]">
-                  Preview
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[9px] text-[#555] font-mono">
-                <span>1920×1080</span>
-                <span className="text-[#444]">|</span>
-                <span>{activeItem?.type?.toUpperCase() || 'IDLE'}</span>
-              </div>
-            </div>
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+      {/* Preview and program monitors */}
+      <div className="flex shrink-0 items-start gap-4 border-b border-border px-4 py-3">
+        {/* Preview */}
+        <section className="flex min-w-0 flex-1 flex-col">
+          <header className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className="state-label text-preview">Preview</span>
+            <span className="min-w-0 truncate text-2xs text-muted-foreground">
+              {previewSlide ? previewSlide.sectionLabel || previewSlide.title || 'Slide' : 'Nothing selected'}
+            </span>
+          </header>
 
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => handleMediaDrop(e, 'item')}
-              className="relative w-full max-w-[calc(28vh*16/9)] mx-auto rounded overflow-hidden border-2 border-[#3a5f8a] shadow-[0_0_0_1px_#1a1a1a,0_4px_20px_rgba(0,0,0,0.8)]"
-              style={{ aspectRatio: '16/9' }}
-              title="Drop a Motion or Still Background here to apply to this song/item"
-            >
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => handleMediaDrop(e, 'item')}
+            className="relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border border-border bg-black"
+            style={{ aspectRatio: '16/9', containerType: 'size' }}
+            title="Drop a background here to apply it to this item"
+          >
+            {previewSlide ? (
               <SlideCanvas
                 slide={previewSlide}
                 theme={activeTheme}
@@ -679,75 +683,46 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                 itemVideoBgUrl={activeItem?.videoBackgroundUrl}
                 globalVideoBgUrl={globalVideoBgUrl}
               />
-
-              <div className="absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-0.5 bg-[#1c3a5c]/90 border border-[#3a5f8a]/70 rounded text-[#5b9bd5] font-black text-[9px] uppercase tracking-widest backdrop-blur-sm">
-                <Eye className="w-2.5 h-2.5" />
-                <span>PREVIEW</span>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xs text-white/30">No slide in preview</span>
               </div>
-
-              {previewSlide && (
-                <div className="absolute bottom-2 left-2 z-20 text-[8px] text-[#8ab4d4] font-mono bg-black/60 px-1.5 py-0.5 rounded truncate max-w-[80%] backdrop-blur-sm">
-                  {previewSlide.sectionLabel || previewSlide.title || 'Slide'}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between mt-2 gap-2">
-              <div className="text-[9px] text-[#555] font-mono truncate">
-                {previewSlide ? `${previewSlide.content?.substring(0, 40) || '—'}...` : 'No slide in preview'}
-              </div>
-              <button
-                onClick={() => previewSlide && onSendSlideLive(previewSlide)}
-                disabled={!previewSlide}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[#5b9bd5] hover:bg-[#4a8bc5] disabled:bg-[#2a3a4a] disabled:text-[#444] text-white font-black text-[10px] uppercase tracking-wider rounded transition shadow-lg active:scale-95"
-                title="Transition preview to program output"
-              >
-                <MonitorPlay className="w-3 h-3" />
-                Transition
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* ─── PROGRAM / LIVE MONITOR (right) ─── */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <div className="flex items-center gap-1.5">
-                <Circle
-                  className={`w-2.5 h-2.5 fill-current ${
-                    liveSlide ? 'text-[#e84040] animate-pulse' : 'text-[#555]'
-                  }`}
-                />
-                <span
-                  className={`text-[10px] font-black uppercase tracking-[0.15em] ${
-                    liveSlide ? 'text-[#e84040]' : 'text-[#666]'
-                  }`}
-                >
-                  Program
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[9px] font-mono">
-                {liveSlide ? (
-                  <span className="text-[#e84040] font-black flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-[#e84040] rounded-full animate-pulse inline-block" />
-                    ON AIR
-                  </span>
-                ) : (
-                  <span className="text-[#555]">CLEAR</span>
-                )}
-              </div>
-            </div>
-
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => handleMediaDrop(e, 'global')}
-              className={`relative w-full max-w-[calc(28vh*16/9)] mx-auto rounded overflow-hidden border-2 shadow-[0_0_0_1px_#1a1a1a,0_4px_20px_rgba(0,0,0,0.8)] transition-all duration-300 ${
-                liveSlide
-                  ? 'border-[#e84040] shadow-[0_0_0_1px_#1a1a1a,0_0_25px_rgba(232,64,64,0.4),0_4px_20px_rgba(0,0,0,0.8)]'
-                  : 'border-[#3a2020]'
-              }`}
-              style={{ aspectRatio: '16/9' }}
-              title="Drop a Motion or Still Background here to set as Global Live Layer Background"
+          <footer className="mt-2 flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-2xs text-muted-foreground">
+              {previewSlide?.content?.slice(0, 64) || 'Choose an item in the service'}
+            </span>
+            <Button
+              size="xs"
+              variant="secondary"
+              disabled={!previewSlide}
+              onClick={() => previewSlide && onSendSlideLive(previewSlide)}
             >
+              Take live
+            </Button>
+          </footer>
+        </section>
+
+        {/* Program */}
+        <section className="flex min-w-0 flex-1 flex-col">
+          <header className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className={cn('state-label', liveSlide ? 'text-live' : 'text-muted-foreground')}>Program</span>
+            <span className={cn('min-w-0 truncate text-2xs', liveSlide ? 'text-live' : 'text-muted-foreground')}>{liveSlide ? 'On air' : 'Clear'}</span>
+          </header>
+
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => handleMediaDrop(e, 'global')}
+            className={cn(
+              'relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border bg-black',
+              liveSlide ? 'border-live/60' : 'border-border'
+            )}
+            style={{ aspectRatio: '16/9', containerType: 'size' }}
+            title="Drop a background here to set the live layer background for every slide"
+          >
+            {liveSlide ? (
               <SlideCanvas
                 slide={liveSlide}
                 theme={activeTheme}
@@ -758,265 +733,177 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                 itemVideoBgUrl={activeItem?.videoBackgroundUrl}
                 globalVideoBgUrl={globalVideoBgUrl}
               />
-
-              <div
-                className={`absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-widest backdrop-blur-sm border ${
-                  liveSlide
-                    ? 'bg-[#e84040]/90 border-[#ff6060]/50 text-white'
-                    : 'bg-[#2a1010]/80 border-[#4a2020]/60 text-[#665555]'
-                }`}
-              >
-                <Tv className={`w-2.5 h-2.5 ${liveSlide ? 'animate-pulse' : ''}`} />
-                <span>{liveSlide ? 'ON AIR' : 'PROGRAM'}</span>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+                <span className="state-label text-white/25">Clear</span>
+                <span className="text-2xs text-white/20">Nothing is being projected</span>
               </div>
-
-              {/* Active Audience Alert indicator on Program Monitor */}
-              {activeAlert && (
-                <div className="absolute top-2 right-2 z-30 bg-amber-500/95 text-black px-2 py-0.5 rounded font-black text-[8px] uppercase flex items-center gap-1 shadow">
-                  <Bell className="w-2.5 h-2.5 animate-bounce" />
-                  <span>{activeAlert.code}</span>
-                </div>
-              )}
-
-              {/* Active ticker indicator */}
-              {activeLowerThirdText && (
-                <div className="absolute bottom-0 left-0 right-0 z-30 bg-purple-900/95 border-t border-purple-500/60 flex items-center justify-between gap-2 px-2 py-1 backdrop-blur-sm">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-                    <Megaphone className="w-3 h-3 text-amber-300 animate-pulse shrink-0" />
-                    <div
-                      className="animate-crawl-line font-bold text-white text-[9px] whitespace-nowrap"
-                      style={{
-                        animationDuration:
-                          (activeLowerThirdText as any)?.speed === 'slow'
-                            ? '32s'
-                            : (activeLowerThirdText as any)?.speed === 'fast'
-                            ? '13s'
-                            : '22s'
-                      }}
-                    >
-                      {activeLowerThirdText.content}{' '}
-                      {activeLowerThirdText.title ? `— (${activeLowerThirdText.title})` : ''}
-                    </div>
-                  </div>
-                  <button
-                    onClick={onClearLowerThirdAnnouncement}
-                    className="shrink-0 p-0.5 bg-rose-700 hover:bg-rose-600 text-white rounded transition"
-                    title="Stop ticker"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-
-              {liveSlide && (
-                <div className="absolute bottom-2 right-2 z-20 text-[8px] text-[#ff9999] font-mono bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm">
-                  {liveSlide.sectionLabel || liveSlide.title || 'Live'}
-                </div>
-              )}
-            </div>
-
-            {/* Program status & ProPresenter Layer Clearing Bar */}
-            <div className="flex items-center justify-between mt-2 gap-1.5">
-              <div className="flex items-center gap-1 flex-wrap">
-                {liveSlide && onClearLiveSlide && (
-                  <button
-                    onClick={onClearLiveSlide}
-                    className="px-2 py-1 bg-rose-950/80 hover:bg-rose-800 border border-rose-500/40 rounded text-[9px] font-black text-rose-300 uppercase flex items-center gap-1 transition"
-                    title="Clear Slide Layer Only"
-                  >
-                    <Eraser className="w-2.5 h-2.5" /> Slide
-                  </button>
-                )}
-                {activeLowerThirdText && (
-                  <button
-                    onClick={onClearLowerThirdAnnouncement}
-                    className="px-2 py-1 bg-purple-950/80 hover:bg-purple-800 border border-purple-500/40 rounded text-[9px] font-black text-purple-300 uppercase flex items-center gap-1 transition"
-                    title="Clear Announcement Ticker Layer"
-                  >
-                    <X className="w-2.5 h-2.5" /> Ticker
-                  </button>
-                )}
-                {activeStageMsg && (
-                  <button
-                    onClick={handleClearStageMessage}
-                    className="px-2 py-1 bg-amber-950/80 hover:bg-amber-800 border border-amber-500/40 rounded text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 transition"
-                    title="Clear Stage Message"
-                  >
-                    <X className="w-2.5 h-2.5" /> Stage Msg
-                  </button>
-                )}
-                {activeAlert && (
-                  <button
-                    onClick={handleClearAudienceAlert}
-                    className="px-2 py-1 bg-amber-950/80 hover:bg-amber-800 border border-amber-500/40 rounded text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 transition"
-                    title="Clear Nursery Pager Alert"
-                  >
-                    <X className="w-2.5 h-2.5" /> Alert ({activeAlert.code})
-                  </button>
-                )}
-                {activePadKey && (
-                  <button
-                    onClick={stopWorshipPad}
-                    className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-800 border border-emerald-500/40 rounded text-[9px] font-black text-emerald-300 uppercase flex items-center gap-1 transition"
-                    title="Fade Out Worship Pad"
-                  >
-                    <Music2 className="w-2.5 h-2.5 animate-pulse" /> Pad: {activePadKey}
-                  </button>
-                )}
-              </div>
-              <div className="shrink-0 text-[9px] font-mono text-[#666] bg-[#111] border border-[#2a2a2a] px-2 py-1 rounded">
-                {activeTheme.name}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          PROPRESENTER LIVE OPERATOR TOOLS BAR (Motion BGs / Stage Msg / Nursery Pager / Worship Pads)
-      ══════════════════════════════════════════════════════════════ */}
-      <div className="px-3 py-1.5 bg-[#121621] border-b border-[#26334a] flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setActiveDockTab(prev => (prev === 'bgs' ? 'none' : 'bgs'))}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 border transition ${
-              activeDockTab === 'bgs' || globalVideoBgUrl || activeItem?.videoBackgroundUrl
-                ? 'bg-indigo-500/25 border-indigo-500/70 text-indigo-200'
-                : 'bg-[#1a2234] border-[#2a364f] text-slate-300 hover:text-white'
-            }`}
-            title="ProPresenter Quick Motion & Still Background Bin (switch backgrounds while staying on Songs/Bible)"
-          >
-            <Film className="w-3 h-3 text-indigo-400" />
-            <span>Motion BGs</span>
-            {(globalVideoBgUrl || activeItem?.videoBackgroundUrl) && (
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
             )}
-          </button>
 
-          <button
-            onClick={() => setActiveDockTab(prev => (prev === 'stage-msg' ? 'none' : 'stage-msg'))}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 border transition ${
-              activeDockTab === 'stage-msg' || activeStageMsg
-                ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
-                : 'bg-[#1a2234] border-[#2a364f] text-slate-300 hover:text-white'
-            }`}
-          >
-            <MessageSquare className="w-3 h-3 text-amber-400" />
-            <span>Stage Message</span>
-            {activeStageMsg && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />}
-          </button>
+            {activeAlert && (
+              <div className="absolute right-2 top-2 z-30">
+                <Badge variant="warning">{activeAlert.code}</Badge>
+              </div>
+            )}
 
-          <button
-            onClick={() => setActiveDockTab(prev => (prev === 'pager' ? 'none' : 'pager'))}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 border transition ${
-              activeDockTab === 'pager' || activeAlert
-                ? 'bg-rose-500/20 border-rose-500/60 text-rose-300'
-                : 'bg-[#1a2234] border-[#2a364f] text-slate-300 hover:text-white'
-            }`}
-          >
-            <Bell className="w-3 h-3 text-rose-400" />
-            <span>Nursery / Pager</span>
-            {activeAlert && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />}
-          </button>
+            {activeLowerThirdText && (
+              <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t border-white/10 bg-black/85 px-2 py-1">
+                <div
+                  className="animate-crawl-line whitespace-nowrap text-2xs font-medium text-white"
+                  style={{
+                    animationDuration:
+                      (activeLowerThirdText as any)?.speed === 'slow'
+                        ? '32s'
+                        : (activeLowerThirdText as any)?.speed === 'fast'
+                        ? '13s'
+                        : '22s'
+                  }}
+                >
+                  {activeLowerThirdText.content}{' '}
+                  {activeLowerThirdText.title ? ` - (${activeLowerThirdText.title})` : ''} 
+                </div>
+                <button
+                  onClick={onClearLowerThirdAnnouncement}
+                  className="ml-auto shrink-0 rounded-sm px-1 text-2xs text-white/60 transition-colors hover:text-white"
+                  title="Stop the ticker"
+                >
+                  Stop
+                </button>
+              </div>
+            )}
 
-          <button
-            onClick={() => setActiveDockTab(prev => (prev === 'pads' ? 'none' : 'pads'))}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 border transition ${
-              activeDockTab === 'pads' || activePadKey
-                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
-                : 'bg-[#1a2234] border-[#2a364f] text-slate-300 hover:text-white'
-            }`}
-          >
-            <Music2 className="w-3 h-3 text-emerald-400" />
-            <span>Worship Pads {activePadKey ? `(${activePadKey})` : ''}</span>
-          </button>
+            {liveSlide && (
+              <div className="absolute bottom-1.5 right-1.5 z-20 rounded-sm bg-black/60 px-1.5 py-0.5 text-2xs text-white/70">
+                {liveSlide.sectionLabel || liveSlide.title || 'Live'}
+              </div>
+            )}
+          </div>
+
+          <footer className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {liveSlide && onClearLiveSlide && (
+                <LayerChip onClick={onClearLiveSlide} label="Clear slide" />
+              )}
+              {activeLowerThirdText && (
+                <LayerChip onClick={onClearLowerThirdAnnouncement} label="Stop ticker" />
+              )}
+              {activeStageMsg && <LayerChip onClick={handleClearStageMessage} label="Clear stage message" />}
+              {activeAlert && <LayerChip onClick={handleClearAudienceAlert} label={`Dismiss ${activeAlert.code}`} />}
+              {activePadKey && <LayerChip onClick={stopWorshipPad} label={`Stop pad ${activePadKey}`} />}
+            </div>
+            <span className="shrink-0 truncate text-2xs text-muted-foreground">{activeTheme.name}</span>
+          </footer>
+        </section>
+      </div>
+
+      {/* Operator toolbar */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-1.5">
+        <div className="flex items-center gap-0.5">
+          {[
+            { id: 'bgs', label: 'Backgrounds', active: Boolean(globalVideoBgUrl || activeItem?.videoBackgroundUrl) },
+            { id: 'stage-msg', label: 'Stage message', active: Boolean(activeStageMsg) },
+            { id: 'pager', label: 'Pager', active: Boolean(activeAlert) },
+            { id: 'pads', label: 'Pads', active: Boolean(activePadKey) }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveDockTab(prev => (prev === tab.id ? 'none' : (tab.id as typeof prev)))}
+              className={cn(
+                'flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-colors',
+                activeDockTab === tab.id
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              )}
+            >
+              {tab.label}
+              {tab.active && <span className="h-1 w-1 rounded-full bg-foreground/60" aria-hidden />}
+            </button>
+          ))}
         </div>
 
-        {/* Auto-Advance Loop Timer & View Mode Switcher */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#1a2234] border border-[#2a364f] rounded px-2 py-0.5">
-            <Repeat className={`w-3 h-3 ${autoAdvanceSec > 0 ? 'text-indigo-400 animate-spin' : 'text-slate-500'}`} />
-            <span className="text-[9px] font-bold text-slate-400 uppercase">Loop:</span>
-            <select
-              value={autoAdvanceSec}
-              onChange={e => setAutoAdvanceSec(Number(e.target.value))}
-              className="bg-transparent text-[10px] font-bold text-white outline-none cursor-pointer"
-              title="ProPresenter Auto-Advance Slide Loop Timer"
-            >
-              <option value={0} className="bg-[#0d1320]">Off</option>
-              <option value={5} className="bg-[#0d1320]">5s</option>
-              <option value={8} className="bg-[#0d1320]">8s</option>
-              <option value={10} className="bg-[#0d1320]">10s</option>
-              <option value={15} className="bg-[#0d1320]">15s</option>
-              <option value={30} className="bg-[#0d1320]">30s</option>
-            </select>
+          <label className="flex items-center gap-1.5">
+            <span className="field-label">Auto-advance</span>
+            <Select value={String(autoAdvanceSec)} onValueChange={value => setAutoAdvanceSec(Number(value))}>
+              <SelectTrigger className="h-7 w-[76px] text-2xs" aria-label="Auto-advance interval">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Off</SelectItem>
+                <SelectItem value="5">5 s</SelectItem>
+                <SelectItem value="8">8 s</SelectItem>
+                <SelectItem value="10">10 s</SelectItem>
+                <SelectItem value="15">15 s</SelectItem>
+                <SelectItem value="30">30 s</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+
+          <div className="flex rounded-md border border-border bg-background/60 p-0.5">
+            {[
+              { id: 'grid', label: 'Slides' },
+              { id: 'list', label: 'List' },
+              { id: 'reflow', label: 'Reflow' }
+            ].map(mode => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setViewMode(mode.id as 'grid' | 'list' | 'reflow')}
+                className={cn(
+                  'h-6 rounded-sm px-2 text-2xs font-medium transition-colors',
+                  viewMode === mode.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {mode.label}
+              </button>
+            ))}
           </div>
 
-          <div className="flex items-center bg-[#1a2234] border border-[#2a364f] rounded p-0.5">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`px-2 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition ${
-                viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-              title="ProPresenter Grid View"
-            >
-              <LayoutGrid className="w-3 h-3" /> Grid
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-2 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition ${
-                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-              title="ProPresenter Table/List View"
-            >
-              <List className="w-3 h-3" /> List
-            </button>
-            <button
-              onClick={() => setViewMode('reflow')}
-              className={`px-2 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition ${
-                viewMode === 'reflow' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-              title="ProPresenter Reflow Slide Editor (Split/Merge/Edit inline)"
-            >
-              <AlignLeft className="w-3 h-3" /> Reflow
-            </button>
-          </div>
+          {onOpenInspector && (
+            <Button size="xs" variant="secondary" onClick={onOpenInspector}>
+              Slide settings
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* EXPANDABLE OPERATOR DOCK DRAWER */}
+      {/* Operator drawers */}
       {activeDockTab === 'bgs' && (
-        <div className="px-3 py-2 bg-[#0d1322] border-b border-indigo-500/40 flex flex-col gap-2 shrink-0">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-black uppercase tracking-wider text-indigo-300">
-                1-Click Background Target:
-              </span>
-              {([
-                { id: 'global', label: 'Live Layer (All Slides)' },
-                { id: 'item', label: 'Current Song / Bible' },
-                { id: 'slide', label: 'Selected Slide' }
-              ] as const).map(sc => (
-                <button
-                  key={sc.id}
-                  onClick={() => setQuickBgScope(sc.id)}
-                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border transition ${
-                    quickBgScope === sc.id
-                      ? 'bg-indigo-600 border-indigo-400 text-white'
-                      : 'bg-[#162032] border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {sc.label}
-                </button>
-              ))}
+        <div className="shrink-0 space-y-2 border-b border-border bg-card/60 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="field-label">Apply to</span>
+              <div className="flex rounded-md border border-border bg-background/60 p-0.5">
+                {(
+                  [
+                    { id: 'global', label: 'Every slide' },
+                    { id: 'item', label: 'This item' },
+                    { id: 'slide', label: 'Selected slide' }
+                  ] as const
+                ).map(scope => (
+                  <button
+                    key={scope.id}
+                    type="button"
+                    onClick={() => setQuickBgScope(scope.id)}
+                    className={cn(
+                      'h-6 rounded-sm px-2 text-2xs font-medium transition-colors',
+                      quickBgScope === scope.id
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {scope.label}
+                  </button>
+                ))}
+              </div>
             </div>
             {onClearBackground && (
-              <button
-                onClick={onClearBackground}
-                className="px-2.5 py-0.5 bg-rose-950/90 hover:bg-rose-700 border border-rose-500/50 rounded text-[9px] font-black text-rose-200 uppercase flex items-center gap-1 transition"
-              >
-                <Eraser className="w-2.5 h-2.5" /> Clear Active Background
-              </button>
+              <Button size="xs" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={onClearBackground}>
+                Clear background
+              </Button>
             )}
           </div>
 
@@ -1031,17 +918,17 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                 return (
                   <button
                     key={m.id}
+                    type="button"
                     draggable
                     onDragStart={e => {
                       e.dataTransfer.setData('application/livepsalms-media', JSON.stringify(m));
                     }}
                     onClick={() => onApplyBackground && onApplyBackground(m, quickBgScope)}
-                    className={`group relative w-28 h-16 rounded-lg overflow-hidden shrink-0 border-2 transition ${
-                      isCurrentBg
-                        ? 'border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
-                        : 'border-slate-700 hover:border-indigo-400'
-                    }`}
-                    title={`Click to apply "${m.name}" (${quickBgScope}) or drag onto any slide/monitor`}
+                    className={cn(
+                      'group relative h-16 w-28 shrink-0 overflow-hidden rounded-sm border transition-colors',
+                      isCurrentBg ? 'border-foreground/60 ring-1 ring-foreground/20' : 'border-border hover:border-ring/60'
+                    )}
+                    title={`Apply "${m.name}" or drag it onto a slide`}
                   >
                     {m.type === 'video' ? (
                       <video
@@ -1054,21 +941,15 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                           e.currentTarget.pause();
                           e.currentTarget.currentTime = 0;
                         }}
-                        className="w-full h-full object-cover"
+                        className="h-full w-full object-cover"
                       />
                     ) : (
-                      <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
+                      <img src={m.url} alt={m.name} className="h-full w-full object-cover" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-between p-1">
-                      <span
-                        className={`self-start px-1 py-0.2 rounded text-[7px] font-black uppercase ${
-                          m.type === 'video' ? 'bg-indigo-600/90 text-white' : 'bg-slate-800/90 text-slate-300'
-                        }`}
-                      >
-                        {m.type === 'video' ? 'MOTION' : 'STILL'}
-                      </span>
-                      <span className="text-[8px] font-bold text-white truncate w-full text-left">{m.name}</span>
-                    </div>
+                    <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-black/70 px-1 py-0.5">
+                      <span className="truncate text-[10px] text-white/85">{m.name}</span>
+                      <span className="shrink-0 text-[10px] text-white/50">{m.type === 'video' ? 'Motion' : 'Still'}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -1077,53 +958,48 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       )}
 
       {activeDockTab === 'stage-msg' && (
-        <div className="px-3 py-2.5 bg-[#0e1422] border-b border-amber-500/40 flex flex-col gap-2 shrink-0">
+        <div className="shrink-0 space-y-2 border-b border-border bg-card/60 px-3 py-2">
           <div className="flex items-center gap-2">
-            <input
-              type="text"
+            <Input
               value={stageMsgInput}
               onChange={e => setStageMsgInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSendStageMessage()}
-              placeholder="Type message for Stage Confidence Monitor only (e.g. 'Wrap up in 2 mins')..."
-              className="flex-1 bg-[#162032] border border-slate-700 focus:border-amber-500 rounded px-2.5 py-1 text-xs text-white outline-none"
+              placeholder="Message for the stage display only"
+              className="h-8 flex-1"
+              aria-label="Stage message"
             />
-            <label className="flex items-center gap-1 text-[10px] font-bold text-amber-300 cursor-pointer">
+            <label className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
               <input
                 type="checkbox"
                 checked={stageMsgFlash}
                 onChange={e => setStageMsgFlash(e.target.checked)}
-                className="accent-amber-500"
+                className="accent-foreground"
               />
               Flash
             </label>
-            <button
-              onClick={() => handleSendStageMessage()}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-black text-[10px] uppercase rounded transition"
-            >
-              Send to Stage
-            </button>
+            <Button size="xs" onClick={() => handleSendStageMessage()}>
+              Send
+            </Button>
             {activeStageMsg && (
-              <button
-                onClick={handleClearStageMessage}
-                className="px-2.5 py-1 bg-rose-700 hover:bg-rose-600 text-white font-black text-[10px] uppercase rounded transition"
-              >
+              <Button size="xs" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={handleClearStageMessage}>
                 Clear
-              </button>
+              </Button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[9px] font-bold text-slate-500 uppercase">Quick Presets:</span>
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="field-label mr-1">Presets</span>
             {[
               'Wrap up in 2 minutes',
-              'Time is up — please conclude',
+              'Time is up, please conclude',
               'Worship team come to stage',
-              'Check microphone / hold closer',
+              'Check microphone',
               'Pastor coming up next'
             ].map(preset => (
               <button
                 key={preset}
+                type="button"
                 onClick={() => handleSendStageMessage(preset)}
-                className="px-2 py-0.5 bg-[#1a2438] hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/50 rounded text-[9px] text-slate-300 hover:text-amber-200 transition"
+                className="h-6 rounded-sm border border-border px-1.5 text-2xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
               >
                 {preset}
               </button>
@@ -1133,68 +1009,64 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       )}
 
       {activeDockTab === 'pager' && (
-        <div className="px-3 py-2.5 bg-[#0e1422] border-b border-rose-500/40 flex items-center gap-2 shrink-0 flex-wrap">
-          <input
-            type="text"
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card/60 px-3 py-2">
+          <Input
             value={pagerLabel}
             onChange={e => setPagerLabel(e.target.value)}
-            placeholder="Header (e.g. NURSERY PAGER)"
-            className="w-40 bg-[#162032] border border-slate-700 focus:border-rose-500 rounded px-2.5 py-1 text-xs text-amber-300 font-bold outline-none"
+            placeholder="Header"
+            className="h-8 w-36"
+            aria-label="Alert header"
           />
-          <input
-            type="text"
+          <Input
             value={pagerCode}
             onChange={e => setPagerCode(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSendAudienceAlert()}
-            placeholder="Pager # or License Plate (e.g. #142)"
-            className="flex-1 min-w-[180px] bg-[#162032] border border-slate-700 focus:border-rose-500 rounded px-2.5 py-1 text-xs text-white font-black outline-none"
+            placeholder="Pager number or plate"
+            className="h-8 min-w-[160px] flex-1"
+            aria-label="Pager number or plate"
           />
-          <label className="flex items-center gap-1 text-[10px] font-bold text-slate-300 cursor-pointer">
+          <label className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
             <input
               type="checkbox"
               checked={pagerAutoClear}
               onChange={e => setPagerAutoClear(e.target.checked)}
-              className="accent-rose-500"
+              className="accent-foreground"
             />
-            Auto-hide (30s)
+            Hide after 30 seconds
           </label>
-          <button
-            onClick={handleSendAudienceAlert}
-            className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase rounded transition"
-          >
-            Show Corner Alert
-          </button>
+          <Button size="xs" variant="live" onClick={handleSendAudienceAlert}>
+            Show alert
+          </Button>
           {activeAlert && (
-            <button
-              onClick={handleClearAudienceAlert}
-              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-black text-[10px] uppercase rounded transition"
-            >
+            <Button size="xs" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={handleClearAudienceAlert}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {activeDockTab === 'pads' && (
-        <div className="px-3 py-2.5 bg-[#0e1422] border-b border-emerald-500/40 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-3 py-2">
           <div className="flex items-center gap-1">
-            <span className="text-[9px] font-black uppercase text-emerald-400 mr-1">Key:</span>
+            <span className="field-label mr-1">Key</span>
             {PAD_KEYS.map(k => (
               <button
                 key={k.key}
+                type="button"
                 onClick={() => playWorshipPad(k)}
-                className={`w-7 h-7 rounded font-black text-[10px] border transition ${
+                className={cn(
+                  'h-7 w-8 rounded-sm border text-2xs font-medium transition-colors',
                   activePadKey === k.key
-                    ? 'bg-emerald-500 border-emerald-300 text-black shadow-[0_0_12px_rgba(16,185,129,0.6)] scale-105'
-                    : 'bg-[#162032] border-slate-700 text-slate-300 hover:border-emerald-500/50 hover:text-white'
-                }`}
+                    ? 'border-foreground/50 bg-foreground text-background'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
               >
                 {k.key}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="field-label">Volume</span>
             <input
               type="range"
               min={0.05}
@@ -1202,51 +1074,40 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
               step={0.05}
               value={padVolume}
               onChange={e => setPadVolume(Number(e.target.value))}
-              className="w-24 accent-emerald-500 cursor-pointer"
+              aria-label="Pad volume"
+              className="h-1 w-24 cursor-pointer accent-foreground"
             />
             {activePadKey && (
-              <button
-                onClick={stopWorshipPad}
-                className="px-2.5 py-1 bg-rose-700 hover:bg-rose-600 text-white font-black text-[9px] uppercase rounded transition"
-              >
-                Fade Out
-              </button>
+              <Button size="xs" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={stopWorshipPad}>
+                Fade out
+              </Button>
             )}
           </div>
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          QUICK PINNED ITEMS BAR
-      ══════════════════════════════════════════════════════════════ */}
+      {/* Pinned shortcuts */}
       {quickPinnedItems && quickPinnedItems.length > 0 && (
-        <div className="px-3 py-1.5 bg-[#111] border-b border-[#333] flex items-center gap-2 overflow-x-auto shrink-0">
-          <span className="text-[9px] font-extrabold text-amber-500/80 uppercase tracking-wider flex items-center gap-1 shrink-0">
-            <Pin className="w-3 h-3" /> Pinned:
-          </span>
+        <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border px-4 py-1.5">
+          <span className="field-label shrink-0">Pinned</span>
           {quickPinnedItems.map(item => {
             const isActivePin =
               activeItem &&
               (activeItem.id === item.id || activeItem.title.toLowerCase() === item.title.toLowerCase());
             const rememberedId =
-              item.lastViewedSlideId ||
-              lastViewedSlideMap[item.id] ||
-              lastViewedSlideMap[item.title.toLowerCase()];
-            const rememberedSlide = rememberedId
-              ? item.slides.find(s => s.id === rememberedId)
-              : undefined;
+              item.lastViewedSlideId || lastViewedSlideMap[item.id] || lastViewedSlideMap[item.title.toLowerCase()];
+            const rememberedSlide = rememberedId ? item.slides.find(s => s.id === rememberedId) : undefined;
             const rememberedVerseNum =
               rememberedSlide?.bibleMeta?.verse ??
               (rememberedSlide?.title?.includes(':') ? rememberedSlide.title.split(':')[1] : null);
 
             return (
-              <div
+              <span
                 key={item.id}
-                className={`rounded px-2.5 py-1 flex items-center gap-1.5 text-[10px] shrink-0 transition cursor-pointer border ${
-                  isActivePin
-                    ? 'bg-amber-950/80 border-amber-500/60 text-amber-200 font-black'
-                    : 'bg-[#1e1e1e] border-[#333] hover:border-amber-500/40 text-slate-300 font-semibold'
-                }`}
+                className={cn(
+                  'flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-2xs',
+                  isActivePin ? 'border-border bg-accent text-accent-foreground' : 'border-transparent text-muted-foreground'
+                )}
               >
                 <button
                   type="button"
@@ -1256,25 +1117,14 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   }}
                   className="flex items-center gap-1.5"
                   title={
-                    rememberedVerseNum
-                      ? `Resume ${item.title} at verse ${rememberedVerseNum}`
-                      : `Open ${item.title}`
+                    rememberedVerseNum ? `Resume ${item.title} at verse ${rememberedVerseNum}` : `Open ${item.title}`
                   }
                 >
-                  <span>{item.type === 'bible' ? '📖' : item.type === 'song' ? '🎵' : '📢'}</span>
                   <span className="max-w-[140px] truncate">{item.title}</span>
                   {item.type === 'bible' && rememberedVerseNum && (
-                    <span className="text-[8px] px-1 py-0.2 rounded bg-indigo-600/80 text-white font-black">
-                      v.{rememberedVerseNum}
-                    </span>
+                    <span className="tabular text-[10px] text-muted-foreground">v{rememberedVerseNum}</span>
                   )}
-                  <span
-                    className={`text-[8px] px-1 rounded font-bold ${
-                      isActivePin ? 'bg-amber-500 text-black' : 'bg-[#2a2a2a] text-slate-400'
-                    }`}
-                  >
-                    {item.slides.length}
-                  </span>
+                  <span className="tabular text-[10px] text-muted-foreground/70">{item.slides.length}</span>
                 </button>
                 {onUnpinFromQuickSection && (
                   <button
@@ -1283,75 +1133,63 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                       e.stopPropagation();
                       onUnpinFromQuickSection(item.id);
                     }}
-                    className="text-[#444] hover:text-rose-400 transition ml-0.5"
+                    className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                    aria-label={`Unpin ${item.title}`}
                   >
-                    <X className="w-3 h-3" />
+                    ×
                   </button>
                 )}
-              </div>
+              </span>
             );
           })}
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          COLOR-CODED PROPRESENTER SECTION JUMP BAR
-      ══════════════════════════════════════════════════════════════ */}
+      {/* Section jump bar */}
       {availableSections.length > 0 && (
-        <div className="px-3 py-1.5 bg-[#111] border-b border-[#2a2a2a] flex items-center gap-1.5 overflow-x-auto shrink-0">
-          <span className="text-[9px] font-bold text-[#555] uppercase tracking-wider flex items-center gap-1 shrink-0">
-            <Zap className="w-3 h-3 text-amber-500/60" /> Groups:
-          </span>
-          {availableSections.map(sec => {
-            const groupStyle = getSectionGroupColor(sec);
-            return (
+        <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border px-4 py-1.5">
+          <span className="field-label shrink-0">Sections</span>
+          <div className="flex items-center gap-0.5">
+            {availableSections.map(sec => (
               <button
                 key={sec}
+                type="button"
                 onClick={() => onJumpSection(sec)}
-                className={`px-2.5 py-0.5 rounded text-[10px] font-bold border transition shrink-0 hover:brightness-125 ${groupStyle.badge}`}
+                className="h-6 shrink-0 rounded-sm px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
               >
                 {sec}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          PARALLEL TRANSLATION BAR (Shown when Parallel Translation is selected)
-      {/* ═══════════════════════════════════════════════════════════════
-          SLIDE AREA — GRID VIEW / LIST VIEW / REFLOW EDITOR
-      ══════════════════════════════════════════════════════════════ */}
-      <div ref={slideGridContainerRef} className="flex-1 overflow-y-auto bg-[#141414] p-3">
+      {/* Slide area: grid, outline or reflow editor */}
+      <div ref={slideGridContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-4 py-3">
         {activeItem ? (
           <div>
-            {/* Item header */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="font-black text-[11px] text-white tracking-wide truncate max-w-xs">
-                  {activeItem.title}
-                </span>
-                <span className="text-[9px] px-2 py-0.5 rounded bg-[#222] text-[#888] font-bold border border-[#333] uppercase tracking-wider">
-                  {activeItem.type}
-                </span>
-                <span className="text-[9px] text-[#555] font-mono">
-                  {activeItem.slides.length} slides
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <h2 className="truncate text-xs font-medium text-foreground">{activeItem.title}</h2>
+                <span className="text-2xs text-muted-foreground">
+                  {activeItem.slides.length} {activeItem.slides.length === 1 ? 'slide' : 'slides'} · {activeItem.type}
                 </span>
               </div>
-              <span className="text-[9px] text-[#555] font-mono">
-                {viewMode === 'reflow'
-                  ? 'Reflow Editor: Edit lyrics inline, Split or Merge slides'
-                  : 'Click = preview  •  Dbl-click = live'}
+              <span className="hidden shrink-0 text-2xs text-muted-foreground sm:inline">
+                {viewMode === 'reflow' ? 'Edit text inline, split or merge slides' : 'Click to preview, double-click to take live'}
               </span>
             </div>
 
-            {/* 1. PROPRESENTER GRID VIEW */}
+            {/* Grid */}
             {viewMode === 'grid' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {activeItem.slides.map((slide, sIdx) => {
                   const isPreviewed = previewSlide?.id === slide.id;
                   const isLive = liveSlide?.id === slide.id;
-                  const groupColor = getSectionGroupColor(slide.sectionLabel);
+                  const canTranslate =
+                    (activeItem.type === 'bible' || slide.sectionLabel === 'Scripture') &&
+                    Boolean(targetParallelVersionId) &&
+                    Boolean(onTranslateActiveBible);
 
                   return (
                     <div
@@ -1361,159 +1199,101 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                       onDoubleClick={() => onSendSlideLive(slide)}
                       onDragOver={e => e.preventDefault()}
                       onDrop={e => handleMediaDrop(e, 'slide', slide)}
-                      className={`relative rounded overflow-hidden cursor-pointer transition-all duration-150 border-2 group ${
+                      className={cn(
+                        'group relative cursor-pointer overflow-hidden rounded border bg-black transition-colors',
                         isLive
-                          ? 'border-[#e84040] shadow-[0_0_14px_rgba(232,64,64,0.5)] scale-[1.01]'
+                          ? 'border-live ring-1 ring-live/40'
                           : isPreviewed
-                          ? 'border-[#3a6f9a] shadow-[0_0_10px_rgba(91,155,213,0.35)]'
-                          : 'border-[#2a2a2a] hover:border-[#444]'
-                      }`}
-                      style={{ aspectRatio: '16/9' }}
+                          ? 'border-preview ring-1 ring-preview/30'
+                          : 'border-border hover:border-ring/60'
+                      )}
+                      style={{ aspectRatio: '16/9', containerType: 'size' }}
                     >
-                      <div className="absolute inset-0 bg-[#111]" />
-                      {(slide.backgroundUrl || activeItem.videoBackgroundUrl || globalVideoBgUrl) && (
-                        slide.backgroundType === 'video' || (!slide.backgroundUrl && (activeItem.videoBackgroundUrl || globalVideoBgUrl)) ? (
+                      <div className="absolute inset-0 bg-[#0b0b0c]" />
+
+                      {(slide.backgroundUrl || activeItem.videoBackgroundUrl || globalVideoBgUrl) &&
+                        (slide.backgroundType === 'video' ||
+                        (!slide.backgroundUrl && (activeItem.videoBackgroundUrl || globalVideoBgUrl)) ? (
                           <video
                             src={slide.backgroundUrl || activeItem.videoBackgroundUrl || globalVideoBgUrl || ''}
                             muted
                             playsInline
-                            className={`absolute inset-0 w-full h-full pointer-events-none ${
+                            className={cn(
+                              'pointer-events-none absolute inset-0 h-full w-full',
                               !slide.content?.trim() && slide.backgroundUrl ? 'object-contain opacity-95' : 'object-cover opacity-30'
-                            }`}
+                            )}
                           />
                         ) : (
                           <img
                             src={slide.backgroundUrl}
                             alt=""
-                            className={`absolute inset-0 w-full h-full pointer-events-none ${
+                            className={cn(
+                              'pointer-events-none absolute inset-0 h-full w-full',
                               !slide.content?.trim() && slide.backgroundUrl ? 'object-contain opacity-95' : 'object-cover opacity-30'
-                            }`}
+                            )}
                           />
-                        )
-                      )}
+                        ))}
 
-                      {/* ProPresenter Color-Coded Group Top Ribbon */}
-                      <div className={`absolute top-0 left-0 right-0 h-1 z-30 ${groupColor.bar}`} />
-
-                      {/* Slide text content */}
-                      <div className="absolute inset-0 flex items-center justify-center p-2.5 pt-4 text-center z-10">
+                      <div className="absolute inset-0 z-10 flex items-center justify-center p-3 text-center">
                         <div
-                          className="font-bold text-white whitespace-pre-line leading-tight drop-shadow-lg"
+                          className="whitespace-pre-line font-semibold leading-tight text-white drop-shadow"
                           style={getFlexibleFontSize(slide.content, 11)}
                         >
                           {slide.content}
                         </div>
                       </div>
 
-                      {/* Top bar: slide number + color-coded section tag */}
-                      <div className="absolute top-1 left-0 right-0 flex items-center justify-between px-1.5 py-0.5 z-20 bg-gradient-to-b from-black/80 to-transparent">
-                        <span className="text-[8px] font-mono font-black text-slate-400 bg-black/60 px-1 rounded">
-                          {sIdx + 1}
-                        </span>
+                      <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-1 p-1.5">
+                        <span className="tabular text-2xs text-white/60">{sIdx + 1}</span>
                         {slide.sectionLabel && (
-                          <span
-                            className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded border ${groupColor.badge}`}
-                          >
-                            {slide.sectionLabel}
-                          </span>
+                          <span className="rounded-sm bg-black/60 px-1 text-2xs text-white/70">{slide.sectionLabel}</span>
                         )}
                       </div>
 
-                      {/* Live / Preview status badge */}
                       {(isLive || isPreviewed) && (
-                        <div className="absolute inset-0 border-0 z-10 pointer-events-none rounded">
-                          <div
-                            className={`absolute bottom-0 left-0 right-0 flex items-center justify-between px-1.5 py-1 pointer-events-auto ${
-                              isLive ? 'bg-[#e84040]/90' : 'bg-[#1c3a5c]/90'
-                            }`}
-                          >
-                            <span className="text-[8px] font-black uppercase text-white flex items-center gap-1">
-                              {isLive ? (
-                                <>
-                                  <Tv className="w-2.5 h-2.5 animate-pulse" /> ON AIR
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="w-2.5 h-2.5" /> PREVIEW
-                                </>
-                              )}
-                            </span>
-                            <div className="flex gap-1">
-                              {(activeItem.type === 'bible' || slide.sectionLabel === 'Scripture') &&
-                                targetParallelVersionId &&
-                                onTranslateActiveBible && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      onTranslateActiveBible(undefined, slide);
-                                    }}
-                                    className="px-1.5 py-0.5 bg-purple-600/95 hover:bg-purple-500 text-white font-black rounded text-[7px] uppercase transition flex items-center gap-0.5 shadow"
-                                    title="Translate this verse & chapter to Parallel Translation"
-                                  >
-                                    <Globe className="w-2 h-2" /> TRANSLATE
-                                  </button>
-                                )}
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  onTriggerLowerThirdAnnouncement(slide);
-                                }}
-                                className="px-1.5 py-0.5 bg-purple-700/90 hover:bg-purple-600 text-white font-bold rounded text-[7px] uppercase transition flex items-center gap-0.5"
-                                title="Trigger as crawl ticker"
-                              >
-                                <Megaphone className="w-2 h-2" />
-                              </button>
-                              {!isLive && (
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    onSendSlideLive(slide);
-                                  }}
-                                  className="px-1.5 py-0.5 bg-[#e84040]/90 hover:bg-[#c03030] text-white font-bold rounded text-[7px] uppercase transition"
-                                >
-                                  LIVE
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        <span
+                          className={cn(
+                            'absolute bottom-1.5 left-1.5 z-20 rounded-sm px-1.5 py-0.5 text-2xs font-medium',
+                            isLive ? 'bg-live text-live-foreground' : 'bg-preview text-preview-foreground'
+                          )}
+                        >
+                          {isLive ? 'Live' : 'Preview'}
+                        </span>
                       )}
 
-                      {/* Hover overlay with action buttons */}
-                      {!isLive && !isPreviewed && (
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-150 flex items-end justify-end p-1.5 gap-1 z-20 opacity-0 group-hover:opacity-100">
-                          {(activeItem.type === 'bible' || slide.sectionLabel === 'Scripture') &&
-                            targetParallelVersionId &&
-                            onTranslateActiveBible && (
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  onTranslateActiveBible(undefined, slide);
-                                }}
-                                className="px-1.5 py-0.5 bg-purple-600/95 hover:bg-purple-500 text-white font-black rounded text-[7px] uppercase transition flex items-center gap-0.5 shadow-lg"
-                                title="Translate this verse & chapter to Parallel Translation"
-                              >
-                                <Globe className="w-2 h-2" /> TRANSLATE
-                              </button>
-                            )}
+                      {!isLive && (
+                        <div className="absolute inset-x-0 bottom-0 z-30 flex items-center justify-end gap-1 bg-gradient-to-t from-black/80 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                          {canTranslate && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                onTranslateActiveBible?.(undefined, slide);
+                              }}
+                              className="rounded-sm bg-white/10 px-1.5 py-0.5 text-2xs text-white transition-colors hover:bg-white/20"
+                            >
+                              Translate
+                            </button>
+                          )}
                           <button
+                            type="button"
                             onClick={e => {
                               e.stopPropagation();
                               onTriggerLowerThirdAnnouncement(slide);
                             }}
-                            className="px-1.5 py-0.5 bg-purple-700/90 hover:bg-purple-600 text-white font-bold rounded text-[7px] uppercase transition flex items-center gap-0.5 shadow-lg"
-                            title="Trigger as crawl ticker"
+                            className="rounded-sm bg-white/10 px-1.5 py-0.5 text-2xs text-white transition-colors hover:bg-white/20"
                           >
-                            <Megaphone className="w-2 h-2" />
+                            Ticker
                           </button>
                           <button
+                            type="button"
                             onClick={e => {
                               e.stopPropagation();
                               onSendSlideLive(slide);
                             }}
-                            className="px-2 py-0.5 bg-[#e84040]/90 hover:bg-[#c03030] text-white font-black rounded text-[7px] uppercase transition shadow-lg"
+                            className="rounded-sm bg-white px-1.5 py-0.5 text-2xs font-medium text-black transition-colors hover:bg-white/90"
                           >
-                            LIVE
+                            Take live
                           </button>
                         </div>
                       )}
@@ -1523,13 +1303,16 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
               </div>
             )}
 
-            {/* 2. PROPRESENTER LIST / OUTLINE VIEW */}
+            {/* Outline */}
             {viewMode === 'list' && (
-              <div className="flex flex-col gap-1.5">
+              <div className="overflow-hidden rounded-md border border-border">
                 {activeItem.slides.map((slide, sIdx) => {
                   const isPreviewed = previewSlide?.id === slide.id;
                   const isLive = liveSlide?.id === slide.id;
-                  const groupColor = getSectionGroupColor(slide.sectionLabel);
+                  const canTranslate =
+                    (activeItem.type === 'bible' || slide.sectionLabel === 'Scripture') &&
+                    Boolean(targetParallelVersionId) &&
+                    Boolean(onTranslateActiveBible);
 
                   return (
                     <div
@@ -1537,64 +1320,54 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                       data-slide-id={slide.id}
                       onClick={() => onSelectSlidePreview(slide)}
                       onDoubleClick={() => onSendSlideLive(slide)}
-                      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border cursor-pointer transition ${
-                        isLive
-                          ? 'bg-rose-950/30 border-rose-500 text-white'
-                          : isPreviewed
-                          ? 'bg-sky-950/30 border-sky-500/70 text-white'
-                          : 'bg-[#1a1a1a] border-[#2a2a2a] hover:border-[#444] text-slate-200'
-                      }`}
+                      className={cn(
+                        'group flex cursor-pointer items-center gap-3 border-b border-border/70 px-3 py-2 transition-colors last:border-b-0',
+                        isLive ? 'bg-live/10' : isPreviewed ? 'bg-accent' : 'hover:bg-accent/50'
+                      )}
                     >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className="text-[10px] font-mono font-bold text-slate-500 w-5">
-                          #{sIdx + 1}
-                        </span>
-                        {slide.sectionLabel && (
-                          <span
-                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border shrink-0 ${groupColor.badge}`}
+                      <span className="tabular w-6 shrink-0 text-2xs text-muted-foreground">{sIdx + 1}</span>
+                      {slide.sectionLabel && (
+                        <span className="w-20 shrink-0 truncate text-2xs text-muted-foreground">{slide.sectionLabel}</span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                        {(slide.content || '').replace(/\r?\n/g, ' / ')}
+                      </span>
+                      {isLive && <span className="state-label shrink-0 text-live">Live</span>}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {canTranslate && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            className="opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={e => {
+                              e.stopPropagation();
+                              onTranslateActiveBible?.(undefined, slide);
+                            }}
                           >
-                            {slide.sectionLabel}
-                          </span>
+                            Translate
+                          </Button>
                         )}
-                        <span className="text-xs font-semibold truncate">
-                          {(slide.content || '').replace(/\r?\n/g, '  /  ')}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {(activeItem.type === 'bible' || slide.sectionLabel === 'Scripture') &&
-                          targetParallelVersionId &&
-                          onTranslateActiveBible && (
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                onTranslateActiveBible(undefined, slide);
-                              }}
-                              className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-[9px] font-black uppercase flex items-center gap-1"
-                              title="Translate this verse & chapter to Parallel Translation"
-                            >
-                              <Globe className="w-3 h-3" /> Translate
-                            </button>
-                          )}
-                        <button
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="opacity-0 transition-opacity group-hover:opacity-100"
                           onClick={e => {
                             e.stopPropagation();
                             onTriggerLowerThirdAnnouncement(slide);
                           }}
-                          className="px-2 py-1 bg-purple-800/80 hover:bg-purple-700 text-white rounded text-[9px] font-bold uppercase flex items-center gap-1"
                         >
-                          <Megaphone className="w-3 h-3" /> Ticker
-                        </button>
-                        <button
+                          Ticker
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={isLive ? 'secondary' : 'ghost'}
                           onClick={e => {
                             e.stopPropagation();
                             onSendSlideLive(slide);
                           }}
-                          className={`px-2.5 py-1 rounded text-[9px] font-black uppercase ${
-                            isLive ? 'bg-rose-600 text-white' : 'bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white'
-                          }`}
                         >
-                          {isLive ? 'ON AIR' : 'GO LIVE'}
-                        </button>
+                          {isLive ? 'On air' : 'Take live'}
+                        </Button>
                       </div>
                     </div>
                   );
@@ -1602,32 +1375,31 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
               </div>
             )}
 
-            {/* 3. PROPRESENTER REFLOW EDITOR VIEW */}
+            {/* Reflow editor */}
             {viewMode === 'reflow' && (
-              <div className="flex flex-col gap-3">
+              <div className="space-y-3">
                 {activeItem.slides.map((slide, sIdx) => {
                   const isLive = liveSlide?.id === slide.id;
-                  const groupColor = getSectionGroupColor(slide.sectionLabel);
 
                   return (
                     <div
                       key={slide.id}
-                      className={`rounded-xl border bg-[#1b2230] p-3 flex flex-col gap-2 ${
-                        isLive ? 'border-rose-500' : 'border-slate-700/80'
-                      }`}
+                      className={cn(
+                        'rounded-md border bg-card p-3',
+                        isLive ? 'border-live/60' : 'border-border'
+                      )}
                     >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded bg-black/50 text-slate-300">
-                            Slide {sIdx + 1}
-                          </span>
+                          <span className="tabular text-2xs text-muted-foreground">{sIdx + 1}</span>
                           <select
                             value={slide.sectionLabel || 'Slide'}
                             onChange={e => handleReflowSectionChange(slide.id, e.target.value as SectionTag)}
-                            className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border outline-none cursor-pointer ${groupColor.badge}`}
+                            aria-label={`Section for slide ${sIdx + 1}`}
+                            className="h-6 rounded-sm border border-input bg-background/60 px-1.5 text-2xs text-foreground outline-none focus:border-ring"
                           >
                             {SECTION_TAGS.map(t => (
-                              <option key={t} value={t} className="bg-[#0f172a] text-white">
+                              <option key={t} value={t}>
                                 {t}
                               </option>
                             ))}
@@ -1635,51 +1407,33 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleSplitSlide(sIdx)}
-                            className="px-2 py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded text-[9px] font-bold flex items-center gap-1 transition"
-                            title="Split slide into two slides"
-                          >
-                            <Scissors className="w-3 h-3" /> Split
-                          </button>
+                          <Button size="xs" variant="ghost" onClick={() => handleSplitSlide(sIdx)}>
+                            Split
+                          </Button>
                           {sIdx < activeItem.slides.length - 1 && (
-                            <button
-                              onClick={() => handleMergeWithNext(sIdx)}
-                              className="px-2 py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded text-[9px] font-bold flex items-center gap-1 transition"
-                              title="Merge with next slide"
-                            >
-                              <Merge className="w-3 h-3" /> Merge Down
-                            </button>
+                            <Button size="xs" variant="ghost" onClick={() => handleMergeWithNext(sIdx)}>
+                              Merge
+                            </Button>
                           )}
-                          <button
-                            onClick={() => handleDuplicateSlide(sIdx)}
-                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[9px] font-bold flex items-center gap-1 transition"
-                            title="Duplicate slide"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => handleAddSlideAfter(sIdx)}
-                            className="px-2 py-1 bg-emerald-800/70 hover:bg-emerald-600 text-emerald-200 hover:text-white rounded text-[9px] font-bold flex items-center gap-1 transition"
-                            title="Insert new slide below"
-                          >
-                            <Plus className="w-3 h-3" /> Add
-                          </button>
+                          <Button size="xs" variant="ghost" onClick={() => handleDuplicateSlide(sIdx)}>
+                            Duplicate
+                          </Button>
+                          <Button size="xs" variant="ghost" onClick={() => handleAddSlideAfter(sIdx)}>
+                            Add
+                          </Button>
                           {activeItem.slides.length > 1 && (
-                            <button
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteSlide(sIdx)}
-                              className="px-2 py-1 bg-rose-950/70 hover:bg-rose-700 text-rose-300 hover:text-white rounded text-[9px] font-bold flex items-center gap-1 transition"
-                              title="Delete slide"
                             >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                              Delete
+                            </Button>
                           )}
-                          <button
-                            onClick={() => onSendSlideLive(slide)}
-                            className="ml-1 px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-black uppercase transition"
-                          >
-                            {isLive ? 'ON AIR' : 'Live'}
-                          </button>
+                          <Button size="xs" variant={isLive ? 'secondary' : 'default'} onClick={() => onSendSlideLive(slide)}>
+                            {isLive ? 'On air' : 'Take live'}
+                          </Button>
                         </div>
                       </div>
 
@@ -1687,7 +1441,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                         rows={3}
                         value={slide.content}
                         onChange={e => handleReflowTextChange(slide.id, e.target.value)}
-                        className="w-full bg-[#0f1522] border border-slate-700 focus:border-indigo-500 rounded-lg p-2.5 text-xs text-white font-semibold leading-relaxed outline-none resize-y"
+                        className="w-full resize-y rounded-md border border-input bg-background/60 p-2.5 text-xs leading-relaxed text-foreground outline-none focus:border-ring"
                       />
                     </div>
                   );
@@ -1696,13 +1450,13 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             )}
           </div>
         ) : (
-          <div className="h-48 flex flex-col items-center justify-center gap-2">
-            <MonitorPlay className="w-8 h-8 text-[#333]" />
-            <p className="text-[#555] text-xs font-semibold">No Item Selected</p>
-            <p className="text-[#3a3a3a] text-[10px]">Select an item from the playlist to begin</p>
-          </div>
+          <EmptyState
+            title="No item selected"
+            description="Choose a song, passage or slide in the service to see its slides here."
+            className="h-56"
+          />
         )}
       </div>
-    </div>
+    </main>
   );
 };

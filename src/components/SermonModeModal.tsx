@@ -1,20 +1,30 @@
 import React, { useState, useMemo } from 'react';
 import { PlaylistItem, Slide, MediaAsset } from '../types/presentation';
+import { MoreHorizontal } from 'lucide-react';
 import {
-  BookOpen,
-  Plus,
-  Trash2,
-  X,
-  Check,
-  Play,
-  ArrowUp,
-  ArrowDown,
-  Image as ImageIcon,
-  Film,
-  Ban,
-  Sparkles,
-  RotateCcw
-} from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Field, FieldGroup } from './ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
+import { Separator } from './ui/separator';
+import { EmptyState, ListHeader } from './ui/primitives';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 
 interface SermonModeModalProps {
   isOpen: boolean;
@@ -168,153 +178,125 @@ export const SermonModeModal: React.FC<SermonModeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-4xl bg-[#0f1624] border border-purple-500/60 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-xs animate-zoom-in">
-        {/* Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/40 flex items-center justify-center">
-              <BookOpen className="w-4 h-4 text-purple-400" />
-            </div>
-            <div>
-              <h2 className="font-black text-sm text-white uppercase tracking-wider">
-                Sermon Presentation Builder
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Build sermon title, editable points, background, and speaker notes with live preview.
-              </p>
-            </div>
-          </div>
+    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="h-[min(88vh,44rem)] max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Sermon deck</DialogTitle>
+          <DialogDescription>
+            Build the title, points, background and notes, then check the deck.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleResetSample}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
-              title="Fill with sample sermon outline"
-            >
-              <RotateCcw className="w-3 h-3" /> Load Sample
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+          {/* Builder controls */}
+          <div className="min-h-0 space-y-5 overflow-y-auto border-b border-border p-5 md:w-7/12 md:min-w-0 md:border-b-0 md:border-r">
+            <FieldGroup title="Sermon">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Title" htmlFor="sermon-title">
+                  <Input
+                    id="sermon-title"
+                    type="text"
+                    autoFocus
+                    placeholder="Unstoppable Faith"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                  />
+                </Field>
+                <Field label="Series" htmlFor="sermon-series">
+                  <Input
+                    id="sermon-series"
+                    type="text"
+                    placeholder="Sunday Word"
+                    value={seriesSubtitle}
+                    onChange={e => setSeriesSubtitle(e.target.value)}
+                  />
+                </Field>
+                <Field label="Speaker" htmlFor="sermon-speaker">
+                  <Input
+                    id="sermon-speaker"
+                    type="text"
+                    placeholder="Pastor John"
+                    value={speaker}
+                    onChange={e => setSpeaker(e.target.value)}
+                  />
+                </Field>
+              </div>
+            </FieldGroup>
 
-        {/* Body */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12">
-          {/* Left Column: Builder Controls */}
-          <div className="md:col-span-7 p-4 space-y-3.5 overflow-y-auto border-b md:border-b-0 md:border-r border-[#26334a]">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Sermon Title
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="e.g. Unstoppable Faith"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  className="w-full bg-[#141d2e] border border-slate-700 rounded-lg p-2 text-white font-bold outline-none focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Series / Tagline
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Sunday Word"
-                  value={seriesSubtitle}
-                  onChange={e => setSeriesSubtitle(e.target.value)}
-                  className="w-full bg-[#141d2e] border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Speaker Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Pastor John"
-                  value={speaker}
-                  onChange={e => setSpeaker(e.target.value)}
-                  className="w-full bg-[#141d2e] border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-purple-500"
-                />
-              </div>
-            </div>
+            <Separator />
 
-            {/* Editable & Reorderable Sermon Points */}
-            <div className="space-y-2 bg-[#141d2e] border border-slate-800 p-3 rounded-xl">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">
-                  Main Sermon Points ({points.length})
-                </label>
+            <FieldGroup title="Points" description="Each point becomes one slide.">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-2xs text-muted-foreground">
+                  {points.length} {points.length === 1 ? 'point' : 'points'}
+                </span>
                 {points.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setPoints([])}
-                    className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold"
-                  >
-                    Clear Points
-                  </button>
+                  <Button variant="ghost" size="xs" onClick={() => setPoints([])}>
+                    Clear points
+                  </Button>
                 )}
               </div>
 
-              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                {points.map((pt, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-1.5 bg-[#0d1320] border border-slate-700 p-1.5 rounded-lg"
-                  >
-                    <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold text-[10px] shrink-0">
-                      #{idx + 1}
-                    </span>
-                    <input
-                      type="text"
-                      value={pt}
-                      onChange={e => handleUpdatePoint(idx, e.target.value)}
-                      className="flex-1 bg-transparent text-slate-100 font-medium text-xs outline-none px-1"
-                    />
-                    <button
-                      type="button"
-                      disabled={idx === 0}
-                      onClick={() => handleMovePoint(idx, -1)}
-                      className="p-1 text-slate-500 hover:text-white disabled:opacity-20"
-                      title="Move point up"
+              {points.length > 0 && (
+                <div className="max-h-52 overflow-y-auto rounded-md border border-border">
+                  {points.map((pt, idx) => (
+                    <div
+                      key={idx}
+                      className="group flex items-center gap-1 border-t border-border/70 px-1.5 first:border-t-0"
                     >
-                      <ArrowUp className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={idx === points.length - 1}
-                      onClick={() => handleMovePoint(idx, 1)}
-                      className="p-1 text-slate-500 hover:text-white disabled:opacity-20"
-                      title="Move point down"
-                    >
-                      <ArrowDown className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePoint(idx)}
-                      className="p-1 text-slate-400 hover:text-rose-400"
-                      title="Remove point"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <span className="tabular w-4 shrink-0 text-2xs text-muted-foreground">
+                        {idx + 1}
+                      </span>
+                      <Input
+                        type="text"
+                        value={pt}
+                        onChange={e => handleUpdatePoint(idx, e.target.value)}
+                        aria-label={`Point ${idx + 1}`}
+                        className="h-8 flex-1 border-transparent bg-transparent px-1.5 text-xs hover:border-input"
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Point ${idx + 1} options`}
+                            title="Point options"
+                            className="shrink-0 opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            disabled={idx === 0}
+                            onSelect={() => handleMovePoint(idx, -1)}
+                          >
+                            Move up
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={idx === points.length - 1}
+                            onSelect={() => handleMovePoint(idx, 1)}
+                          >
+                            Move down
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => handleRemovePoint(idx)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-              <div className="flex gap-2 pt-1">
-                <input
+              <div className="flex items-center gap-2">
+                <Input
                   type="text"
-                  placeholder="Type a sermon point or scripture & press Enter..."
+                  placeholder="Type a point or reference"
                   value={newPoint}
                   onChange={e => setNewPoint(e.target.value)}
                   onKeyDown={e => {
@@ -323,151 +305,134 @@ export const SermonModeModal: React.FC<SermonModeModalProps> = ({
                       handleAddPoint();
                     }
                   }}
-                  className="flex-1 bg-[#0d1320] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white outline-none focus:border-purple-500"
+                  aria-label="New point"
                 />
-                <button
-                  type="button"
-                  onClick={handleAddPoint}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg flex items-center gap-1 shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add
-                </button>
+                <Button variant="secondary" size="sm" onClick={handleAddPoint} className="shrink-0">
+                  Add
+                </Button>
               </div>
-            </div>
+            </FieldGroup>
 
-            {/* Optional Title & Closing Slides */}
-            <div className="bg-[#141d2e] border border-slate-800 p-3 rounded-xl space-y-2">
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-xs text-slate-200 font-semibold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeTitleSlide}
-                    onChange={e => setIncludeTitleSlide(e.target.checked)}
-                    className="accent-purple-500"
-                  />
-                  Include Title Slide
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-200 font-semibold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeClosingSlide}
-                    onChange={e => setIncludeClosingSlide(e.target.checked)}
-                    className="accent-purple-500"
-                  />
-                  Include Closing / Prayer Slide
-                </label>
+            <Separator />
+
+            <FieldGroup title="Slides">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>Title slide</Label>
+                  <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                    Opens the deck with the sermon title.
+                  </p>
+                </div>
+                <Switch
+                  checked={includeTitleSlide}
+                  onCheckedChange={setIncludeTitleSlide}
+                  aria-label="Include title slide"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>Closing slide</Label>
+                  <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                    Ends the deck with a prayer or altar call.
+                  </p>
+                </div>
+                <Switch
+                  checked={includeClosingSlide}
+                  onCheckedChange={setIncludeClosingSlide}
+                  aria-label="Include closing slide"
+                />
               </div>
 
               {includeClosingSlide && (
-                <textarea
-                  rows={2}
-                  value={closingText}
-                  onChange={e => setClosingText(e.target.value)}
-                  placeholder="Closing slide text..."
-                  className="w-full bg-[#0d1320] border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-purple-500 resize-none"
-                />
+                <Field label="Closing text" htmlFor="sermon-closing">
+                  <Textarea
+                    id="sermon-closing"
+                    value={closingText}
+                    onChange={e => setClosingText(e.target.value)}
+                    rows={2}
+                    placeholder="Closing slide text"
+                    className="h-16"
+                  />
+                </Field>
               )}
-            </div>
+            </FieldGroup>
 
-            {/* Background Selector (if media available) */}
             {media.length > 0 && (
-              <div className="bg-[#141d2e] border border-slate-800 p-3 rounded-xl space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5 text-sky-400" /> Slide Background (Optional)
-                </label>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMediaId(null)}
-                    className={`shrink-0 w-20 h-12 rounded-lg border-2 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition ${
-                      selectedMediaId === null
-                        ? 'border-purple-400 bg-purple-950/40 text-purple-200'
-                        : 'border-slate-800 bg-[#0d1320] text-slate-400'
-                    }`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    Theme
-                  </button>
-                  {media.map(m => {
-                    const isSel = selectedMediaId === m.id;
-                    const isVid = m.type === 'video';
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setSelectedMediaId(m.id)}
-                        className={`relative shrink-0 w-20 h-12 rounded-lg overflow-hidden border-2 transition ${
-                          isSel
-                            ? 'border-purple-400 ring-2 ring-purple-500/40'
-                            : 'border-slate-800 opacity-75 hover:opacity-100'
-                        }`}
-                      >
-                        {isVid ? (
-                          <video src={m.url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
-                        ) : (
-                          <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
-                        )}
-                        <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 flex items-center gap-0.5">
-                          {isVid && <Film className="w-2.5 h-2.5 text-sky-400 shrink-0" />}
-                          <span className="text-[8px] font-bold text-white truncate">{m.name}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <>
+                <Separator />
+                <FieldGroup title="Background">
+                  <Field label="Image or video" hint="Applies to every slide in the deck.">
+                    <Select
+                      value={selectedMediaId ?? '__none__'}
+                      onValueChange={value =>
+                        setSelectedMediaId(value === '__none__' ? null : value)
+                      }
+                    >
+                      <SelectTrigger aria-label="Deck background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Theme default</SelectItem>
+                        {media.map(asset => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </FieldGroup>
+              </>
             )}
 
-            {/* Speaker Notes */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                Speaker Notes (Stage Display)
-              </label>
-              <textarea
+            <Separator />
+
+            <FieldGroup title="Speaker notes" description="Shown on the stage display only.">
+              <Textarea
                 value={speakerNotes}
                 onChange={e => setSpeakerNotes(e.target.value)}
-                placeholder="Notes visible to the preacher on the Stage Monitor..."
-                className="w-full h-14 bg-[#141d2e] border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-purple-500 resize-none"
+                placeholder="Notes for the preacher"
+                aria-label="Speaker notes"
+                className="h-20"
               />
-            </div>
+            </FieldGroup>
           </div>
 
-          {/* Right Column: Live Sermon Deck Preview */}
-          <div className="md:col-span-5 bg-[#0b101b] p-4 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
-                  Sermon Deck Preview
-                </span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-bold text-purple-300">
+          {/* Deck preview */}
+          <div className="flex min-h-0 flex-col md:w-5/12 md:min-w-0">
+            <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+              <ListHeader className="px-0">Deck</ListHeader>
+              <span className="tabular text-2xs text-muted-foreground">
                 {builtSlides.length} {builtSlides.length === 1 ? 'slide' : 'slides'}
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {builtSlides.length === 0 ? (
-                <div className="h-full min-h-[200px] flex items-center justify-center text-center p-4 border border-dashed border-slate-800 rounded-xl text-slate-500">
-                  Add at least one point or enable Title/Closing slide to build your deck.
-                </div>
+                <EmptyState
+                  title="No slides yet"
+                  description="Add a point, or enable the title or closing slide to build the deck."
+                />
               ) : (
                 builtSlides.map((slide, idx) => (
                   <div
                     key={`${slide.id}-${idx}`}
-                    className="p-2.5 rounded-xl bg-[#131b2c] border border-slate-800 space-y-1"
+                    className="space-y-1 border-t border-border/70 px-4 py-2 first:border-t-0"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="px-1.5 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-[9px] font-bold uppercase text-purple-300">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-2xs text-muted-foreground">
                         {slide.title || slide.sectionLabel}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">#{idx + 1}</span>
+                      <span className="tabular shrink-0 text-2xs text-muted-foreground">
+                        {idx + 1}
+                      </span>
                     </div>
-                    <div className="text-xs text-slate-100 whitespace-pre-line leading-relaxed">
+                    <p className="line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-foreground">
                       {slide.content}
-                    </div>
+                    </p>
                     {slide.subtitle && (
-                      <div className="text-[10px] text-slate-400 truncate">{slide.subtitle}</div>
+                      <p className="truncate text-2xs text-muted-foreground">{slide.subtitle}</p>
                     )}
                   </div>
                 ))
@@ -476,39 +441,33 @@ export const SermonModeModal: React.FC<SermonModeModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 bg-[#131b2c] border-t border-[#26334a] flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-2 text-slate-400 hover:text-white font-semibold"
-          >
-            Cancel
-          </button>
-
+        <DialogFooter className="justify-between">
+          <Button variant="ghost" size="sm" onClick={handleResetSample}>
+            Load sample
+          </Button>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={builtSlides.length === 0}
               onClick={() => handleBuildSermon(false)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-100 border border-slate-700 font-bold rounded-xl flex items-center gap-1.5 transition"
             >
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              Add to Playlist ({builtSlides.length})
-            </button>
-
-            <button
-              type="button"
+              Add to playlist ({builtSlides.length})
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
               disabled={builtSlides.length === 0}
               onClick={() => handleBuildSermon(true)}
-              className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black uppercase tracking-wider rounded-xl shadow-xl flex items-center gap-1.5 transition"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Add & Go Live</span>
-            </button>
+              Add and go live
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

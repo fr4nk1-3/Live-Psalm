@@ -266,9 +266,20 @@ export const App: React.FC = () => {
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStreamingOpen, setIsStreamingOpen] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const activeItem = playlist.find(i => i.id === activeItemId) || null;
   const activeTheme = themes.find(t => t.id === activeThemeId) || themes[0];
+
+  /** The window subtitle reflects the first section heading in the service. */
+  const serviceTitle = (() => {
+    const heading = playlist.find(item => item.type === 'header' && item.title.trim());
+    if (!heading) return 'Untitled service';
+    const raw = heading.title.trim();
+    return raw === raw.toUpperCase()
+      ? raw.toLowerCase().replace(/(^|\s|&)([a-z])/g, (_match, prefix, letter) => prefix + letter.toUpperCase())
+      : raw;
+  })();
 
   // Helper to accurately compute the upcoming slide for Stage Confidence Monitor
   const getUpcomingNextSlide = (): Slide | undefined => {
@@ -1200,7 +1211,15 @@ export const App: React.FC = () => {
       }
 
       // Do not trigger single-key operator shortcuts while a modal dialog or input is active
-      if (isSearchOpen || isQuickModeOpen || isSermonModeOpen || isDesignerOpen || isSettingsOpen || isStreamingOpen) {
+      if (
+        isSearchOpen ||
+        isQuickModeOpen ||
+        isSermonModeOpen ||
+        isDesignerOpen ||
+        isSettingsOpen ||
+        isStreamingOpen ||
+        isInspectorOpen
+      ) {
         return;
       }
 
@@ -1269,7 +1288,8 @@ export const App: React.FC = () => {
     isSermonModeOpen,
     isDesignerOpen,
     isSettingsOpen,
-    isStreamingOpen
+    isStreamingOpen,
+    isInspectorOpen
   ]);
 
   // Playlist Handlers
@@ -1312,9 +1332,43 @@ export const App: React.FC = () => {
     }
   };
 
+  /**
+   * Selecting an item in the service loads it into Preview only. Taking it to
+   * air is always an explicit action (Go live, Enter, or double-click).
+   */
+  const handlePreviewItem = (item: PlaylistItem) => {
+    setActiveItemId(item.id);
+    if (item.type === 'header') return;
+    setSpeakerNotes(item.speakerNotes || '');
+    if (item.slides.length === 0) {
+      setPreviewSlide(null);
+      return;
+    }
+    const target =
+      item.type === 'bible'
+        ? resolveRememberedSlide(
+            item.slides,
+            item.id,
+            item.title,
+            undefined,
+            item.lastViewedSlideId,
+            item.bibleMeta
+          )
+        : item.slides[0];
+    setPreviewSlide(target);
+  };
+
+  const handlePreviewSlideInPlaylist = (item: PlaylistItem, slide: Slide) => {
+    setActiveItemId(item.id);
+    setPreviewSlide(slide);
+    setSpeakerNotes(item.speakerNotes || '');
+    if (item.type === 'bible') {
+      setPlaylist(prev => prev.map(p => (p.id === item.id ? { ...p, lastViewedSlideId: slide.id } : p)));
+    }
+  };
+
   const handleAddItem = (type: ItemType) => {
-    if (type === 'header') {
-      const headerItem: PlaylistItem = {
+    if (type === 'header') {      const headerItem: PlaylistItem = {
         id: `item-hdr-${Math.random().toString(36).substring(2, 9)}`,
         title: 'WORSHIP & PRAISE',
         type: 'header',
@@ -2080,10 +2134,10 @@ export const App: React.FC = () => {
   }, [activeItemId, activeItem?.title, activeItem?.bibleMeta?.book, activeItem?.bibleMeta?.chapter]);
 
   return (
-    <div className="w-screen h-screen bg-[#090d14] text-slate-100 flex flex-col overflow-hidden select-none font-sans">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background font-sans text-foreground">
       {/* Top Header */}
       <Header
-        serviceTitle="Sunday Service Worship & Media"
+        serviceTitle={serviceTitle}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenQuickMode={() => setIsQuickModeOpen(true)}
         onOpenSermonMode={() => setIsSermonModeOpen(true)}
@@ -2111,25 +2165,8 @@ export const App: React.FC = () => {
       />
 
       {/* Main Studio Body Workspace Layout */}
-      <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden">
-        {/* Left Panel: Service Playlist */}
-        <PlaylistPanel
-          playlist={playlist}
-          activeItemId={activeItemId}
-          onSelectItem={handleSelectItem}
-          onSelectSlideInItem={handleSelectSlideInPlaylist}
-          onAddItem={handleAddItem}
-          onRemoveItem={handleRemoveItem}
-          onDuplicateItem={handleDuplicateItem}
-          onRenameItem={handleRenameItem}
-          onClearPlaylist={handleClearPlaylist}
-          onMoveItem={handleMoveItem}
-          onLoadTemplate={handleLoadTemplate}
-          liveItemId={liveItemId}
-          liveSlideId={liveSlide?.id || null}
-        />
-
-        {/* Tabbed Library Browser (Songs, Bible, Announcements, Media, Themes) */}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden select-none">
+        {/* Left Panel: Library Browser (Songs, Bible, Announcements, Media, Themes) */}
         <LibraryTabs
           songs={songs}
           media={media}
@@ -2223,10 +2260,31 @@ export const App: React.FC = () => {
           onClearLiveSlide={() => setLiveSlide(null)}
           onApplyBackground={handleApplyBackgroundWithScope}
           onClearBackground={handleClearAllBackgrounds}
+          onOpenInspector={() => setIsInspectorOpen(true)}
         />
 
-        {/* Right Inspector Panel */}
+        {/* Right rail: service order */}
+        <PlaylistPanel
+          playlist={playlist}
+          activeItemId={activeItemId}
+          onPreviewItem={handlePreviewItem}
+          onSelectItem={handleSelectItem}
+          onPreviewSlideInItem={handlePreviewSlideInPlaylist}
+          onSelectSlideInItem={handleSelectSlideInPlaylist}
+          onAddItem={handleAddItem}
+          onRemoveItem={handleRemoveItem}
+          onDuplicateItem={handleDuplicateItem}
+          onRenameItem={handleRenameItem}
+          onClearPlaylist={handleClearPlaylist}
+          onMoveItem={handleMoveItem}
+          onLoadTemplate={handleLoadTemplate}
+          liveItemId={liveItemId}
+          liveSlideId={liveSlide?.id || null}
+        />
+
         <InspectorPanel
+          open={isInspectorOpen}
+          onClose={() => setIsInspectorOpen(false)}
           theme={activeTheme}
           onUpdateTheme={(updated) => {
             setThemes(prev => prev.map(t => t.id === activeTheme.id ? { ...t, ...updated } : t));

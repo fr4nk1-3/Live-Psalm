@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Song } from '../types/presentation';
 import { ImporterService } from '../services/importer';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Field } from './ui/field';
+import { EmptyState } from './ui/primitives';
 import {
-  X,
-  Music,
-  Plus,
-  Play,
-  Upload,
-  Check,
-  Sparkles,
-  Layers
-} from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from './ui/dialog';
 
 interface SongEditorModalProps {
   isOpen: boolean;
@@ -134,216 +137,170 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   };
 
   const canSave = title.trim().length > 0 && lyrics.trim().length > 0;
+  const slideCount = lyrics.trim() ? previewSlides.length : 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-[#0f1624] border border-[#26334a] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center">
-              <Music className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div>
-              <h2 className="text-sm font-black text-white">
-                {editingSong ? 'Edit Worship Song' : 'Add New Worship Song'}
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Use section buttons or blank lines — slides are formatted automatically in real time.
-              </p>
-            </div>
-          </div>
+    <Dialog
+      open={isOpen}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-w-[920px]">
+        <DialogHeader>
+          <DialogTitle>{editingSong ? 'Edit song' : 'New song'}</DialogTitle>
+          <DialogDescription>
+            {editingSong
+              ? 'Change the title, author or lyrics. Slides update as you type.'
+              : 'Lyrics become slides. A section heading or a blank line starts a new slide.'}
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.text"
-              onChange={handleImportTextFile}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
-              title="Import lyrics from a .txt file"
-            >
-              <Upload className="w-3.5 h-3.5 text-indigo-400" />
-              Import .txt
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12">
-          {/* Left Column: Form & Guided Editor */}
-          <div className="md:col-span-7 p-4 space-y-3 overflow-y-auto border-b md:border-b-0 md:border-r border-[#26334a]">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  Song Title *
-                </label>
-                <input
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_320px] md:overflow-hidden">
+          <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Title" htmlFor="song-title">
+                <Input
+                  id="song-title"
                   type="text"
                   autoFocus
-                  placeholder="e.g. Way Maker"
+                  placeholder="Way Maker"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  className="w-full bg-[#090d16] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs text-white font-semibold outline-none"
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  Artist / Author
-                </label>
-                <input
+              </Field>
+              <Field label="Author" htmlFor="song-artist">
+                <Input
+                  id="song-artist"
                   type="text"
-                  placeholder="e.g. Sinach"
+                  placeholder="Sinach"
                   value={artist}
                   onChange={e => setArtist(e.target.value)}
-                  className="w-full bg-[#090d16] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs text-white outline-none"
                 />
-              </div>
+              </Field>
             </div>
 
-            {/* Quick Section Tag Buttons */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Quick Insert Section Tag
-                </label>
-                <span className="text-[10px] text-slate-500">Click to insert at cursor</span>
-              </div>
+            <Field label="Section headings" hint="Inserts the heading at the cursor.">
               <div className="flex flex-wrap gap-1.5">
                 {SECTION_SHORTCUTS.map(tag => (
-                  <button
+                  <Button
                     key={tag}
                     type="button"
+                    variant="outline"
+                    size="xs"
                     onClick={() => insertSectionHeader(tag)}
-                    className="px-2 py-1 bg-[#162032] hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-400/60 text-slate-200 hover:text-indigo-200 rounded-md text-[11px] font-semibold flex items-center gap-1 transition"
                   >
-                    <Plus className="w-3 h-3 text-indigo-400" />
                     {tag}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </div>
+            </Field>
 
-            {/* Lyrics Textarea */}
-            <div className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Lyrics *
-                </label>
-                <span className="text-[10px] text-slate-500">
-                  Blank line = new slide section • Auto-wraps every 4 lines
-                </span>
-              </div>
-              <textarea
+            <Field
+              label="Lyrics"
+              htmlFor="song-lyrics"
+              action={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Import .txt
+                </Button>
+              }
+              hint="A blank line starts a new slide. Long sections wrap every four lines."
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.text"
+                onChange={handleImportTextFile}
+                className="hidden"
+              />
+              <Textarea
+                id="song-lyrics"
                 ref={textareaRef}
                 value={lyrics}
                 onChange={e => setLyrics(e.target.value)}
                 placeholder={`Verse 1\nYou are here, moving in our midst\nI worship You, I worship You\n\nChorus\nWay maker, miracle worker\nPromise keeper, light in the darkness...`}
-                className="w-full h-64 bg-[#090d16] border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-100 leading-relaxed outline-none resize-none font-sans"
+                className="h-64"
               />
-            </div>
+            </Field>
           </div>
 
-          {/* Right Column: Live Slide Preview */}
-          <div className="md:col-span-5 bg-[#0b101b] p-4 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
-                  Live Slide Preview
-                </span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-bold text-indigo-300">
-                {lyrics.trim() ? previewSlides.length : 0} {previewSlides.length === 1 ? 'slide' : 'slides'}
+          <aside className="min-h-0 overflow-y-auto border-t border-border bg-card/40 px-4 py-4 md:border-l md:border-t-0">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs font-medium text-foreground">Slides</p>
+              <span className="tabular text-2xs text-muted-foreground">
+                {slideCount} {slideCount === 1 ? 'slide' : 'slides'}
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="mt-2">
               {!lyrics.trim() ? (
-                <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
-                  <Music className="w-7 h-7 text-slate-700 mb-2" />
-                  <p className="font-semibold text-slate-400">Slide cards appear here</p>
-                  <p className="mt-1 text-[11px] text-slate-600">
-                    Type or paste lyrics on the left, or import a .txt file.
-                  </p>
-                </div>
+                <EmptyState
+                  title="Slides appear here"
+                  description="Type or paste lyrics on the left, or import a .txt file."
+                  className="px-2 py-8"
+                />
               ) : (
                 previewSlides.map((slide, idx) => (
                   <div
                     key={`${slide.id}-${idx}`}
-                    className="p-2.5 rounded-xl bg-[#131b2c] border border-slate-800 space-y-1"
+                    className="border-t border-border/70 py-2 first:border-t-0"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-[9px] font-bold uppercase text-indigo-300">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-2xs text-muted-foreground">
                         {slide.sectionLabel || `Slide ${idx + 1}`}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">#{idx + 1}</span>
+                      <span className="tabular text-2xs text-muted-foreground">#{idx + 1}</span>
                     </div>
-                    <div className="text-xs text-slate-200 whitespace-pre-line leading-relaxed">
+                    <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-foreground">
                       {slide.content}
-                    </div>
+                    </p>
                   </div>
                 ))
               )}
             </div>
-          </div>
+          </aside>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 bg-[#131b2c] border-t border-[#26334a] flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-white transition"
-          >
+        <DialogFooter className="justify-between">
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={!canSave}
               onClick={() => handleSubmit('library')}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-100 border border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition"
             >
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              {editingSong ? 'Update Song' : 'Save to Library'}
-            </button>
+              {editingSong ? 'Update song' : 'Save to library'}
+            </Button>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={!canSave}
               onClick={() => handleSubmit('playlist')}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
             >
-              <Layers className="w-3.5 h-3.5" />
-              Save & Add to Playlist
-            </button>
+              Save and add to playlist
+            </Button>
 
-            <button
+            <Button
               type="button"
+              variant="default"
               disabled={!canSave}
               onClick={() => handleSubmit('golive')}
-              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              Save & Go Live
-            </button>
+              Save and go live
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Song, MediaAsset, Slide } from '../types/presentation';
 import { ImporterService } from '../services/importer';
+import { cn } from '../lib/utils';
 import {
-  Zap,
-  Play,
-  X,
-  Music,
-  Image as ImageIcon,
-  Film,
-  Search,
-  Type,
-  Layers,
-  Ban
-} from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Field, FieldGroup } from './ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { EmptyState, ListHeader } from './ui/primitives';
 
 interface QuickPresentationModalProps {
   isOpen: boolean;
@@ -124,264 +128,179 @@ export const QuickPresentationModal: React.FC<QuickPresentationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-3xl bg-[#0f1624] border border-indigo-500/60 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-xs animate-zoom-in">
-        {/* Header */}
-        <div className="px-5 py-3.5 bg-[#131b2c] border-b border-[#26334a] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-amber-400 fill-current" />
-            </div>
-            <div>
-              <h2 className="font-black text-sm text-white uppercase tracking-wider">
-                Quick Presentation Mode
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Launch a worship song or spontaneous message onto the screen in seconds.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="h-[min(88vh,40rem)] max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Quick presentation</DialogTitle>
+          <DialogDescription>Send a song or a single slide to the screen.</DialogDescription>
+        </DialogHeader>
 
-        {/* Mode Switcher */}
-        <div className="px-5 pt-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('song')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition ${
-              mode === 'song'
-                ? 'bg-indigo-600 border-indigo-400 text-white shadow'
-                : 'bg-[#141d2e] border-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            <Music className="w-3.5 h-3.5" />
-            Worship Song
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('instant')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition ${
-              mode === 'instant'
-                ? 'bg-indigo-600 border-indigo-400 text-white shadow'
-                : 'bg-[#141d2e] border-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            <Type className="w-3.5 h-3.5" />
-            Instant Slide / Notice
-          </button>
-        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+          {/* Song / text and background */}
+          <div className="min-h-0 space-y-5 overflow-y-auto border-b border-border p-5 md:w-7/12 md:min-w-0 md:border-b-0 md:border-r">
+            <Tabs value={mode} onValueChange={value => setMode(value as 'song' | 'instant')}>
+              <TabsList className="w-full">
+                <TabsTrigger value="song">Song</TabsTrigger>
+                <TabsTrigger value="instant">Instant slide</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-        {/* Body */}
-        <div className="p-5 flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-4">
-          {/* Left: Song/Text + Background */}
-          <div className="md:col-span-7 space-y-4">
             {mode === 'song' ? (
-              <div className="bg-[#141d2e] border border-slate-800 p-3 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                    <Music className="w-3.5 h-3.5 text-emerald-400" /> 1. Choose Song
-                  </label>
-                  <span className="text-[10px] text-slate-500">{filteredSongs.length} songs</span>
-                </div>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Search song title or artist..."
-                    value={songQuery}
-                    onChange={e => setSongQuery(e.target.value)}
-                    className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg pl-8 pr-3 py-1.5 text-white outline-none"
-                  />
-                </div>
-                <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-                  {filteredSongs.map(s => {
-                    const isSel = selectedSong?.id === s.id;
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSongId(s.id);
-                          setStartSlideIndex(0);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg border flex items-center justify-between transition ${
-                          isSel
-                            ? 'bg-indigo-600/25 border-indigo-400 text-white'
-                            : 'bg-[#0d1320] border-slate-800 text-slate-300 hover:border-slate-700'
-                        }`}
-                      >
-                        <span className="font-bold truncate">{s.title}</span>
-                        <span className="text-[10px] text-slate-400 truncate ml-2 shrink-0">
-                          {s.artist || 'Traditional'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-[#141d2e] border border-slate-800 p-3 rounded-xl space-y-2.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                  <Type className="w-3.5 h-3.5 text-amber-400" /> 1. Instant Slide Content
-                </label>
-                <input
+              <FieldGroup title="Song">
+                <Input
                   type="text"
-                  placeholder="Optional Heading (e.g. WELCOME TO CHURCH)"
-                  value={instantTitle}
-                  onChange={e => setInstantTitle(e.target.value)}
-                  className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2 text-white font-semibold outline-none"
+                  value={songQuery}
+                  onChange={e => setSongQuery(e.target.value)}
+                  placeholder="Search titles and artists"
+                  aria-label="Search songs"
                 />
-                <textarea
-                  rows={4}
-                  placeholder="Type spontaneous lyrics, announcement, or scripture text..."
-                  value={instantContent}
-                  onChange={e => setInstantContent(e.target.value)}
-                  className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg p-2.5 text-white outline-none resize-none leading-relaxed"
-                />
-              </div>
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                  {filteredSongs.length === 0 ? (
+                    <p className="px-2.5 py-2 text-2xs text-muted-foreground">
+                      No songs match that search.
+                    </p>
+                  ) : (
+                    filteredSongs.map(song => {
+                      const isSelected = selectedSong?.id === song.id;
+                      return (
+                        <button
+                          key={song.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSongId(song.id);
+                            setStartSlideIndex(0);
+                          }}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-3 border-t border-border/70 px-2.5 py-1.5 text-left transition-colors first:border-t-0',
+                            isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                            {song.title}
+                          </span>
+                          <span className="shrink-0 text-2xs text-muted-foreground">
+                            {song.artist || 'Traditional'}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <p className="text-2xs text-muted-foreground">
+                  {filteredSongs.length} {filteredSongs.length === 1 ? 'song' : 'songs'}
+                </p>
+              </FieldGroup>
+            ) : (
+              <FieldGroup title="Text">
+                <Field label="Heading" htmlFor="quick-instant-title">
+                  <Input
+                    id="quick-instant-title"
+                    type="text"
+                    value={instantTitle}
+                    onChange={e => setInstantTitle(e.target.value)}
+                    placeholder="Optional heading"
+                  />
+                </Field>
+                <Field label="Body" htmlFor="quick-instant-content">
+                  <Textarea
+                    id="quick-instant-content"
+                    value={instantContent}
+                    onChange={e => setInstantContent(e.target.value)}
+                    rows={4}
+                    placeholder="Lyrics, an announcement, or scripture text"
+                    className="h-24"
+                  />
+                </Field>
+              </FieldGroup>
             )}
 
-            {/* Step 2: Background Picker */}
-            <div className="bg-[#141d2e] border border-slate-800 p-3 rounded-xl space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                <ImageIcon className="w-3.5 h-3.5 text-sky-400" /> 2. Background (Image / Video)
-              </label>
-              <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMediaId(null)}
-                  className={`rounded-lg border-2 h-16 flex flex-col items-center justify-center gap-1 transition ${
-                    selectedMediaId === null
-                      ? 'border-indigo-500 bg-indigo-950/40 text-indigo-200'
-                      : 'border-slate-800 bg-[#0d1320] text-slate-400 hover:border-slate-700'
-                  }`}
+            <FieldGroup title="Background">
+              <Field
+                label="Image or video"
+                hint="Applies to every slide in this presentation."
+              >
+                <Select
+                  value={selectedMediaId ?? '__none__'}
+                  onValueChange={value => setSelectedMediaId(value === '__none__' ? null : value)}
                 >
-                  <Ban className="w-4 h-4" />
-                  <span className="text-[10px] font-bold">None / Theme</span>
-                </button>
-
-                {media.map(m => {
-                  const isSel = selectedMediaId === m.id;
-                  const isVid = m.type === 'video';
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedMediaId(m.id)}
-                      className={`relative rounded-lg overflow-hidden border-2 cursor-pointer transition h-16 text-left ${
-                        isSel
-                          ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-                          : 'border-slate-800 opacity-75 hover:opacity-100'
-                      }`}
-                    >
-                      {isVid ? (
-                        <video
-                          src={m.url}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 py-1 flex items-center gap-1">
-                        {isVid && <Film className="w-2.5 h-2.5 text-sky-400 shrink-0" />}
-                        <span className="text-[9px] font-bold text-white truncate">
-                          {m.name}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                  <SelectTrigger aria-label="Presentation background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Theme default</SelectItem>
+                    {media.map(asset => (
+                      <SelectItem key={asset.id} value={asset.id}>
+                        {asset.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </FieldGroup>
           </div>
 
-          {/* Right: Starting Slide & Live Preview */}
-          <div className="md:col-span-5 bg-[#0b101b] border border-slate-800 rounded-xl p-3 flex flex-col space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                {mode === 'song' ? 'Click Slide to Start From' : 'Live Slide Preview'}
-              </span>
-              <span className="text-[10px] text-indigo-300 font-bold">
+          {/* Slide preview */}
+          <div className="flex min-h-0 flex-col md:w-5/12 md:min-w-0">
+            <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+              <ListHeader className="px-0">
+                {mode === 'song' ? 'Start from' : 'Preview'}
+              </ListHeader>
+              <span className="tabular text-2xs text-muted-foreground">
                 {previewSlides.length} {previewSlides.length === 1 ? 'slide' : 'slides'}
               </span>
             </div>
-
-            <div className="flex-1 overflow-y-auto space-y-1.5 max-h-64 pr-1">
-              {previewSlides.map((slide, idx) => {
-                const isStart = idx === startSlideIndex;
-                return (
-                  <button
-                    key={`${slide.id}-${idx}`}
-                    type="button"
-                    onClick={() => setStartSlideIndex(idx)}
-                    className={`w-full text-left p-2 rounded-lg border transition ${
-                      isStart
-                        ? 'bg-indigo-600/20 border-indigo-400 text-white'
-                        : 'bg-[#131b2c] border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-slate-800 text-indigo-300">
-                        {slide.sectionLabel || `Slide ${idx + 1}`}
-                      </span>
-                      {isStart && mode === 'song' && (
-                        <span className="text-[9px] font-black text-amber-300 uppercase">
-                          Start Here
-                        </span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+              {previewSlides.length === 0 ? (
+                <EmptyState
+                  title="No slides"
+                  description="Choose a song to see the slides it will send."
+                />
+              ) : (
+                previewSlides.map((slide, idx) => {
+                  const isStart = idx === startSlideIndex;
+                  return (
+                    <button
+                      key={`${slide.id}-${idx}`}
+                      type="button"
+                      onClick={() => setStartSlideIndex(idx)}
+                      aria-pressed={isStart}
+                      className={cn(
+                        'block w-full rounded-md border-t border-border/70 px-2 py-1.5 text-left transition-colors first:border-t-0',
+                        isStart ? 'bg-accent' : 'hover:bg-accent/60'
                       )}
-                    </div>
-                    <div className="text-[11px] whitespace-pre-line line-clamp-3 leading-snug">
-                      {slide.content}
-                    </div>
-                  </button>
-                );
-              })}
+                    >
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-2xs text-muted-foreground">
+                          {slide.sectionLabel || `Slide ${idx + 1}`}
+                        </span>
+                        {isStart && mode === 'song' ? (
+                          <span className="shrink-0 text-2xs text-muted-foreground">Start here</span>
+                        ) : null}
+                      </span>
+                      <span className="mt-0.5 line-clamp-2 whitespace-pre-line text-xs leading-snug text-foreground">
+                        {slide.content}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-5 py-3 bg-[#131b2c] border-t border-[#26334a] flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-2 text-slate-400 hover:text-white font-semibold"
-          >
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!canLaunch}
-              onClick={() => handleLaunch(false)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-100 border border-slate-700 font-bold rounded-xl flex items-center gap-1.5 transition"
-            >
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              Add to Playlist
-            </button>
-            <button
-              type="button"
-              disabled={!canLaunch}
-              onClick={() => handleLaunch(true)}
-              className="px-5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-600 hover:from-indigo-500 hover:to-rose-500 disabled:opacity-40 text-white font-black uppercase tracking-wider rounded-xl shadow-xl flex items-center gap-2 transition"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>PRESENT NOW (GO LIVE!)</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button variant="secondary" size="sm" disabled={!canLaunch} onClick={() => handleLaunch(false)}>
+            Add to playlist
+          </Button>
+          <Button variant="default" size="sm" disabled={!canLaunch} onClick={() => handleLaunch(true)}>
+            Present now
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

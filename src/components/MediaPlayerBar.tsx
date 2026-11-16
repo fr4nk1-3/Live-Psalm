@@ -20,6 +20,9 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { BroadcastService } from '../services/broadcast';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { MediaAsset } from '../types/presentation';
 
 interface MediaPlayerBarProps {
@@ -265,11 +268,12 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
 
   return (
     <div
-      className={`bg-[#0b1120] border-t-2 border-sky-500/70 select-none transition-all duration-300 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] ${
-        isMinimized ? 'h-10' : 'h-[78px]'
-      } overflow-hidden shrink-0 z-30`}
+      className={cn(
+        'z-30 shrink-0 select-none overflow-hidden border-t border-border bg-card transition-[height] duration-200',
+        isMinimized ? 'h-10' : 'h-[72px]'
+      )}
     >
-      {/* Hidden Master Timekeeper Video (muted if Audience Output is open so audio doesn't double) */}
+      {/* Hidden master timekeeper so seek, duration and end behaviour work without the output windows open. */}
       <video
         ref={masterVideoRef}
         src={activeMedia.url}
@@ -282,75 +286,50 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
       />
 
       {isMinimized ? (
-        <div className="h-10 flex items-center px-4 gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="w-5 h-5 rounded bg-sky-700/60 flex items-center justify-center shrink-0">
-              <Film className="w-3 h-3 text-sky-300" />
-            </div>
-            <span className="text-sky-300 text-xs font-bold truncate">{activeMedia.name}</span>
-            <span className="text-slate-400 text-xs font-mono shrink-0">
-              {formatTime(currentTime)} / {formatTime(duration)} (-{formatTime(remaining)})
-            </span>
-          </div>
-          <button
-            onClick={handlePlayPause}
-            className="p-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-full transition"
-          >
-            {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
-          </button>
-          <button
+        <div className="flex h-10 items-center gap-3 px-3">
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{activeMedia.name}</span>
+          <span className="tabular shrink-0 font-mono text-2xs text-muted-foreground">
+            {formatTime(currentTime)} / {formatTime(duration)} (-{formatTime(remaining)})
+          </span>
+          <Button size="xs" variant="secondary" onClick={handlePlayPause}>
+            {isPlaying ? 'Pause' : 'Play'}
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive"
             onClick={handleStop}
-            className="p-1.5 bg-rose-900 hover:bg-rose-700 text-rose-300 hover:text-white rounded-full transition"
-            title="Stop video"
           >
-            <Square className="w-3 h-3 fill-current" />
-          </button>
-          <button
-            onClick={() => setIsMinimized(false)}
-            className="p-1 text-slate-400 hover:text-white transition"
-            title="Expand transport bar"
-          >
-            <ChevronDown className="w-4 h-4 rotate-180" />
-          </button>
+            Stop
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => setIsMinimized(false)}>
+            Expand
+          </Button>
         </div>
       ) : (
-        <div className="h-full flex flex-col justify-between px-4 py-2">
-          {/* Top row: video title + interactive timeline scrubber + remaining timecode */}
+        <div className="flex h-full flex-col justify-between px-3 py-1.5">
+          {/* Timeline */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-7 h-7 rounded-lg bg-sky-600/20 border border-sky-500/50 flex items-center justify-center">
-                <Film className="w-4 h-4 text-sky-400" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-white text-xs font-black truncate max-w-[180px]">
-                  {activeMedia.name}
-                </div>
-                <div className="text-[9px] font-bold uppercase tracking-wider">
-                  {isPlaying ? (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse inline-block" />
-                      ON AIR VIDEO
-                    </span>
-                  ) : (
-                    <span className="text-amber-400">PAUSED</span>
-                  )}
-                </div>
-              </div>
+            <div className="flex min-w-0 shrink-0 items-baseline gap-2">
+              <span className="max-w-[200px] truncate text-xs font-medium text-foreground">{activeMedia.name}</span>
+              <span
+                className={cn(
+                  'state-label shrink-0',
+                  isPlaying ? 'text-live' : 'text-muted-foreground'
+                )}
+              >
+                {isPlaying ? 'On air' : 'Paused'}
+              </span>
             </div>
 
-            {/* Scrubber */}
-            <div className="flex-1 flex items-center gap-2.5 min-w-0">
-              <span className="text-sky-300 text-xs font-mono font-bold shrink-0 w-11 text-right">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="tabular w-11 shrink-0 text-right font-mono text-2xs text-muted-foreground">
                 {formatTime(currentTime)}
               </span>
-              <div className="flex-1 relative flex items-center">
-                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+              <div className="relative flex flex-1 items-center">
+                <div className="h-1 w-full overflow-hidden rounded-full bg-input">
                   <div
-                    className={`h-full transition-all ${
-                      isEndingSoon
-                        ? 'bg-gradient-to-r from-amber-500 to-rose-500'
-                        : 'bg-gradient-to-r from-sky-500 to-indigo-500'
-                    }`}
+                    className={cn('h-full rounded-full transition-[width]', isEndingSoon ? 'bg-warning' : 'bg-foreground/70')}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -365,18 +344,13 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
                   onChange={handleSeek}
                   onMouseUp={handleSeekEnd}
                   onTouchEnd={handleSeekEnd}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-5"
+                  aria-label="Video position"
+                  className="absolute inset-0 h-5 w-full cursor-pointer opacity-0"
                 />
               </div>
-              <span className="text-slate-400 text-xs font-mono shrink-0">
-                {formatTime(duration)}
-              </span>
+              <span className="tabular shrink-0 font-mono text-2xs text-muted-foreground">{formatTime(duration)}</span>
               <span
-                className={`text-xs font-mono font-black px-2 py-0.5 rounded border shrink-0 ${
-                  isEndingSoon
-                    ? 'bg-rose-950/90 border-rose-500 text-rose-300 animate-pulse'
-                    : 'bg-slate-900 border-slate-700 text-amber-300'
-                }`}
+                className={cn('tabular shrink-0 font-mono text-2xs', isEndingSoon ? 'text-warning' : 'text-muted-foreground')}
                 title="Remaining video time"
               >
                 -{formatTime(remaining)}
@@ -384,126 +358,87 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
             </div>
           </div>
 
-          {/* Bottom row: ProPresenter Transport Controls */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Left: Play / Pause / Restart / Skip / Stop */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handlePlayPause}
-                className={`h-7 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition shadow ${
-                  isPlaying
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                    : 'bg-sky-600 hover:bg-sky-500 text-white'
-                }`}
-              >
-                {isPlaying ? (
-                  <>
-                    <Pause className="w-3 h-3" /> Pause
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3 h-3 fill-current" /> Play
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={handleRestart}
-                className="h-7 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
-                title="Restart video from 0:00"
-              >
-                <RotateCcw className="w-3 h-3" /> 0:00
-              </button>
-
-              <button
-                onClick={() => skip(-10)}
-                className="h-7 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition"
-                title="Rewind 10 seconds"
-              >
-                <SkipBack className="w-3 h-3" /> -10s
-              </button>
-
-              <button
-                onClick={() => skip(10)}
-                className="h-7 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition"
-                title="Forward 10 seconds"
-              >
-                <SkipForward className="w-3 h-3" /> +10s
-              </button>
-
-              <button
+          {/* Transport */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1">
+              <Button size="xs" variant={isPlaying ? 'secondary' : 'default'} onClick={handlePlayPause}>
+                {isPlaying ? 'Pause' : 'Play'}
+              </Button>
+              <Button size="xs" variant="ghost" onClick={handleRestart} title="Restart from 0:00">
+                Restart
+              </Button>
+              <Button size="xs" variant="ghost" onClick={() => skip(-10)} title="Rewind 10 seconds">
+                -10s
+              </Button>
+              <Button size="xs" variant="ghost" onClick={() => skip(10)} title="Forward 10 seconds">
+                +10s
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted-foreground hover:text-destructive"
                 onClick={handleStop}
-                className="h-7 px-2.5 bg-rose-900/70 hover:bg-rose-700 border border-rose-500/40 text-rose-200 hover:text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-1 transition"
-                title="Stop video and clear output"
+                title="Stop video and clear the output"
               >
-                <Square className="w-2.5 h-2.5 fill-current" /> Stop
-              </button>
+                Stop
+              </Button>
             </div>
 
-            {/* Center: Loop, Playback Speed, End Behavior */}
-            <div className="flex items-center gap-2">
-              <button
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="xs"
+                variant={loop || endBehavior === 'loop' ? 'secondary' : 'ghost'}
                 onClick={handleToggleLoop}
-                className={`h-7 px-2.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 border transition ${
-                  loop || endBehavior === 'loop'
-                    ? 'bg-indigo-600/30 border-indigo-400 text-indigo-200'
-                    : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-                title="Loop video continuously"
+                title="Loop the video continuously"
               >
-                <Repeat className="w-3 h-3" /> Loop
-              </button>
-
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 h-7">
-                <Gauge className="w-3 h-3 text-sky-400" />
-                <select
-                  value={playbackRate}
-                  onChange={e => handleChangeSpeed( parseFloat(e.target.value) )}
-                  className="bg-transparent text-[10px] font-bold text-white outline-none cursor-pointer"
-                  title="Playback speed"
-                >
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
-                    <option key={r} value={r} className="bg-[#0b1120]">
-                      {r}x
-                    </option>
+                Loop
+              </Button>
+              <span className="field-label">Speed</span>
+              <Select value={String(playbackRate)} onValueChange={value => handleChangeSpeed(parseFloat(value))}>
+                <SelectTrigger className="h-7 w-[68px] text-2xs" aria-label="Playback speed">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
+                    <SelectItem key={rate} value={String(rate)}>
+                      {rate}x
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
+                </SelectContent>
+              </Select>
 
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 h-7">
-                <span className="text-[9px] font-bold text-slate-400 uppercase">On End:</span>
-                <select
-                  value={endBehavior}
-                  onChange={e => {
-                    const val = e.target.value as any;
-                    setEndBehavior(val);
-                    const isLooping = val === 'loop';
-                    setLoop(isLooping);
-                    if (masterVideoRef.current) masterVideoRef.current.loop = isLooping;
-                    BroadcastService.postMessage({ type: 'MEDIA_CMD_LOOP', mediaCmd: { loop: isLooping } });
-                  }}
-                  className="bg-transparent text-[10px] font-bold text-sky-300 outline-none cursor-pointer"
-                >
-                  <option value="clear" className="bg-[#0b1120]">Stop & Clear</option>
-                  <option value="hold" className="bg-[#0b1120]">Hold Final Frame</option>
-                  <option value="loop" className="bg-[#0b1120]">Loop Continuously</option>
-                  <option value="logo" className="bg-[#0b1120]">Transition to Logo</option>
-                </select>
-              </div>
+              <span className="field-label">At the end</span>
+              <Select
+                value={endBehavior}
+                onValueChange={value => {
+                  const val = value as typeof endBehavior;
+                  setEndBehavior(val);
+                  const isLooping = val === 'loop';
+                  setLoop(isLooping);
+                  if (masterVideoRef.current) masterVideoRef.current.loop = isLooping;
+                  BroadcastService.postMessage({ type: 'MEDIA_CMD_LOOP', mediaCmd: { loop: isLooping } });
+                }}
+              >
+                <SelectTrigger className="h-7 w-[130px] text-2xs" aria-label="What happens when the video ends">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clear">Stop and clear</SelectItem>
+                  <SelectItem value="hold">Hold the last frame</SelectItem>
+                  <SelectItem value="loop">Loop continuously</SelectItem>
+                  <SelectItem value="logo">Go to the logo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Right: Audio Volume & Minimize */}
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleMuteToggle}
-                className="text-slate-400 hover:text-white transition"
+                className="text-2xs text-muted-foreground transition-colors hover:text-foreground"
                 title={isMuted ? 'Unmute audio' : 'Mute audio'}
               >
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="w-4 h-4 text-rose-400" />
-                ) : (
-                  <Volume2 className="w-4 h-4 text-sky-400" />
-                )}
+                {isMuted || volume === 0 ? 'Unmute' : 'Mute'}
               </button>
               <input
                 type="range"
@@ -512,16 +447,13 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
                 step={0.05}
                 value={isMuted ? 0 : volume}
                 onChange={handleVolume}
-                className="w-20 accent-sky-500 cursor-pointer h-1"
-                title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                aria-label="Volume"
+                title={`Volume ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                className="h-1 w-20 cursor-pointer accent-foreground"
               />
-              <button
-                onClick={() => setIsMinimized(true)}
-                className="p-1 text-slate-400 hover:text-white transition"
-                title="Minimize transport bar"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
+              <Button size="xs" variant="ghost" onClick={() => setIsMinimized(true)}>
+                Minimize
+              </Button>
             </div>
           </div>
         </div>

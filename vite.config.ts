@@ -471,6 +471,11 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    host: true
+    host: true,
+    watch: {
+      // Editors write atomically through hidden temp directories; watching those
+      // files crashes chokidar with EBUSY on Windows.
+      ignored: [/[\\/]\.[^\\/]*\.tmpdir[\\/]/, '**/*.tmp']
+    }
   }
 });

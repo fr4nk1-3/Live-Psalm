@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Song, MediaAsset, PlaylistItem } from '../types/presentation';
 import { StorageService } from '../services/storage';
-import { Search, Music, Book, Film, Play, Plus, X, Zap } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { cn } from '../lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from './ui/dialog';
+import { Input } from './ui/input';
+import { EmptyState, Kbd, ListHeader } from './ui/primitives';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -63,162 +74,200 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   // Search Bible Verses (Reference match + keyword text search)
   const matchedBibleVerses = query.trim() ? StorageService.searchBibleVerses(query) : [];
 
+  const totalResults =
+    matchedSongs.length + matchedBibleVerses.length + matchedMedia.length + matchedPlaylist.length;
+
+  const handleAddVerse = (verse: {
+    formattedRef: string;
+    text: string;
+    translation: string;
+  }) => {
+    const slides = [
+      {
+        id: `slide-b-${Math.random().toString(36).substring(2, 9)}`,
+        title: verse.formattedRef,
+        content: verse.text,
+        subtitle: verse.translation,
+        sectionLabel: 'Scripture'
+      }
+    ];
+    onAddBible(verse.formattedRef, slides);
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-20 p-4 select-none">
-      <div className="w-full max-w-2xl bg-[#0f1624] border border-[#26334a] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-zoom-in">
-        {/* Search Header */}
-        <div className="p-4 border-b border-[#26334a] flex items-center gap-3 bg-[#131b2c]">
-          <Search className="w-5 h-5 text-indigo-400" />
-          <input
-            type="text"
-            placeholder="Search scripture (e.g. John 3:16 or 'love'), songs, or media..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-            className="flex-1 bg-transparent text-white text-base outline-none placeholder-slate-500 font-medium"
-          />
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white rounded">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="h-[min(88vh,32rem)] max-w-2xl">
+        <DialogHeader className="gap-2">
+          <DialogTitle>Search</DialogTitle>
+          <DialogDescription>Songs, scripture, media and the running service.</DialogDescription>
+          <div className="relative mt-1">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search, or type a reference such as John 3:16"
+              autoFocus
+              aria-label="Search songs, scripture, media and the service"
+              className="h-9 pl-8 text-sm"
+            />
+          </div>
+        </DialogHeader>
 
-        {/* Search Results */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-          {/* SCRIPTURE MATCHES */}
-          {matchedBibleVerses.length > 0 && (
-            <div>
-              <div className="font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Book className="w-4 h-4" /> Scripture Verses ({matchedBibleVerses.length})
-              </div>
-              <div className="space-y-2">
-                {matchedBibleVerses.slice(0, 8).map((v, idx) => (
-                  <div key={idx} className="bg-[#162032] border border-amber-500/40 p-2.5 rounded-xl flex items-center justify-between gap-3 group hover:border-amber-400 transition">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-extrabold text-sm text-amber-300 flex items-center gap-2">
-                        <span>{v.formattedRef}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">({v.translation})</span>
-                      </div>
-                      <div className="text-slate-200 italic truncate mt-0.5">
-                        "{v.text}"
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const slides = [{
-                          id: `slide-b-${Math.random().toString(36).substring(2, 9)}`,
-                          title: v.formattedRef,
-                          content: v.text,
-                          subtitle: v.translation,
-                          sectionLabel: 'Scripture'
-                        }];
-                        onAddBible(v.formattedRef, slides);
-                        onClose();
-                      }}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow flex items-center gap-1 shrink-0 transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add to Service
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {query.trim() !== '' && totalResults === 0 && (
+            <EmptyState
+              title={`No matches for “${query.trim()}”`}
+              description="Try a reference such as John 3:16, a song title, or a media name."
+            />
           )}
 
-          {/* SONGS MATCHES */}
-          {matchedSongs.length > 0 && (
-            <div>
-              <div className="font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Music className="w-4 h-4" /> Songs ({matchedSongs.length})
-              </div>
-              <div className="space-y-1.5">
+          {query.trim() === '' && matchedSongs.length === 0 && matchedMedia.length === 0 && (
+            <EmptyState
+              title="Nothing to search yet"
+              description="Add songs or media to the library, then search from here."
+            />
+          )}
+
+          <div className="space-y-4">
+            {matchedSongs.length > 0 && (
+              <section>
+                <ListHeader className="px-2 pb-1">Songs</ListHeader>
                 {matchedSongs.map(song => (
-                  <div
+                  <ResultRow
                     key={song.id}
-                    className="bg-[#141d2e] border border-slate-800 hover:border-emerald-500/50 p-2.5 rounded-xl flex items-center justify-between gap-2 group transition"
-                  >
-                    <div>
-                      <div className="font-bold text-slate-200 text-sm">{song.title}</div>
-                      <div className="text-slate-400 text-[10px]">{song.artist} • {song.sections.length} sections</div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        onAddSong(song);
-                        onClose();
-                      }}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg flex items-center gap-1 shadow transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add
-                    </button>
-                  </div>
+                    title={song.title}
+                    meta={`${song.artist || 'Traditional'} · ${song.sections.length} ${
+                      song.sections.length === 1 ? 'section' : 'sections'
+                    }`}
+                    action="Add"
+                    onClick={() => {
+                      onAddSong(song);
+                      onClose();
+                    }}
+                  />
                 ))}
-              </div>
-            </div>
-          )}
+              </section>
+            )}
 
-          {/* MEDIA MATCHES */}
-          {matchedMedia.length > 0 && (
-            <div>
-              <div className="font-bold text-sky-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Film className="w-4 h-4" /> Media Assets ({matchedMedia.length})
-              </div>
-              <div className="grid grid-cols-3 gap-2">
+            {matchedBibleVerses.length > 0 && (
+              <section>
+                <ListHeader className="px-2 pb-1">Scripture</ListHeader>
+                {matchedBibleVerses.slice(0, 8).map((verse, idx) => (
+                  <ResultRow
+                    key={`${verse.formattedRef}-${idx}`}
+                    title={verse.formattedRef}
+                    meta={`${verse.translation} · ${verse.text}`}
+                    action="Add"
+                    onClick={() => handleAddVerse(verse)}
+                  />
+                ))}
+              </section>
+            )}
+
+            {matchedMedia.length > 0 && (
+              <section>
+                <ListHeader className="px-2 pb-1">Media</ListHeader>
                 {matchedMedia.map(item => (
-                  <div
+                  <ResultRow
                     key={item.id}
+                    title={item.name}
+                    meta={`${item.category} · ${item.type === 'video' ? 'Video' : 'Image'}`}
+                    action="Add"
                     onClick={() => {
                       onAddMedia(item);
                       onClose();
                     }}
-                    className="bg-[#141d2e] border border-slate-800 hover:border-sky-500/60 p-2 rounded-lg cursor-pointer transition text-center group"
-                  >
-                    <img src={item.url} alt={item.name} className="w-full h-16 object-cover rounded mb-1" />
-                    <div className="font-bold text-slate-200 truncate">{item.name}</div>
-                  </div>
+                  />
                 ))}
-              </div>
-            </div>
-          )}
+              </section>
+            )}
 
-          {/* SERVICE PLAYLIST MATCHES */}
-          {query.trim() !== '' && matchedPlaylist.length > 0 && (
-            <div>
-              <div className="font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Zap className="w-4 h-4" /> In Active Service Playlist ({matchedPlaylist.length})
-              </div>
-              <div className="space-y-1.5">
+            {query.trim() !== '' && matchedPlaylist.length > 0 && (
+              <section>
+                <ListHeader className="px-2 pb-1">Service</ListHeader>
                 {matchedPlaylist.map(item => (
-                  <div
+                  <ResultRow
                     key={item.id}
-                    className="bg-[#141d2e] border border-indigo-500/30 hover:border-indigo-500 p-2.5 rounded-xl flex items-center justify-between gap-2 transition"
-                  >
-                    <div>
-                      <div className="font-bold text-slate-200 text-sm">{item.title}</div>
-                      <div className="text-slate-400 text-[10px]">{item.category || item.type} • {item.slides.length} slides</div>
-                    </div>
-                    {item.slides.length > 0 && (
-                      <button
-                        onClick={() => {
-                          onGoLiveSlide(item.slides[0]);
-                          onClose();
-                        }}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg flex items-center gap-1 shadow transition"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" /> Go Live
-                      </button>
-                    )}
-                  </div>
+                    title={item.title}
+                    meta={`${item.category || item.type} · ${item.slides.length} ${
+                      item.slides.length === 1 ? 'slide' : 'slides'
+                    }`}
+                    action={item.slides.length > 0 ? 'Go live' : undefined}
+                    onClick={
+                      item.slides.length > 0
+                        ? () => {
+                            onGoLiveSlide(item.slides[0]);
+                            onClose();
+                          }
+                        : undefined
+                    }
+                  />
                 ))}
-              </div>
-            </div>
-          )}
-
-          {query && matchedSongs.length === 0 && matchedBibleVerses.length === 0 && matchedMedia.length === 0 && matchedPlaylist.length === 0 && (
-            <div className="p-8 text-center text-slate-500">
-              No results found for "{query}". Try searching for "John 3:16" or "Way Maker".
-            </div>
-          )}
+              </section>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter className="justify-between">
+          <span className="text-2xs text-muted-foreground">
+            {query.trim() === ''
+              ? 'Type to search the library and the service.'
+              : `${totalResults} ${totalResults === 1 ? 'result' : 'results'}`}
+          </span>
+          <span className="flex items-center gap-3 text-2xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Kbd>Esc</Kbd> Close
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>K</Kbd> Toggle
+            </span>
+          </span>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
+
+/**
+ * One flat result row: title, a single muted meta line and a quiet text action.
+ * The whole row is the target so a result can be added from anywhere in it.
+ */
+function ResultRow({
+  title,
+  meta,
+  action,
+  onClick
+}: {
+  title: string;
+  meta: string;
+  action?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors',
+        onClick ? 'hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none' : 'cursor-default'
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-foreground">{title}</span>
+        <span className="block truncate text-2xs text-muted-foreground">{meta}</span>
+      </span>
+      {action ? (
+        <span className="shrink-0 text-2xs text-muted-foreground transition-colors group-hover:text-foreground">
+          {action}
+        </span>
+      ) : null}
+    </button>
+  );
+}
