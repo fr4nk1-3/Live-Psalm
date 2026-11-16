@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Slide, StageDisplayState } from '../types/presentation';
+import { Slide, StageDisplayState, AudienceViewMode } from '../types/presentation';
 import { BroadcastService, BroadcastPayload } from '../services/broadcast';
 import { StorageService } from '../services/storage';
 import { Clock as ClockIcon, FileText, ArrowRight, Zap, Timer, BookOpen, Film, Image as ImageIcon } from 'lucide-react';
-import { getFlexibleFontSize } from '../utils/fontSize';
+import { getFlexibleFontSize, getOutputFontSize } from '../utils/fontSize';
+
+function formatTranslationBadge(translationId?: string | null): string | null {
+  if (!translationId) return null;
+  const cleaned = translationId
+    .replace(/^bible-/i, '')
+    .replace(/^(eng|swahili|kikuyu|luo|kalenjin|kamba|maasai)-/i, '');
+  return cleaned.toUpperCase();
+}
 
 function isVideoMediaSlide(slide?: Slide | null): boolean {
   if (!slide?.backgroundUrl) return false;
@@ -28,6 +36,9 @@ export const StageDisplayWindow: React.FC = () => {
   const [countdownTargetScreen, setCountdownTargetScreen] = useState<'audience' | 'stage' | 'both'>('both');
   const [showVerseRefOnStage, setShowVerseRefOnStage] = useState<boolean>(
     () => StorageService.getSettings().showVerseNumbers ?? true
+  );
+  const [stageViewMode, setStageViewMode] = useState<AudienceViewMode>(
+    () => StorageService.getSettings().stageViewMode || 'near'
   );
   const stageVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -79,6 +90,7 @@ export const StageDisplayWindow: React.FC = () => {
       }
       if (payload.type === 'APP_SETTINGS_UPDATE' && payload.appSettings) {
         setShowVerseRefOnStage(payload.appSettings.showVerseNumbers ?? true);
+        setStageViewMode(payload.appSettings.stageViewMode || 'near');
       }
       if (stageVideoRef.current) {
         const v = stageVideoRef.current;
@@ -99,13 +111,20 @@ export const StageDisplayWindow: React.FC = () => {
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'live_psalms_app_settings_v1') {
-        setShowVerseRefOnStage(StorageService.getSettings().showVerseNumbers ?? true);
+        const s = StorageService.getSettings();
+        setShowVerseRefOnStage(s.showVerseNumbers ?? true);
+        setStageViewMode(s.stageViewMode || 'near');
       }
     };
     const handleCustomSettings = (e: Event) => {
       const detail = (e as CustomEvent)?.detail;
-      if (detail && typeof detail.showVerseNumbers === 'boolean') {
-        setShowVerseRefOnStage(detail.showVerseNumbers);
+      if (detail) {
+        if (typeof detail.showVerseNumbers === 'boolean') {
+          setShowVerseRefOnStage(detail.showVerseNumbers);
+        }
+        if (detail.stageViewMode) {
+          setStageViewMode(detail.stageViewMode);
+        }
       }
     };
     window.addEventListener('storage', handleStorageChange);
@@ -141,6 +160,210 @@ export const StageDisplayWindow: React.FC = () => {
   const isOnTime    = isRunning && secs > 180;                // > 3 min
   // Show the timer widget if targeted to stage/both AND (running OR paused with time remaining)
   const showTimer   = (countdownTargetScreen === 'both' || countdownTargetScreen === 'stage') && (isRunning || secs !== 0);
+
+  if (stageViewMode === 'far') {
+    const currentSlide = stageState.currentSlide;
+    const isMediaOnly = !!(currentSlide && currentSlide.backgroundUrl && !currentSlide.content?.trim());
+    const isVideo = isVideoMediaSlide(currentSlide);
+    const meta = currentSlide?.bibleMeta;
+    const bookVerseText = meta
+      ? `${meta.book} ${meta.chapter}:${meta.verse}`
+      : (currentSlide?.title || stageState.currentItemTitle || '');
+    const primaryTrans = formatTranslationBadge(meta?.translationId);
+    const parallelTrans = formatTranslationBadge(meta?.parallelTranslationId);
+    const translationBadge = primaryTrans
+      ? (parallelTrans ? `${primaryTrans} + ${parallelTrans}` : primaryTrans)
+      : (currentSlide?.subtitle || '');
+
+    const farSlideStyle = getOutputFontSize(
+      currentSlide?.content || '',
+      4.8,
+      typeof window !== 'undefined' ? window.screen.width : 1920,
+      'far'
+    );
+
+    return (
+      <div
+        onClick={() => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.().catch(() => {});
+          }
+        }}
+        onDoubleClick={() => {
+          if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+          } else {
+            document.documentElement.requestFullscreen?.().catch(() => {});
+          }
+        }}
+        className="w-screen h-screen bg-black text-white select-none px-[3vw] py-[2.5vh] flex flex-col justify-between overflow-hidden"
+      >
+        {/* TOP FOCUS BAR: BOOK/VERSE + TRANSLATION ON LEFT, GIANT COUNTER ON RIGHT */}
+        <div className="flex items-center justify-between gap-4 pb-[2vh] border-b-2 border-slate-800 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
+            {bookVerseText && (
+              <div className="flex items-center gap-2.5 bg-amber-500 text-black px-5 py-2 rounded-2xl shadow-[0_0_24px_rgba(245,158,11,0.35)]">
+                <BookOpen className="w-6 h-6 shrink-0" />
+                <span className="text-2xl xl:text-3xl font-black tracking-wide truncate max-w-[40vw]">
+                  {bookVerseText}
+                </span>
+              </div>
+            )}
+            {translationBadge && (
+              <span className="px-4 py-2 rounded-2xl bg-sky-500/20 border-2 border-sky-400 text-sky-200 text-xl xl:text-2xl font-black uppercase tracking-wider">
+                {translationBadge}
+              </span>
+            )}
+            {!meta && currentSlide?.sectionLabel && (
+              <span className="px-4 py-2 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-200 text-xl xl:text-2xl font-black uppercase tracking-wider">
+                {currentSlide.sectionLabel}
+              </span>
+            )}
+            {!bookVerseText && !translationBadge && (
+              <span className="text-xl font-black uppercase tracking-widest text-slate-400">
+                FAR STAGE DISPLAY
+              </span>
+            )}
+          </div>
+
+          {/* GIANT HIGH-VISIBILITY COUNTER OR CLOCK */}
+          <div className="font-mono shrink-0">
+            {showTimer ? (
+              <div
+                className={`flex items-center gap-4 px-7 py-2.5 rounded-2xl border-2 ${
+                  isOvertime || isWarning
+                    ? 'bg-rose-950 border-rose-400 shadow-[0_0_32px_rgba(244,63,94,0.65)]'
+                    : isOnTime
+                    ? 'bg-emerald-950 border-emerald-400 shadow-[0_0_28px_rgba(16,185,129,0.45)]'
+                    : 'bg-slate-900 border-slate-500'
+                }`}
+              >
+                <Timer
+                  className={`w-10 h-10 ${
+                    isOvertime || isWarning
+                      ? 'text-rose-300 animate-pulse'
+                      : isOnTime
+                      ? 'text-emerald-300'
+                      : 'text-slate-300'
+                  }`}
+                />
+                <div className="flex flex-col leading-none">
+                  <span
+                    className={`text-xs font-black uppercase tracking-[0.22em] mb-1 ${
+                      isOvertime || isWarning ? 'text-rose-300' : isOnTime ? 'text-emerald-300' : 'text-slate-400'
+                    }`}
+                  >
+                    {isOvertime ? 'OVERTIME' : isWarning ? 'COUNTDOWN' : isOnTime ? 'TIMER' : 'PAUSED'}
+                  </span>
+                  <span
+                    className={`text-6xl xl:text-7xl font-black tabular-nums tracking-wider ${
+                      isOvertime || isWarning
+                        ? 'text-rose-300 animate-pulse'
+                        : isOnTime
+                        ? 'text-emerald-300'
+                        : 'text-white'
+                    }`}
+                  >
+                    {formatCountdown(secs)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3.5 bg-slate-950 border-2 border-amber-400/80 px-6 py-2.5 rounded-2xl shadow-[0_0_24px_rgba(245,158,11,0.25)]">
+                <ClockIcon className="w-9 h-9 text-amber-300" />
+                <span className="text-5xl xl:text-6xl font-black tabular-nums text-amber-300 tracking-wider">
+                  {stageState.clockTime}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* STAGE MESSAGE BANNER (IF ACTIVE) */}
+        {stageState.stageMessage && (
+          <div
+            className={`mt-[1.5vh] px-7 py-3 rounded-2xl border-2 flex items-center gap-4 shrink-0 ${
+              stageState.stageMessageFlash
+                ? 'bg-rose-600 border-white text-white animate-pulse'
+                : 'bg-amber-500/25 border-amber-400 text-amber-200'
+            }`}
+          >
+            <span className="px-3 py-1 rounded-lg bg-black/50 text-xs font-black uppercase tracking-widest border border-white/25">
+              CUE
+            </span>
+            <span className="text-3xl xl:text-4xl font-black tracking-wide">
+              {stageState.stageMessage}
+            </span>
+          </div>
+        )}
+
+        {/* HERO LIVE SLIDE AREA — FULL REMAINING HEIGHT, NO NEXT SLIDE OR NOTES CLUTTER */}
+        <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden py-[2vh]">
+          {isMediaOnly && currentSlide?.backgroundUrl ? (
+            <div className="w-full h-full flex items-center justify-center bg-black">
+              {isVideo ? (
+                <video
+                  ref={stageVideoRef}
+                  key={currentSlide.backgroundUrl}
+                  src={currentSlide.backgroundUrl}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : (
+                <img
+                  key={currentSlide.backgroundUrl}
+                  src={currentSlide.backgroundUrl}
+                  alt={currentSlide.title || 'Stage Media'}
+                  className="w-full h-full object-contain bg-black"
+                />
+              )}
+            </div>
+          ) : currentSlide ? (
+            <div className="w-full flex flex-col items-center justify-center text-center" style={{ maxWidth: farSlideStyle.maxWidth }}>
+              <div
+                className="font-black text-white whitespace-pre-line"
+                style={{
+                  fontSize: farSlideStyle.fontSize,
+                  lineHeight: farSlideStyle.lineHeight,
+                  letterSpacing: '0.02em',
+                  textShadow: '0 6px 24px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.95)'
+                }}
+              >
+                {currentSlide.content}
+              </div>
+            </div>
+          ) : (
+            <span className="text-slate-600 text-4xl font-black uppercase tracking-[0.25em]">
+              [ OUTPUT CLEAR ]
+            </span>
+          )}
+        </div>
+
+        {/* BOTTOM REFERENCE FOOTER: ALWAYS KEEPS BOOK, VERSE & TRANSLATION VISIBLE */}
+        {(bookVerseText || translationBadge || currentSlide?.subtitle) && (
+          <div className="pt-[1.5vh] border-t border-slate-900 flex items-center justify-center gap-4 shrink-0">
+            {bookVerseText && (
+              <span className="text-xl xl:text-2xl font-black text-amber-300 tracking-wide uppercase">
+                {bookVerseText}
+              </span>
+            )}
+            {translationBadge && (
+              <span className="text-lg xl:text-xl font-black text-sky-300 bg-sky-950/80 border border-sky-500/50 px-3.5 py-0.5 rounded-full uppercase tracking-wider">
+                {translationBadge}
+              </span>
+            )}
+            {currentSlide?.subtitle && currentSlide.subtitle !== translationBadge && (
+              <span className="text-lg xl:text-xl font-bold text-slate-300 tracking-wider">
+                {currentSlide.subtitle}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

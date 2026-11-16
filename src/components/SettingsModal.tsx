@@ -623,6 +623,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Stage Display Distance / Visibility Mode */}
+                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
+                      Stage Display Mode
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ stageViewMode: 'near' })}
+                        className={`p-3 rounded-xl border text-left transition ${
+                          (settings.stageViewMode || 'near') === 'near'
+                            ? 'bg-amber-600/20 border-amber-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs">Near Stage (Confidence)</span>
+                          {(settings.stageViewMode || 'near') === 'near' && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200 text-[9px] font-black uppercase">Active</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Full confidence monitor with current slide, next slide preview, speaker notes, and timer.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ stageViewMode: 'far' })}
+                        className={`p-3 rounded-xl border text-left transition ${
+                          settings.stageViewMode === 'far'
+                            ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs">Far Stage (Slide &amp; Counter Focus)</span>
+                          {settings.stageViewMode === 'far' && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 text-[9px] font-black uppercase">Active</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          High-contrast long-distance layout focused on the live slide, giant counter, and Book/Verse/Translation badges.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">

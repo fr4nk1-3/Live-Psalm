@@ -242,6 +242,7 @@ export interface AppSettings {
   churchProfile: ChurchProfile;
   obsAlphaBackground: boolean;
   audienceViewMode?: AudienceViewMode;
+  stageViewMode?: AudienceViewMode;
   defaultTransition?: 'fade' | 'slide' | 'cut';
   transitionDurationMs?: number;
   showVerseNumbers?: boolean;
