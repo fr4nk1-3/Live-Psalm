@@ -10,24 +10,30 @@ export function getFlexibleFontSize(
   baseSizePx: number = 48
 ): { fontSize: string; lineHeight: string } {
   const len = text ? text.length : 0;
+  const lines = text ? text.split('\n').length : 1;
+  const effectiveLen = Math.max(len, lines * 55);
   let scale = 1.0;
 
-  if (len > 500) {
+  if (effectiveLen > 800) {
+    scale = 0.28;
+  } else if (effectiveLen > 650) {
+    scale = 0.34;
+  } else if (effectiveLen > 500) {
     scale = 0.42;
-  } else if (len > 350) {
+  } else if (effectiveLen > 350) {
     scale = 0.52;
-  } else if (len > 250) {
+  } else if (effectiveLen > 250) {
     scale = 0.62;
-  } else if (len > 150) {
+  } else if (effectiveLen > 150) {
     scale = 0.75;
-  } else if (len > 90) {
+  } else if (effectiveLen > 90) {
     scale = 0.88;
   }
 
   const computedSize = Math.max(12, Math.round(baseSizePx * scale));
   return {
     fontSize: `${computedSize}px`,
-    lineHeight: len > 250 ? '1.2' : '1.35'
+    lineHeight: effectiveLen > 250 ? '1.2' : '1.35'
   };
 }
 

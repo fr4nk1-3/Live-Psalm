@@ -653,8 +653,7 @@ export const AudienceOutputWindow: React.FC = () => {
               ) : (
                 /* ── FULLSCREEN CENTERED MODE ── */
                 <div
-                  ref={audienceSlideContainerRef}
-                  className="m-auto flex flex-col items-center justify-center text-center h-full max-h-[88vh] overflow-hidden"
+                  className="m-auto flex flex-col items-center justify-center text-center h-full max-h-[90vh]"
                   style={{ maxWidth: dynMaxWidth, width: '100%' }}
                 >
                   {/* Section / title badge — only for text slides */}
@@ -673,26 +672,31 @@ export const AudienceOutputWindow: React.FC = () => {
 
                   {/* Main text */}
                   <div
-                    ref={audienceSlideTextRef}
-                    className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]`}
-                    style={{
-                      fontFamily: theme.fontFamily,
-                      fontSize: audienceFittedPx ? `${audienceFittedPx}px` : dynFontSize,
-                      lineHeight: dynLineHeight,
-                      textAlign: theme.align as any,
-                      color: isFarMode ? '#ffffff' : theme.textColor,
-                      letterSpacing: isFarMode
-                        ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.02em')
-                        : (theme.letterSpacing || 'normal'),
-                      textTransform: (theme.textTransform as any) || 'none',
-                      textShadow: isFarMode
-                        ? '0 6px 24px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.98), 0 2px 4px rgba(0,0,0,1)'
-                        : undefined,
-                      WebkitTextStroke: isFarMode ? '0.018em rgba(0,0,0,0.75)' : undefined,
-                      width: '100%'
-                    }}
+                    ref={audienceSlideContainerRef}
+                    className="w-full max-h-[70vh] flex items-center justify-center overflow-hidden"
                   >
-                    {liveSlide.content}
+                    <div
+                      ref={audienceSlideTextRef}
+                      className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]`}
+                      style={{
+                        fontFamily: theme.fontFamily,
+                        fontSize: audienceFittedPx ? `${audienceFittedPx}px` : dynFontSize,
+                        lineHeight: dynLineHeight,
+                        textAlign: theme.align as any,
+                        color: isFarMode ? '#ffffff' : theme.textColor,
+                        letterSpacing: isFarMode
+                          ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.02em')
+                          : (theme.letterSpacing || 'normal'),
+                        textTransform: (theme.textTransform as any) || 'none',
+                        textShadow: isFarMode
+                          ? '0 6px 24px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.98), 0 2px 4px rgba(0,0,0,1)'
+                          : undefined,
+                        WebkitTextStroke: isFarMode ? '0.018em rgba(0,0,0,0.75)' : undefined,
+                        width: '100%'
+                      }}
+                    >
+                      {liveSlide.content}
+                    </div>
                   </div>
 
                   {/* Subtitle / scripture reference */}

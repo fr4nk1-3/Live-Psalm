@@ -58,7 +58,7 @@ export const StageDisplayWindow: React.FC = () => {
     nearContainerRef,
     nearTextRef,
     [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
-    { minPx: 16, maxPx: 64, startVw: 3.4 }
+    { minPx: 16, maxPx: 96, startVw: 4.5 }
   );
 
   useEffect(() => {
@@ -585,25 +585,27 @@ export const StageDisplayWindow: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div
-                ref={nearContainerRef}
-                className="flex-1 text-center px-4 overflow-hidden flex flex-col gap-3 items-center justify-center"
-              >
+              <div className="flex-1 min-h-0 text-center px-4 overflow-hidden flex flex-col gap-3 items-center justify-center">
                 {currentSlide ? (
                   <>
                     <div
-                      ref={nearTextRef}
-                      className="font-extrabold text-white leading-tight whitespace-pre-line tracking-wide drop-shadow w-full"
-                      style={{
-                        ...getFlexibleFontSize(currentSlide.content, 48),
-                        ...(nearFittedPx ? { fontSize: `${nearFittedPx}px` } : {})
-                      }}
+                      ref={nearContainerRef}
+                      className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden"
                     >
-                      {currentSlide.content}
+                      <div
+                        ref={nearTextRef}
+                        className="font-extrabold text-white leading-tight whitespace-pre-line tracking-wide drop-shadow w-full"
+                        style={{
+                          ...getFlexibleFontSize(currentSlide.content, 48),
+                          ...(nearFittedPx ? { fontSize: `${nearFittedPx}px` } : {})
+                        }}
+                      >
+                        {currentSlide.content}
+                      </div>
                     </div>
                     {/* Bible translation & verse badge — controlled by Stage Monitor setting */}
                     {currentSlide.subtitle && (showVerseRefOnStage || (currentSlide.sectionLabel !== 'Scripture' && !currentSlide.bibleMeta)) && (
-                      <div className="flex justify-center mt-2">
+                      <div className="flex justify-center shrink-0">
                         <span className="text-xs font-bold text-indigo-300 bg-indigo-950/80 border border-indigo-500/40 px-4 py-1.5 rounded-full tracking-wider uppercase">
                           📖 {currentSlide.subtitle}
                         </span>
