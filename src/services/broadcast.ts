@@ -1,4 +1,4 @@
-import { Slide, Theme, EmergencyState, StageDisplayState, TransitionSettings, AudienceAlert } from '../types/presentation';
+import { Slide, Theme, EmergencyState, StageDisplayState, TransitionSettings, AudienceAlert, AppSettings } from '../types/presentation';
 
 export type BroadcastMessageType = 
   | 'LIVE_SLIDE_CHANGE'
@@ -9,6 +9,7 @@ export type BroadcastMessageType =
   | 'STAGE_DISPLAY_UPDATE'
   | 'STAGE_MESSAGE_CHANGE'
   | 'AUDIENCE_ALERT_CHANGE'
+  | 'APP_SETTINGS_UPDATE'
   | 'COUNTDOWN_TICK'
   | 'COUNTDOWN_UPDATE'
   | 'MEDIA_PLAYBACK_CHANGE'
@@ -43,6 +44,7 @@ export interface BroadcastPayload {
   previewSlide?: Slide | null;
   theme?: Theme;
   emergency?: EmergencyState;
+  appSettings?: AppSettings;
   transition?: TransitionSettings;
   stageState?: StageDisplayState;
   stageMessage?: string | null;
@@ -243,12 +245,47 @@ export class BroadcastService {
     };
   }
 
+  private static getMappedDisplayId(outputType: 'audience' | 'stage' | 'led'): string | undefined {
+    try {
+      const raw = localStorage.getItem('live_psalms_app_settings_v1');
+      if (!raw) return undefined;
+      const parsed = JSON.parse(raw);
+      return parsed?.outputDisplayMap?.[outputType];
+    } catch {
+      return undefined;
+    }
+  }
+
+  private static getBrowserDisplayFeatures(outputType: 'audience' | 'stage' | 'led'): string {
+    const displayId = this.getMappedDisplayId(outputType);
+    try {
+      const raw = localStorage.getItem('live_psalms_detected_displays_v1');
+      if (raw && displayId && displayId !== 'auto') {
+        const list = JSON.parse(raw);
+        const match = Array.isArray(list) ? list.find((d: any) => String(d.id) === String(displayId)) : null;
+        if (match?.bounds) {
+          const b = match.bounds;
+          return `width=${b.width || 1920},height=${b.height || 1080},left=${b.x || 0},top=${b.y || 0},menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes,fullscreen=yes`;
+        }
+      }
+    } catch {}
+    return 'width=1920,height=1080,left=0,top=0,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes,fullscreen=yes';
+  }
+
+  public static moveOutputToDisplay(outputType: 'audience' | 'stage' | 'led', displayId: string) {
+    const ipc = getElectronIpc();
+    if (ipc) {
+      ipc.send('move-output-window', { outputType, displayId });
+    }
+  }
+
   // Launch or toggle Audience Output popout window
   public static openAudienceWindow() {
+    const displayId = this.getMappedDisplayId('audience');
     const ipc = getElectronIpc();
     if (ipc) {
       this.initIpcStatusPolling();
-      ipc.send('open-audience-window');
+      ipc.send('open-audience-window', { displayId });
       this.electronWindowStates.audience = true;
       return;
     }
@@ -260,7 +297,7 @@ export class BroadcastService {
     this.audienceWindow = window.open(
       url,
       'LivePsalmsAudienceOutput',
-      'width=1920,height=1080,left=0,top=0,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes,fullscreen=yes'
+      this.getBrowserDisplayFeatures('audience')
     );
   }
 
@@ -288,10 +325,11 @@ export class BroadcastService {
 
   // Launch or toggle Stage Display popout window
   public static openStageWindow() {
+    const displayId = this.getMappedDisplayId('stage');
     const ipc = getElectronIpc();
     if (ipc) {
       this.initIpcStatusPolling();
-      ipc.send('open-stage-window');
+      ipc.send('open-stage-window', { displayId });
       this.electronWindowStates.stage = true;
       return;
     }
@@ -303,7 +341,7 @@ export class BroadcastService {
     this.stageWindow = window.open(
       url,
       'LivePsalmsStageDisplay',
-      'width=1920,height=1080,left=0,top=0,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes,fullscreen=yes'
+      this.getBrowserDisplayFeatures('stage')
     );
   }
 
@@ -331,10 +369,11 @@ export class BroadcastService {
 
   // Launch or toggle LED Wall Output popout window
   public static openLedWindow() {
+    const displayId = this.getMappedDisplayId('led');
     const ipc = getElectronIpc();
     if (ipc) {
       this.initIpcStatusPolling();
-      ipc.send('open-led-window');
+      ipc.send('open-led-window', { displayId });
       this.electronWindowStates.led = true;
       return;
     }
@@ -346,7 +385,7 @@ export class BroadcastService {
     this.ledWindow = window.open(
       url,
       'LivePsalmsLedOutput',
-      'width=1920,height=1080,left=0,top=0,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes,fullscreen=yes'
+      this.getBrowserDisplayFeatures('led')
     );
   }
 

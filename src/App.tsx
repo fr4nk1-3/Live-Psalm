@@ -94,11 +94,33 @@ export const App: React.FC = () => {
     isStopMedia: false
   });
 
-  // Transitions
-  const [transition, setTransition] = useState<TransitionSettings>({
-    type: 'fade',
-    durationMs: 400
+  // Transitions (initialized from saved AppSettings)
+  const [transition, setTransition] = useState<TransitionSettings>(() => {
+    const s = StorageService.getSettings();
+    return {
+      type: s.defaultTransition || 'fade',
+      durationMs: s.transitionDurationMs ?? 400
+    };
   });
+
+  useEffect(() => {
+    const s = StorageService.getSettings();
+    if (s.autoLaunchAudience && !BroadcastService.isAudienceOpen()) {
+      BroadcastService.openAudienceWindow();
+      setIsAudienceActive(true);
+    }
+    const handleSettingsUpdate = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail) {
+        setTransition(prev => ({
+          type: detail.defaultTransition || prev.type,
+          durationMs: detail.transitionDurationMs ?? prev.durationMs
+        }));
+      }
+    };
+    window.addEventListener('app-settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('app-settings-updated', handleSettingsUpdate);
+  }, []);
 
   // Speaker / Stage Notes
   const [speakerNotes, setSpeakerNotes] = useState<string>(playlist[0]?.speakerNotes || '');
@@ -1227,6 +1249,9 @@ export const App: React.FC = () => {
   // Playlist Handlers
   const handleSelectItem = (item: PlaylistItem) => {
     setActiveItemId(item.id);
+    if (item.type === 'header') {
+      return;
+    }
     if (item.slides.length > 0) {
       const target =
         item.type === 'bible'
@@ -1262,6 +1287,18 @@ export const App: React.FC = () => {
   };
 
   const handleAddItem = (type: ItemType) => {
+    if (type === 'header') {
+      const headerItem: PlaylistItem = {
+        id: `item-hdr-${Math.random().toString(36).substring(2, 9)}`,
+        title: 'WORSHIP & PRAISE',
+        type: 'header',
+        category: 'Section',
+        slides: []
+      };
+      setPlaylist(prev => [...prev, headerItem]);
+      setActiveItemId(headerItem.id);
+      return;
+    }
     const newItem: PlaylistItem = {
       id: `item-${Math.random().toString(36).substring(2, 9)}`,
       title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
@@ -1278,6 +1315,19 @@ export const App: React.FC = () => {
     setPlaylist(prev => [...prev, newItem]);
     setActiveItemId(newItem.id);
     setPreviewSlide(newItem.slides[0]);
+  };
+
+  const handleRenameItem = (id: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    setPlaylist(prev => prev.map(i => (i.id === id ? { ...i, title: trimmed } : i)));
+  };
+
+  const handleClearPlaylist = () => {
+    setPlaylist([]);
+    setActiveItemId(null);
+    setPreviewSlide(null);
+    setSpeakerNotes('');
   };
 
   const handleRemoveItem = (id: string) => {
@@ -2045,6 +2095,8 @@ export const App: React.FC = () => {
           onAddItem={handleAddItem}
           onRemoveItem={handleRemoveItem}
           onDuplicateItem={handleDuplicateItem}
+          onRenameItem={handleRenameItem}
+          onClearPlaylist={handleClearPlaylist}
           onMoveItem={handleMoveItem}
           onLoadTemplate={handleLoadTemplate}
           liveItemId={liveItemId}

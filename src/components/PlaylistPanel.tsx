@@ -22,7 +22,10 @@ import {
   ArrowDown,
   Bookmark,
   Radio,
-  Timer
+  Timer,
+  Pencil,
+  GripVertical,
+  Minus
 } from 'lucide-react';
 
 interface PlaylistPanelProps {
@@ -33,6 +36,8 @@ interface PlaylistPanelProps {
   onAddItem: (type: ItemType) => void;
   onRemoveItem: (id: string) => void;
   onDuplicateItem: (id: string) => void;
+  onRenameItem?: (id: string, newTitle: string) => void;
+  onClearPlaylist?: () => void;
   onMoveItem: (fromIndex: number, toIndex: number) => void;
   onLoadTemplate: (templateName: string) => void;
   liveItemId: string | null;
@@ -67,6 +72,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onAddItem,
   onRemoveItem,
   onDuplicateItem,
+  onRenameItem,
+  onClearPlaylist,
   onMoveItem,
   onLoadTemplate,
   liveItemId,
@@ -75,6 +82,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>('');
 
   const headerActionsRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -230,6 +241,22 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                     {tmpl}
                   </button>
                 ))}
+                {onClearPlaylist && playlist.length > 0 && (
+                  <div className="border-t border-slate-700 mt-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTemplateMenu(false);
+                        if (window.confirm('Clear all items from the current service playlist?')) {
+                          onClearPlaylist();
+                        }
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-rose-400 hover:bg-rose-600/20 hover:text-rose-200 font-semibold transition flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3 h-3" /> Clear Playlist
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -249,6 +276,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
             {showAddMenu && (
               <div className="absolute right-0 top-9 w-44 bg-[#182234] border border-[#26334a] rounded-lg shadow-2xl py-1 z-50 text-xs">
                 {[
+                  { type: 'header', label: 'Section Header', icon: Minus },
                   { type: 'song', label: 'Worship Song', icon: Music },
                   { type: 'bible', label: 'Scripture Verse', icon: Book },
                   { type: 'media', label: 'Background / Media', icon: Film },
@@ -291,6 +319,109 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
             const isSelected = item.id === activeItemId;
             const isLive = item.id === liveItemId;
             const isExpanded = !!expandedIds[item.id];
+            const isHeader = item.type === 'header';
+            const isDragTarget = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
+
+            const startEditingTitle = (e?: React.MouseEvent) => {
+              e?.stopPropagation();
+              setEditingId(item.id);
+              setEditingTitle(item.title);
+            };
+
+            const commitEditingTitle = () => {
+              if (editingId === item.id) {
+                if (onRenameItem && editingTitle.trim()) {
+                  onRenameItem(item.id, editingTitle);
+                }
+                setEditingId(null);
+              }
+            };
+
+            if (isHeader) {
+              return (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    setDragOverIndex(index);
+                  }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    if (dragIndex !== null && dragIndex !== index) {
+                      onMoveItem(dragIndex, index);
+                    }
+                    setDragIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  onClick={() => onSelectItem(item)}
+                  className={`group flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg border transition cursor-grab active:cursor-grabbing ${
+                    isDragTarget
+                      ? 'border-indigo-400 bg-indigo-950/50'
+                      : isSelected
+                      ? 'bg-slate-800/90 border-indigo-500/60'
+                      : 'bg-[#0b101b] border-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <GripVertical className="w-3 h-3 text-slate-600 shrink-0" />
+                    {editingId === item.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingTitle}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => setEditingTitle(e.target.value)}
+                        onBlur={commitEditingTitle}
+                        onKeyDown={e => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') commitEditingTitle();
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                        className="w-full bg-[#141d2e] border border-indigo-500 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white outline-none"
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={startEditingTitle}
+                        className="text-[10px] font-black uppercase tracking-widest text-indigo-300 truncate"
+                        title="Double-click to rename section"
+                      >
+                        {item.title}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                    {onRenameItem && (
+                      <button
+                        type="button"
+                        onClick={startEditingTitle}
+                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded"
+                        title="Rename section"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onRemoveItem(item.id);
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded"
+                      title="Remove section header"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             const hasVideoBg =
               Boolean(item.videoBackgroundUrl) ||
               item.slides.some(s => s.backgroundType === 'video');
@@ -307,8 +438,28 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 ref={el => {
                   itemRefs.current[item.id] = el;
                 }}
+                draggable={editingId !== item.id}
+                onDragStart={() => setDragIndex(index)}
+                onDragOver={e => {
+                  e.preventDefault();
+                  setDragOverIndex(index);
+                }}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragIndex !== null && dragIndex !== index) {
+                    onMoveItem(dragIndex, index);
+                  }
+                  setDragIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => {
+                  setDragIndex(null);
+                  setDragOverIndex(null);
+                }}
                 className={`rounded-lg border transition overflow-hidden ${
-                  isLive
+                  isDragTarget
+                    ? 'border-indigo-400 ring-1 ring-indigo-400/60 bg-indigo-950/60'
+                    : isLive
                     ? 'bg-rose-950/35 border-rose-500/80 shadow-[0_0_10px_rgba(239,68,68,0.18)]'
                     : isSelected
                     ? 'bg-indigo-950/50 border-indigo-500/70 text-white'
@@ -376,9 +527,30 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-semibold text-xs truncate">
-                          {item.title}
-                        </span>
+                        {editingId === item.id ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingTitle}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setEditingTitle(e.target.value)}
+                            onBlur={commitEditingTitle}
+                            onKeyDown={e => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter') commitEditingTitle();
+                              if (e.key === 'Escape') setEditingId(null);
+                            }}
+                            className="w-full bg-[#0b101b] border border-indigo-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white outline-none"
+                          />
+                        ) : (
+                          <span
+                            onDoubleClick={startEditingTitle}
+                            className="font-semibold text-xs truncate"
+                            title="Double-click to rename"
+                          >
+                            {item.title}
+                          </span>
+                        )}
                         {isLive && (
                           <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 bg-rose-600 text-white rounded shrink-0">
                             <Radio className="w-2.5 h-2.5 animate-pulse" />
@@ -443,6 +615,16 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
                   {/* Quick Item Actions */}
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                    {onRenameItem && (
+                      <button
+                        type="button"
+                        onClick={startEditingTitle}
+                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded"
+                        title="Rename item"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={e => {

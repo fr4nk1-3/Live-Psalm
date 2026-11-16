@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "preview": "vite preview",
-    "build:win": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --win"
+    "build:win": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --win",
+    "build:deb": "NODE_OPTIONS=--max-old-space-size=8192 tsc && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_OPTIONS=--max-old-space-size=8192 electron-builder --linux deb"
   },
   "build": {
     "appId": "com.livepsalms.app",
@@ -42,6 +43,15 @@
     },
     "portable": {
       "artifactName": "LivePsalms-Windows-Portable.exe"
+    },
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "maintainer": "Live Psalms <support@livepsalms.app>",
+      "icon": "public/icon.png",
+      "category": "AudioVideo",
+      "artifactName": "LivePsalms-Ubuntu-${arch}.deb"
     }
   },
   "dependencies": {

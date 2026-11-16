@@ -109,6 +109,188 @@ export const DEFAULT_THEMES: Theme[] = [
     shadowColor: 'rgba(0,0,0,0.5)',
     lowerThirdStyle: true,
     accentColor: '#10b981'
+  },
+  {
+    id: 'theme-bold-auditorium',
+    name: 'Bold Auditorium',
+    fontFamily: 'Montserrat',
+    fontSize: 58,
+    fontWeight: '800',
+    textColor: '#ffffff',
+    align: 'center',
+    scrimOpacity: 0.55,
+    blurAmount: 0,
+    shadowColor: 'rgba(0,0,0,0.95)',
+    lowerThirdStyle: false,
+    accentColor: '#6366f1',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    backgroundUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-upper-room',
+    name: 'Upper Room Warmth',
+    fontFamily: 'Playfair Display',
+    fontSize: 48,
+    fontWeight: '700',
+    textColor: '#fef3c7',
+    align: 'center',
+    scrimOpacity: 0.65,
+    blurAmount: 4,
+    shadowColor: 'rgba(0,0,0,0.85)',
+    lowerThirdStyle: false,
+    accentColor: '#f59e0b',
+    backgroundUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-scripture-editorial',
+    name: 'Scripture Editorial',
+    fontFamily: 'Playfair Display',
+    fontSize: 44,
+    fontWeight: '600',
+    textColor: '#f8fafc',
+    align: 'left',
+    scrimOpacity: 0.72,
+    blurAmount: 6,
+    shadowColor: 'rgba(0,0,0,0.8)',
+    lowerThirdStyle: false,
+    accentColor: '#10b981',
+    backgroundUrl: 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-broadcast-lower-clean',
+    name: 'Broadcast Lower 3rd (Sky)',
+    fontFamily: 'Inter',
+    fontSize: 34,
+    fontWeight: '700',
+    textColor: '#ffffff',
+    align: 'left',
+    scrimOpacity: 0.88,
+    blurAmount: 10,
+    shadowColor: 'rgba(0,0,0,0.75)',
+    lowerThirdStyle: true,
+    accentColor: '#38bdf8'
+  },
+  {
+    id: 'theme-broadcast-lower-gold',
+    name: 'Broadcast Lower 3rd (Gold)',
+    fontFamily: 'Outfit',
+    fontSize: 34,
+    fontWeight: '700',
+    textColor: '#fffbeb',
+    align: 'left',
+    scrimOpacity: 0.88,
+    blurAmount: 10,
+    shadowColor: 'rgba(0,0,0,0.8)',
+    lowerThirdStyle: true,
+    accentColor: '#f59e0b'
+  },
+  {
+    id: 'theme-led-neon',
+    name: 'LED Wall Neon',
+    fontFamily: 'Montserrat',
+    fontSize: 54,
+    fontWeight: '800',
+    textColor: '#ffffff',
+    align: 'center',
+    scrimOpacity: 0.4,
+    blurAmount: 0,
+    shadowColor: 'rgba(0,0,0,0.9)',
+    lowerThirdStyle: false,
+    accentColor: '#06b6d4',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    backgroundUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-sermon-slate',
+    name: 'Sermon Teaching Slate',
+    fontFamily: 'Inter',
+    fontSize: 42,
+    fontWeight: '700',
+    textColor: '#f1f5f9',
+    align: 'left',
+    scrimOpacity: 0.78,
+    blurAmount: 8,
+    shadowColor: 'rgba(0,0,0,0.7)',
+    lowerThirdStyle: false,
+    accentColor: '#8b5cf6',
+    backgroundUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-cathedral-glass',
+    name: 'Cathedral Hymn',
+    fontFamily: 'Cinzel',
+    fontSize: 46,
+    fontWeight: '700',
+    textColor: '#fef9c3',
+    align: 'center',
+    scrimOpacity: 0.62,
+    blurAmount: 3,
+    shadowColor: 'rgba(0,0,0,0.92)',
+    lowerThirdStyle: false,
+    accentColor: '#eab308',
+    letterSpacing: '0.04em',
+    backgroundUrl: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-sunrise-grace',
+    name: 'Sunrise Grace',
+    fontFamily: 'Outfit',
+    fontSize: 46,
+    fontWeight: '700',
+    textColor: '#fff1f2',
+    align: 'center',
+    scrimOpacity: 0.48,
+    blurAmount: 2,
+    shadowColor: 'rgba(0,0,0,0.85)',
+    lowerThirdStyle: false,
+    accentColor: '#fb7185',
+    backgroundUrl: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-acoustic-night',
+    name: 'Acoustic Night',
+    fontFamily: 'Outfit',
+    fontSize: 44,
+    fontWeight: '600',
+    textColor: '#fde68a',
+    align: 'center',
+    scrimOpacity: 0.7,
+    blurAmount: 4,
+    shadowColor: 'rgba(0,0,0,0.9)',
+    lowerThirdStyle: false,
+    accentColor: '#d97706',
+    backgroundUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-midnight-prayer',
+    name: 'Midnight Prayer',
+    fontFamily: 'Cinzel',
+    fontSize: 46,
+    fontWeight: '700',
+    textColor: '#e0e7ff',
+    align: 'center',
+    scrimOpacity: 0.68,
+    blurAmount: 4,
+    shadowColor: 'rgba(0,0,0,0.92)',
+    lowerThirdStyle: false,
+    accentColor: '#818cf8',
+    backgroundUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=1920&q=80'
+  },
+  {
+    id: 'theme-pure-black',
+    name: 'Pure Black (Clean Key)',
+    fontFamily: 'Inter',
+    fontSize: 48,
+    fontWeight: '800',
+    textColor: '#ffffff',
+    align: 'center',
+    scrimOpacity: 1,
+    blurAmount: 0,
+    shadowColor: 'rgba(0,0,0,0.95)',
+    lowerThirdStyle: false,
+    accentColor: '#ffffff'
   }
 ];
 
@@ -176,6 +358,132 @@ export const DEFAULT_MEDIA: MediaAsset[] = [
     category: 'Backgrounds',
     favorite: false,
     tags: ['youth', 'lights', 'stage']
+  },
+  {
+    id: 'media-bg-bible-light',
+    name: 'Open Bible Warm Light',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['bible', 'scripture', 'sermon', 'warm']
+  },
+  {
+    id: 'media-bg-cathedral',
+    name: 'Cathedral Stained Light',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['church', 'hymn', 'cathedral']
+  },
+  {
+    id: 'media-bg-sunrise-hills',
+    name: 'Sunrise Over Hills',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['sunrise', 'morning', 'creation']
+  },
+  {
+    id: 'media-bg-starry-night',
+    name: 'Midnight Prayer Stars',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['night', 'prayer', 'stars']
+  },
+  {
+    id: 'media-bg-ocean-calm',
+    name: 'Still Waters Horizon',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['water', 'peace', 'psalm23']
+  },
+  {
+    id: 'media-bg-forest-rays',
+    name: 'Forest Sunbeams',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['forest', 'light', 'nature']
+  },
+  {
+    id: 'media-bg-abstract-neon',
+    name: 'LED Neon Waves',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['led', 'modern', 'youth']
+  },
+  {
+    id: 'media-bg-dark-slate',
+    name: 'Minimal Dark Texture',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['dark', 'sermon', 'minimal']
+  },
+  {
+    id: 'media-bg-worship-stage',
+    name: 'Auditorium Stage Lights',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['worship', 'stage', 'auditorium']
+  },
+  {
+    id: 'media-bg-acoustic-warm',
+    name: 'Acoustic Warm Glow',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['acoustic', 'warm', 'worship']
+  },
+  {
+    id: 'media-bg-dove-sky',
+    name: 'Heavenly Sky Rays',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1534088568595-a066f410bcda?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['clouds', 'heaven', 'sky']
+  },
+  {
+    id: 'media-bg-wheat-harvest',
+    name: 'Golden Harvest Field',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['harvest', 'gold', 'nature']
+  },
+  {
+    id: 'media-bg-desert-dawn',
+    name: 'Desert Dawn Horizon',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: false,
+    tags: ['desert', 'dawn', 'reflection']
+  },
+  {
+    id: 'media-bg-aurora',
+    name: 'Northern Lights Glory',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1920&q=80',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['aurora', 'sky', 'worship']
   },
   {
     id: 'media-logo-main',
@@ -527,10 +835,13 @@ export class StorageService {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.media)) {
-          const defaultMotions = DEFAULT_MEDIA.filter(dm => dm.type === 'video');
-          defaultMotions.forEach(dm => {
+          DEFAULT_MEDIA.forEach(dm => {
             if (!parsed.media.some((m: MediaAsset) => m.id === dm.id)) {
-              parsed.media.unshift(dm);
+              if (dm.type === 'video') {
+                parsed.media.unshift(dm);
+              } else {
+                parsed.media.push(dm);
+              }
             }
           });
           parsed.media = parsed.media.map((m: MediaAsset) => {
@@ -543,6 +854,15 @@ export class StorageService {
             }
             return m;
           });
+        }
+        if (Array.isArray(parsed.themes)) {
+          DEFAULT_THEMES.forEach(dt => {
+            if (!parsed.themes.some((t: Theme) => t.id === dt.id)) {
+              parsed.themes.push(dt);
+            }
+          });
+        } else {
+          parsed.themes = DEFAULT_THEMES;
         }
         return parsed;
       }
@@ -1553,6 +1873,9 @@ export class StorageService {
       localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(settings));
       if (settings.churchProfile) {
         this.saveChurchProfile(settings.churchProfile);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-settings-updated', { detail: settings }));
       }
     } catch (e) {}
   }

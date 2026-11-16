@@ -243,6 +243,11 @@ export interface AppSettings {
   transitionDurationMs?: number;
   showVerseNumbers?: boolean;
   autoLaunchAudience?: boolean;
+  outputDisplayMap?: {
+    audience?: string;
+    stage?: string;
+    led?: string;
+  };
 }
 
 export interface LedWallDisplayState {

@@ -65,14 +65,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => unsub();
   }, []);
 
-  const refreshSystemInfo = () => {
+  const refreshSystemInfo = async () => {
     try {
       if ((window as any).require) {
         const { ipcRenderer } = (window as any).require('electron');
         ipcRenderer
           .invoke('get-connected-displays')
           .then((list: any[]) => {
-            if (Array.isArray(list)) setDisplays(list);
+            if (Array.isArray(list)) {
+              setDisplays(list);
+              try {
+                localStorage.setItem('live_psalms_detected_displays_v1', JSON.stringify(list));
+              } catch {}
+            }
           })
           .catch(() => {});
         ipcRenderer
@@ -88,6 +93,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           })
           .catch(() => {});
       } else {
+        // Browser Multi-Screen Window Placement API (when available) + fallback
+        let detected: any[] = [];
+        try {
+          if (typeof (window as any).getScreenDetails === 'function') {
+            const details = await (window as any).getScreenDetails();
+            if (details && Array.isArray(details.screens)) {
+              detected = details.screens.map((s: any, idx: number) => ({
+                id: String(idx + 1),
+                index: idx + 1,
+                label: s.label || (s.isPrimary ? `Display ${idx + 1} (Primary)` : `Display ${idx + 1} (External)`),
+                isPrimary: Boolean(s.isPrimary),
+                bounds: { x: s.left, y: s.top, width: s.width, height: s.height },
+                resolution: `${s.width}x${s.height}`
+              }));
+            }
+          }
+        } catch {}
+
+        if (detected.length === 0) {
+          detected = [
+            {
+              id: '1',
+              index: 1,
+              label: 'Primary Display',
+              isPrimary: true,
+              bounds: { x: 0, y: 0, width: window.screen.width, height: window.screen.height },
+              resolution: `${window.screen.width}x${window.screen.height}`
+            }
+          ];
+        }
+        setDisplays(detected);
+        try {
+          localStorage.setItem('live_psalms_detected_displays_v1', JSON.stringify(detected));
+        } catch {}
+
         fetch('/api/obs/info')
           .then(r => r.json())
           .then(info => {
@@ -130,6 +170,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const next = { ...settings, ...patch };
     setSettings(next);
     StorageService.saveSettings(next);
+    BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: next });
   };
 
   const handleUpdateProfile = (updated: Partial<ChurchProfile>) => {
@@ -423,16 +464,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'projection' && (
               <div className="space-y-4">
                 <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="font-bold text-sky-300 text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Tv className="w-4 h-4 text-sky-400" /> Connected Displays
+                      <Tv className="w-4 h-4 text-sky-400" /> Connected Displays ({displays.length})
                     </div>
                     <button
                       type="button"
-                      onClick={refreshSystemInfo}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
+                      onClick={() => refreshSystemInfo()}
+                      className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow transition"
                     >
-                      <RefreshCw className="w-3 h-3" /> Refresh
+                      <RefreshCw className="w-3 h-3" /> Detect Displays
                     </button>
                   </div>
 
@@ -441,27 +482,100 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       {displays.map((d, idx) => (
                         <div
                           key={d.id || idx}
-                          className="p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg flex items-center justify-between"
+                          className="p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg flex items-center justify-between gap-2"
                         >
-                          <div>
-                            <div className="font-bold text-white text-xs">
-                              Display {idx + 1} {d.primary ? '(Primary)' : ''}
+                          <div className="min-w-0">
+                            <div className="font-bold text-white text-xs truncate">
+                              {d.label || `Display ${idx + 1}`}
                             </div>
-                            <div className="text-[10px] text-slate-400">
-                              {d.bounds?.width || '?'} × {d.bounds?.height || '?'} px
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {d.bounds?.width || '?'} × {d.bounds?.height || '?'} px • ({d.bounds?.x ?? 0}, {d.bounds?.y ?? 0})
                             </div>
                           </div>
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[9px] font-bold uppercase">
-                            Active
+                          <span
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
+                              d.isPrimary || d.primary
+                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            }`}
+                          >
+                            {d.isPrimary || d.primary ? 'Primary' : 'External'}
                           </span>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="p-3 bg-[#0b101b] border border-slate-800 rounded-lg text-slate-400 text-[11px]">
-                      Running in browser/single-screen mode. Use the <strong>Audience</strong>, <strong>Stage</strong>, or <strong>LED Wall</strong> buttons in the top bar to open projector windows.
+                      Click <strong>Detect Displays</strong> above to scan connected monitors.
                     </div>
                   )}
+
+                  {/* Output-to-Display Mapping */}
+                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
+                      Map Outputs to Specific Display
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        {
+                          key: 'audience' as const,
+                          label: 'Audience Output (Main Projector)',
+                          openFn: () => BroadcastService.openAudienceWindow()
+                        },
+                        {
+                          key: 'stage' as const,
+                          label: 'Stage Confidence Monitor',
+                          openFn: () => BroadcastService.openStageWindow()
+                        },
+                        {
+                          key: 'led' as const,
+                          label: 'LED Wall Display',
+                          openFn: () => BroadcastService.openLedWindow()
+                        }
+                      ].map(row => {
+                        const mappedVal = settings.outputDisplayMap?.[row.key] || 'auto';
+                        return (
+                          <div
+                            key={row.key}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#0b101b] border border-slate-800 rounded-lg"
+                          >
+                            <span className="font-bold text-xs text-slate-200">{row.label}</span>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={mappedVal}
+                                onChange={(e) => {
+                                  const nextDisplayId = e.target.value;
+                                  updateSettings({
+                                    outputDisplayMap: {
+                                      ...(settings.outputDisplayMap || {}),
+                                      [row.key]: nextDisplayId
+                                    }
+                                  });
+                                  BroadcastService.moveOutputToDisplay(row.key, nextDisplayId);
+                                }}
+                                className="bg-[#121929] border border-slate-700 focus:border-sky-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none"
+                              >
+                                <option value="auto">Auto (External Display)</option>
+                                {displays.map((d, idx) => (
+                                  <option key={d.id || idx} value={String(d.id || idx + 1)}>
+                                    {d.label || `Display ${idx + 1}`} ({d.bounds?.width}×{d.bounds?.height})
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={row.openFn}
+                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold uppercase transition shrink-0"
+                                title={`Open ${row.label} on mapped display`}
+                              >
+                                Open
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-[#121929] border border-slate-800 p-4 rounded-xl space-y-3">
@@ -518,9 +632,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="pt-2 border-t border-slate-800 space-y-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-bold text-slate-200">Show Verse Numbers on Scripture Slides</div>
+                        <div className="font-bold text-slate-200">Show Verse Reference on Stage Monitor</div>
                         <div className="text-[10px] text-slate-400">
-                          Displays verse reference numbers clearly on projected Bible slides.
+                          Displays Scripture verse reference &amp; translation badge on the Stage Monitor.
                         </div>
                       </div>
                       {renderToggle(settings.showVerseNumbers ?? true, (val) =>

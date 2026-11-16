@@ -230,16 +230,29 @@ function createMainWindow() {
   });
 }
 
-function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, externalIndex }) {
+function resolveTargetDisplay(externalIndex = 0, displayId) {
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  if (displayId && displayId !== 'auto') {
+    const matched = displays.find((d) => String(d.id) === String(displayId));
+    if (matched) return matched;
+  }
+  const externalDisplays = displays.filter((d) => d.id !== primary.id);
+  return externalDisplays[externalIndex] || externalDisplays[0] || primary;
+}
+
+function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, externalIndex, displayId }) {
+  const targetDisplay = resolveTargetDisplay(externalIndex, displayId);
+
   if (existingWin && !existingWin.isDestroyed()) {
+    if (displayId) {
+      existingWin.setFullScreen(false);
+      existingWin.setBounds(targetDisplay.bounds);
+      existingWin.setFullScreen(true);
+    }
     existingWin.focus();
     return existingWin;
   }
-
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-  const externalDisplays = displays.filter((d) => d.id !== primary.id);
-  const targetDisplay = externalDisplays[externalIndex] || externalDisplays[0] || primary;
 
   const win = new BrowserWindow({
     width: targetDisplay.bounds.width,
@@ -278,8 +291,9 @@ ipcMain.handle('get-connected-displays', () => {
   const displays = screen.getAllDisplays();
   const primary = screen.getPrimaryDisplay();
   return displays.map((d, idx) => ({
-    id: d.id,
+    id: String(d.id),
     index: idx + 1,
+    label: d.label || (d.id === primary.id ? `Display ${idx + 1} (Primary)` : `Display ${idx + 1} (External)`),
     isPrimary: d.id === primary.id,
     bounds: d.bounds,
     resolution: `${d.bounds.width}x${d.bounds.height}`
@@ -308,13 +322,14 @@ ipcMain.on('broadcast-payload', (event, payload) => {
 });
 
 // IPC Listeners to launch or close secondary & tertiary display windows
-ipcMain.on('open-audience-window', () => {
+ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
     title: 'Live Psalms — Audience Presentation Output',
     bgColor: '#000000',
-    externalIndex: 0
+    externalIndex: 0,
+    displayId: opts?.displayId
   });
   audienceWindow.once('closed', () => { audienceWindow = null; });
 });
@@ -326,13 +341,14 @@ ipcMain.on('close-audience-window', () => {
   audienceWindow = null;
 });
 
-ipcMain.on('open-stage-window', () => {
+ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
     title: 'Live Psalms — Stage Confidence Monitor',
     bgColor: '#070b12',
-    externalIndex: 1
+    externalIndex: 1,
+    displayId: opts?.displayId
   });
   stageWindow.once('closed', () => { stageWindow = null; });
 });
@@ -344,15 +360,28 @@ ipcMain.on('close-stage-window', () => {
   stageWindow = null;
 });
 
-ipcMain.on('open-led-window', () => {
+ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
     title: 'Live Psalms — LED Wall & Motion Display Output',
     bgColor: '#000000',
-    externalIndex: 2
+    externalIndex: 2,
+    displayId: opts?.displayId
   });
   ledWindow.once('closed', () => { ledWindow = null; });
+});
+
+ipcMain.on('move-output-window', (_event, { outputType, displayId }) => {
+  const winMap = { audience: audienceWindow, stage: stageWindow, led: ledWindow };
+  const extIdxMap = { audience: 0, stage: 1, led: 2 };
+  const win = winMap[outputType];
+  if (win && !win.isDestroyed()) {
+    const targetDisplay = resolveTargetDisplay(extIdxMap[outputType] ?? 0, displayId);
+    win.setFullScreen(false);
+    win.setBounds(targetDisplay.bounds);
+    win.setFullScreen(true);
+  }
 });
 
 ipcMain.on('close-led-window', () => {

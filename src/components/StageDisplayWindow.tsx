@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Slide, StageDisplayState } from '../types/presentation';
 import { BroadcastService, BroadcastPayload } from '../services/broadcast';
+import { StorageService } from '../services/storage';
 import { Clock as ClockIcon, FileText, ArrowRight, Zap, Timer, BookOpen, Film, Image as ImageIcon } from 'lucide-react';
 import { getFlexibleFontSize } from '../utils/fontSize';
 
@@ -25,6 +26,9 @@ export const StageDisplayWindow: React.FC = () => {
     countdownRemaining: 0
   });
   const [countdownTargetScreen, setCountdownTargetScreen] = useState<'audience' | 'stage' | 'both'>('both');
+  const [showVerseRefOnStage, setShowVerseRefOnStage] = useState<boolean>(
+    () => StorageService.getSettings().showVerseNumbers ?? true
+  );
   const stageVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -73,6 +77,9 @@ export const StageDisplayWindow: React.FC = () => {
           nextSlide: payload.previewSlide || undefined
         }));
       }
+      if (payload.type === 'APP_SETTINGS_UPDATE' && payload.appSettings) {
+        setShowVerseRefOnStage(payload.appSettings.showVerseNumbers ?? true);
+      }
       if (stageVideoRef.current) {
         const v = stageVideoRef.current;
         if (payload.type === 'MEDIA_CMD_PAUSE') v.pause();
@@ -90,9 +97,25 @@ export const StageDisplayWindow: React.FC = () => {
     // Request initial state on mount
     BroadcastService.requestInitialState();
 
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'live_psalms_app_settings_v1') {
+        setShowVerseRefOnStage(StorageService.getSettings().showVerseNumbers ?? true);
+      }
+    };
+    const handleCustomSettings = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && typeof detail.showVerseNumbers === 'boolean') {
+        setShowVerseRefOnStage(detail.showVerseNumbers);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('app-settings-updated', handleCustomSettings);
+
     return () => {
       clearInterval(timer);
       unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('app-settings-updated', handleCustomSettings);
     };
   }, []);
 
@@ -259,7 +282,7 @@ export const StageDisplayWindow: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 {/* Verse reference or Media title badge */}
-                {currentSlide?.title && (
+                {currentSlide?.title && (showVerseRefOnStage || (currentSlide.sectionLabel !== 'Scripture' && !currentSlide.bibleMeta)) && (
                   <span className="text-xs font-black text-amber-300 bg-amber-950/90 border border-amber-500/60 px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow">
                     <BookOpen className="w-4 h-4 text-amber-400" />
                     {currentSlide.title}
@@ -305,8 +328,8 @@ export const StageDisplayWindow: React.FC = () => {
                     >
                       {currentSlide.content}
                     </div>
-                    {/* Bible translation badge — shown below the verse text */}
-                    {currentSlide.subtitle && (
+                    {/* Bible translation & verse badge — controlled by Stage Monitor setting */}
+                    {currentSlide.subtitle && (showVerseRefOnStage || (currentSlide.sectionLabel !== 'Scripture' && !currentSlide.bibleMeta)) && (
                       <div className="flex justify-center mt-2">
                         <span className="text-xs font-bold text-indigo-300 bg-indigo-950/80 border border-indigo-500/40 px-4 py-1.5 rounded-full tracking-wider uppercase">
                           📖 {currentSlide.subtitle}
