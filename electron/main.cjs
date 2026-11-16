@@ -1,5 +1,10 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
+
+// Prevent Chromium zygote/sandbox crash on Linux (e.g., Ubuntu 24.04 AppArmor & space-in-path /opt/Live Psalms)
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+}
 const fs = require('fs');
 const http = require('http');
 const os = require('os');

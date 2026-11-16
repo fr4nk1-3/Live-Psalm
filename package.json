@@ -53,6 +53,9 @@
       "icon": "public/icon.png",
       "category": "AudioVideo",
       "artifactName": "LivePsalms-Ubuntu-${arch}.deb"
+    },
+    "deb": {
+      "afterInstall": "electron/linux-after-install.sh"
     }
   },
   "dependencies": {
