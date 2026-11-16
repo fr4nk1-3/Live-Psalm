@@ -137,6 +137,15 @@ export interface BiblePassage {
   formattedRef: string;
 }
 
+export type ProjectorLayout =
+  | 'centered'
+  | 'lower_third'
+  | 'top_banner'
+  | 'split_left'
+  | 'split_right'
+  | 'boxed_card'
+  | 'minimal';
+
 export interface Theme {
   id: string;
   name: string;
@@ -149,6 +158,7 @@ export interface Theme {
   blurAmount: number; // in px
   shadowColor: string;
   lowerThirdStyle: boolean;
+  projectorLayout?: ProjectorLayout;
   accentColor: string;
   backgroundUrl?: string;
   textTransform?: 'none' | 'uppercase' | 'capitalize';
@@ -247,6 +257,7 @@ export interface AppSettings {
   transitionDurationMs?: number;
   showVerseNumbers?: boolean;
   autoLaunchAudience?: boolean;
+  broadcastMultiviewEnabled?: boolean;
   outputDisplayMap?: {
     audience?: string;
     stage?: string;

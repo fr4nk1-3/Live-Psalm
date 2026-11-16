@@ -9,7 +9,8 @@ import {
   TransitionSettings, 
   SectionTag,
   ItemType,
-  QuickPinnedItem
+  QuickPinnedItem,
+  ChurchProfile
 } from './types/presentation';
 import { StorageService } from './services/storage';
 import { BroadcastService } from './services/broadcast';
@@ -28,7 +29,7 @@ import { QuickPresentationModal } from './components/QuickPresentationModal';
 import { SermonModeModal } from './components/SermonModeModal';
 import { SlideDesignerModal } from './components/SlideDesignerModal';
 import { SettingsModal } from './components/SettingsModal';
-import { StreamingModal } from './components/StreamingModal';
+import { BroadcastDock } from './components/BroadcastDock';
 import { MediaPlayerBar } from './components/MediaPlayerBar';
 
 import { AudienceOutputWindow } from './components/AudienceOutputWindow';
@@ -86,6 +87,9 @@ export const App: React.FC = () => {
   } | null>(null);
 
   // Emergency States (Mutually Exclusive)
+  // Church profile, kept reactive so the broadcast dock and logo follow edits
+  const [churchProfile, setChurchProfile] = useState<ChurchProfile>(() => StorageService.getChurchProfile());
+
   const [emergency, setEmergency] = useState<EmergencyState>({
     isBlack: false,
     isClear: false,
@@ -167,6 +171,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleProfileUpdated = (evt?: any) => {
       const profile = evt?.detail || StorageService.getChurchProfile();
+      setChurchProfile(profile);
       const logoName = StorageService.getLogoDisplayName(profile);
       setMedia(prev =>
         prev.map(m =>
@@ -265,7 +270,7 @@ export const App: React.FC = () => {
   const [isSermonModeOpen, setIsSermonModeOpen] = useState(false);
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStreamingOpen, setIsStreamingOpen] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const activeItem = playlist.find(i => i.id === activeItemId) || null;
@@ -1217,7 +1222,7 @@ export const App: React.FC = () => {
         isSermonModeOpen ||
         isDesignerOpen ||
         isSettingsOpen ||
-        isStreamingOpen ||
+        isBroadcastOpen ||
         isInspectorOpen
       ) {
         return;
@@ -1288,7 +1293,7 @@ export const App: React.FC = () => {
     isSermonModeOpen,
     isDesignerOpen,
     isSettingsOpen,
-    isStreamingOpen,
+    isBroadcastOpen,
     isInspectorOpen
   ]);
 
@@ -2154,7 +2159,8 @@ export const App: React.FC = () => {
           const nextState = BroadcastService.toggleLedWindow();
           setIsLedActive(nextState);
         }}
-        onOpenStreaming={() => setIsStreamingOpen(true)}
+        onOpenStreaming={() => setIsBroadcastOpen(v => !v)}
+        isBroadcastOpen={isBroadcastOpen}
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
@@ -2162,6 +2168,27 @@ export const App: React.FC = () => {
         isLedActive={isLedActive}
         isSaved={isSaved}
         onOpenSlideDesigner={() => setIsDesignerOpen(true)}
+      />
+
+      {/* Integrated live broadcast and recording dock */}
+      <BroadcastDock
+        isOpen={isBroadcastOpen}
+        onClose={() => setIsBroadcastOpen(false)}
+        liveSlide={liveSlide}
+        activeTheme={activeTheme}
+        globalVideoBgUrl={globalVideoBgUrl}
+        itemVideoBgUrl={activeItem?.videoBackgroundUrl || null}
+        isFullSlideCountdown={isFullSlideCountdown}
+        isCountdownRunning={isCountdownRunning}
+        countdownTargetScreen={countdownTargetScreen}
+        countdownSeconds={countdownSeconds}
+        countdownTitle={countdownTitle}
+        lowerThird={activeLowerThirdText}
+        churchProfile={churchProfile}
+        mediaList={media}
+        isAudienceActive={isAudienceActive}
+        isStageActive={isStageActive}
+        isLedActive={isLedActive}
       />
 
       {/* Main Studio Body Workspace Layout */}
@@ -2480,10 +2507,6 @@ export const App: React.FC = () => {
         }}
       />
 
-      <StreamingModal
-        isOpen={isStreamingOpen}
-        onClose={() => setIsStreamingOpen(false)}
-      />
     </div>
   );
 };

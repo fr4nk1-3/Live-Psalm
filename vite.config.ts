@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
 
 const sseClients = new Set<any>();
 const cachedPayloads = new Map<string, any>();
@@ -284,6 +285,40 @@ export default defineConfig({
             serverObsConnected = false;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ connected: false }));
+            return;
+          }
+
+          if (url === '/api/system/displays' && req.method === 'GET') {
+            if (process.platform === 'linux') {
+              execFile('xrandr', ['--listactivemonitors'], { timeout: 2500 }, (err, stdout = '') => {
+                const parsed: any[] = [];
+                if (!err && stdout) {
+                  for (const line of stdout.split('\n')) {
+                    const m = line.match(/^\s*\d+:\s+(\+\*?|\*?)\S+\s+(\d+)(?:\/\d+)?x(\d+)(?:\/\d+)?\+(\-?\d+)\+(\-?\d+)\s+(.+)$/);
+                    if (!m) continue;
+                    const isPrim = m[1].includes('*');
+                    const w = parseInt(m[2], 10);
+                    const h = parseInt(m[3], 10);
+                    const x = parseInt(m[4], 10);
+                    const y = parseInt(m[5], 10);
+                    const name = m[6].trim();
+                    parsed.push({
+                      id: `xrandr-${parsed.length + 1}`,
+                      index: parsed.length + 1,
+                      label: `${name} (${isPrim ? 'Primary' : 'External'})`,
+                      isPrimary: isPrim,
+                      bounds: { x, y, width: w, height: h },
+                      resolution: `${w}x${h}`
+                    });
+                  }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ displays: parsed }));
+              });
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ displays: [] }));
             return;
           }
 

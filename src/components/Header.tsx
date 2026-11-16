@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenSermonMode: () => void;
   onOpenSettings: () => void;
   onOpenStreaming?: () => void;
+  isBroadcastOpen?: boolean;
   onOpenAudienceOutput: () => void;
   onOpenStageOutput: () => void;
   onOpenLedOutput?: () => void;
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSermonMode,
   onOpenSettings,
   onOpenStreaming,
+  isBroadcastOpen = false,
   onOpenAudienceOutput,
   onOpenStageOutput,
   onOpenLedOutput,
@@ -53,21 +55,63 @@ export const Header: React.FC<HeaderProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [displayCount, setDisplayCount] = React.useState(1);
 
-  React.useEffect(() => {
+  const refreshDisplayCount = React.useCallback(async () => {
     try {
       if ((window as any).require) {
         const { ipcRenderer } = (window as any).require('electron');
-        ipcRenderer
-          .invoke('get-connected-displays')
-          .then((displays: any[]) => {
-            if (Array.isArray(displays)) setDisplayCount(displays.length);
-          })
-          .catch(() => {});
+        const displays = await ipcRenderer.invoke('get-connected-displays');
+        if (Array.isArray(displays)) setDisplayCount(displays.length);
+        return;
       }
+      try {
+        const res = await fetch('/api/system/displays');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.displays) && data.displays.length > 0) {
+            setDisplayCount(data.displays.length);
+            return;
+          }
+        }
+      } catch {
+        /* dev server may not expose display scanning */
+      }
+      if (typeof (window as any).getScreenDetails === 'function') {
+        try {
+          const details = await (window as any).getScreenDetails();
+          if (details && Array.isArray(details.screens) && details.screens.length > 0) {
+            setDisplayCount(details.screens.length);
+            return;
+          }
+        } catch {
+          /* permission denied */
+        }
+      }
+      setDisplayCount((window.screen as any).isExtended ? 2 : 1);
     } catch {
-      /* Browser preview mode */
+      /* ignore detection failures */
     }
   }, []);
+
+  React.useEffect(() => {
+    refreshDisplayCount();
+    let ipcRenderer: any = null;
+    const onDisplaysChanged = (_event: any, list: any[]) => {
+      if (Array.isArray(list)) setDisplayCount(list.length);
+    };
+    try {
+      if ((window as any).require) {
+        ipcRenderer = (window as any).require('electron').ipcRenderer;
+        ipcRenderer.on('displays-changed', onDisplaysChanged);
+      }
+    } catch {
+      /* browser preview */
+    }
+    window.addEventListener('focus', refreshDisplayCount);
+    return () => {
+      if (ipcRenderer) ipcRenderer.removeListener('displays-changed', onDisplaysChanged);
+      window.removeEventListener('focus', refreshDisplayCount);
+    };
+  }, [refreshDisplayCount]);
 
   const activeOutputs = [isAudienceActive, isStageActive, isLedActive].filter(Boolean).length;
 
@@ -96,9 +140,14 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
             <span className="max-w-[220px] truncate">{serviceTitle}</span>
             <span aria-hidden>·</span>
-            <span className="tabular whitespace-nowrap">
+            <button
+              type="button"
+              onClick={refreshDisplayCount}
+              className="tabular whitespace-nowrap rounded-sm transition-colors hover:text-foreground"
+              title="Re-scan connected displays"
+            >
               {displayCount > 1 ? `${displayCount} screens` : '1 screen'}
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -156,7 +205,10 @@ export const Header: React.FC<HeaderProps> = ({
             {onOpenStreaming && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onOpenStreaming}>Streaming setup…</DropdownMenuItem>
+                <DropdownMenuCheckboxItem checked={isBroadcastOpen} onSelect={onOpenStreaming}>
+                  Broadcast studio
+                  <span className="ml-auto pl-2 text-2xs text-muted-foreground">Stream and record</span>
+                </DropdownMenuCheckboxItem>
               </>
             )}
           </DropdownMenuContent>

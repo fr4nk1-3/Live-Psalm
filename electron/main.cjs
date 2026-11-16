@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu, session } = require('electron');
 const path = require('path');
 
 // Prevent Chromium zygote/sandbox crash on Linux (e.g., Ubuntu 24.04 AppArmor & space-in-path /opt/Live Psalms)
@@ -21,6 +21,7 @@ let audienceWindow = null;
 let stageWindow = null;
 let ledWindow = null;
 let activeStreamProcess = null;
+let activeRecordProcess = null;
 
 // Default directory for Direct OBS File Output (Text GDI+ Read-from-file integration)
 function getObsOutputDir() {
@@ -250,15 +251,75 @@ function createMainWindow() {
   });
 }
 
+let cachedFallbackDisplays = [];
+
+async function getConnectedDisplaysList() {
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  let formatted = displays.map((d, idx) => ({
+    id: String(d.id),
+    index: idx + 1,
+    label: d.label || (d.id === primary.id ? `Display ${idx + 1} (Primary)` : `Display ${idx + 1} (External)`),
+    isPrimary: d.id === primary.id,
+    bounds: d.bounds,
+    resolution: `${d.bounds.width}x${d.bounds.height}`
+  }));
+
+  if (process.platform === 'linux' && formatted.length <= 1) {
+    try {
+      const xrandrDisplays = await new Promise((resolve) => {
+        execFile('xrandr', ['--listactivemonitors'], { timeout: 2500 }, (err, stdout = '') => {
+          if (err || !stdout) return resolve([]);
+          const parsed = [];
+          for (const line of stdout.split('\n')) {
+            const m = line.match(/^\s*\d+:\s+(\+\*?|\*?)\S+\s+(\d+)(?:\/\d+)?x(\d+)(?:\/\d+)?\+(\-?\d+)\+(\-?\d+)\s+(.+)$/);
+            if (!m) continue;
+            const isPrim = m[1].includes('*');
+            const w = parseInt(m[2], 10);
+            const h = parseInt(m[3], 10);
+            const x = parseInt(m[4], 10);
+            const y = parseInt(m[5], 10);
+            const name = m[6].trim();
+            parsed.push({
+              id: `xrandr-${parsed.length + 1}`,
+              index: parsed.length + 1,
+              label: `${name} (${isPrim ? 'Primary' : 'External'})`,
+              isPrimary: isPrim,
+              bounds: { x, y, width: w, height: h },
+              resolution: `${w}x${h}`
+            });
+          }
+          resolve(parsed);
+        });
+      });
+      if (xrandrDisplays.length > formatted.length) {
+        formatted = xrandrDisplays;
+      }
+    } catch {}
+  }
+
+  cachedFallbackDisplays = formatted;
+  return formatted;
+}
+
 function resolveTargetDisplay(externalIndex = 0, displayId) {
   const displays = screen.getAllDisplays();
   const primary = screen.getPrimaryDisplay();
   if (displayId && displayId !== 'auto') {
     const matched = displays.find((d) => String(d.id) === String(displayId));
     if (matched) return matched;
+    const matchedFallback = cachedFallbackDisplays.find((d) => String(d.id) === String(displayId));
+    if (matchedFallback) return matchedFallback;
   }
   const externalDisplays = displays.filter((d) => d.id !== primary.id);
-  return externalDisplays[externalIndex] || externalDisplays[0] || primary;
+  if (externalDisplays.length > 0) {
+    return externalDisplays[externalIndex] || externalDisplays[0];
+  }
+  const fallbackExternals = cachedFallbackDisplays.filter((d) => !d.isPrimary);
+  if (fallbackExternals.length > 0) {
+    return fallbackExternals[externalIndex] || fallbackExternals[0];
+  }
+  return primary;
 }
 
 function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, externalIndex, displayId }) {
@@ -314,17 +375,8 @@ function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, ex
 }
 
 // IPC Listener to query connected physical screens & network IPs
-ipcMain.handle('get-connected-displays', () => {
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-  return displays.map((d, idx) => ({
-    id: String(d.id),
-    index: idx + 1,
-    label: d.label || (d.id === primary.id ? `Display ${idx + 1} (Primary)` : `Display ${idx + 1} (External)`),
-    isPrimary: d.id === primary.id,
-    bounds: d.bounds,
-    resolution: `${d.bounds.width}x${d.bounds.height}`
-  }));
+ipcMain.handle('get-connected-displays', async () => {
+  return getConnectedDisplaysList();
 });
 
 ipcMain.handle('get-network-ip', () => {
@@ -440,30 +492,68 @@ ipcMain.handle('check-ffmpeg', () => {
   });
 });
 
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500 }) => {
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, useMediaPipe = false, hasVideo = true, hasAudio = true }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
   try {
-    const args = [
-      '-re',
-      '-f', 'lavfi',
-      '-i', `color=c=black:s=${resolution}:r=${fps}`,
-      '-f', 'lavfi',
-      '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-b:v', `${bitrate}k`,
-      '-maxrate', `${bitrate}k`,
-      '-bufsize', `${bitrate * 2}k`,
-      '-pix_fmt', 'yuv420p',
-      '-g', String(fps * 2),
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-f', 'flv',
-      rtmpUrl
-    ];
+    const [w, h] = String(resolution).split('x');
+    const vfScale = w && h
+      ? `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,fps=${fps}`
+      : `fps=${fps}`;
+
+    let args;
+    if (useMediaPipe) {
+      args = [
+        '-fflags', '+genpts',
+        '-i', 'pipe:0',
+        ...(hasVideo ? [] : ['-f', 'lavfi', '-i', `color=c=black:s=${resolution}:r=${fps}`]),
+        ...(hasAudio ? [] : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000']),
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'zerolatency',
+        '-profile:v', 'high',
+        '-level', '4.1',
+        '-b:v', `${bitrate}k`,
+        '-maxrate', `${bitrate}k`,
+        '-bufsize', `${bitrate * 2}k`,
+        '-pix_fmt', 'yuv420p',
+        '-vf', vfScale,
+        '-g', String(fps * 2),
+        '-keyint_min', String(fps * 2),
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '48000',
+        '-ac', '2',
+        '-f', 'flv',
+        rtmpUrl
+      ];
+    } else {
+      args = [
+        '-re',
+        '-f', 'lavfi',
+        '-i', `color=c=black:s=${resolution}:r=${fps}`,
+        '-f', 'lavfi',
+        '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'zerolatency',
+        '-b:v', `${bitrate}k`,
+        '-maxrate', `${bitrate}k`,
+        '-bufsize', `${bitrate * 2}k`,
+        '-pix_fmt', 'yuv420p',
+        '-g', String(fps * 2),
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '48000',
+        '-ac', '2',
+        '-f', 'flv',
+        rtmpUrl
+      ];
+    }
+
     activeStreamProcess = spawn('ffmpeg', args);
+    activeStreamProcess.stdin.on('error', () => {});
     activeStreamProcess.stderr.on('data', (chunk) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('stream-log', chunk.toString().trim());
@@ -482,9 +572,20 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
   }
 });
 
+ipcMain.on('stream-data', (_event, chunk) => {
+  if (activeStreamProcess && activeStreamProcess.stdin && !activeStreamProcess.stdin.destroyed && activeStreamProcess.stdin.writable) {
+    try {
+      activeStreamProcess.stdin.write(Buffer.from(chunk));
+    } catch (e) {}
+  }
+});
+
 ipcMain.handle('stop-stream', async () => {
   if (activeStreamProcess) {
     try {
+      if (activeStreamProcess.stdin && !activeStreamProcess.stdin.destroyed) {
+        activeStreamProcess.stdin.end();
+      }
       activeStreamProcess.kill('SIGINT');
     } catch (e) {}
     activeStreamProcess = null;
@@ -492,10 +593,237 @@ ipcMain.handle('stop-stream', async () => {
   return { success: true };
 });
 
+// ── Broadcast Studio: Local Recording, Hardware Encoders, Diagnostics & Connection Test ──
+function getDefaultRecordingDir() {
+  try {
+    return path.join(app.getPath('videos'), 'LivePsalms-Recordings');
+  } catch (e) {
+    return path.join(os.homedir(), 'LivePsalms-Recordings');
+  }
+}
+
+ipcMain.handle('get-default-recording-dir', () => {
+  return getDefaultRecordingDir();
+});
+
+ipcMain.handle('detect-encoders', () => {
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-hide_banner', '-encoders'], (err, stdout = '') => {
+      if (err) {
+        resolve(['libx264']);
+        return;
+      }
+      const available = ['libx264'];
+      if (stdout.includes('h264_nvenc')) available.push('h264_nvenc');
+      if (stdout.includes('h264_vaapi')) available.push('h264_vaapi');
+      if (stdout.includes('h264_qsv')) available.push('h264_qsv');
+      resolve(available);
+    });
+  });
+});
+
+ipcMain.handle('get-system-stats', () => {
+  const mem = process.memoryUsage();
+  const totalMemMb = Math.round(os.totalmem() / (1024 * 1024));
+  const freeMemMb = Math.round(os.freemem() / (1024 * 1024));
+  const rssMb = Math.round(mem.rss / (1024 * 1024));
+  const load1m = os.loadavg ? Number(os.loadavg()[0].toFixed(2)) : 0;
+  return {
+    rssMb,
+    usedMemPct: totalMemMb > 0 ? Math.round(((totalMemMb - freeMemMb) / totalMemMb) * 100) : 0,
+    load1m,
+    cpuCount: os.cpus()?.length || 1
+  };
+});
+
+ipcMain.handle('test-rtmp-connection', ({ }, { rtmpUrl }) => {
+  return new Promise((resolve) => {
+    if (!rtmpUrl) {
+      resolve({ success: false, error: 'Missing server URL or stream key.' });
+      return;
+    }
+    try {
+      const url = new URL(rtmpUrl.replace(/^rtmps:/, 'https:').replace(/^rtmp:/, 'http:').replace(/^srt:/, 'http:'));
+      const net = require('net');
+      const port = Number(url.port) || (rtmpUrl.startsWith('rtmps:') ? 443 : rtmpUrl.startsWith('rtmp:') ? 1935 : 9000);
+      const sock = new net.Socket();
+      let settled = false;
+      sock.setTimeout(4000);
+      sock.on('connect', () => {
+        if (!settled) {
+          settled = true;
+          sock.destroy();
+          resolve({ success: true, message: `Connected to ${url.hostname}:${port}` });
+        }
+      });
+      sock.on('timeout', () => {
+        if (!settled) {
+          settled = true;
+          sock.destroy();
+          resolve({ success: false, error: `Connection timed out (${url.hostname}:${port})` });
+        }
+      });
+      sock.on('error', (err) => {
+        if (!settled) {
+          settled = true;
+          sock.destroy();
+          resolve({ success: false, error: err.message });
+        }
+      });
+      sock.connect(port, url.hostname);
+    } catch (err) {
+      resolve({ success: false, error: 'Invalid URL format' });
+    }
+  });
+});
+
+ipcMain.handle('start-recording', async (_event, { recordingDir, format = 'mp4', resolution = '1920x1080', fps = 30, bitrate = 6000, audioBitrate = 192 }) => {
+  if (activeRecordProcess) {
+    return { success: false, error: 'A recording is already running.' };
+  }
+  try {
+    const targetDir = recordingDir || getDefaultRecordingDir();
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ext = ['mp4', 'mkv', 'flv'].includes(format) ? format : 'mp4';
+    const filePath = path.join(targetDir, `LivePsalms_${stamp}.${ext}`);
+    const [w, h] = String(resolution).split('x');
+    const vfScale = w && h
+      ? `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,fps=${fps}`
+      : `fps=${fps}`;
+
+    const args = [
+      '-fflags', '+genpts',
+      '-i', 'pipe:0',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-b:v', `${bitrate}k`,
+      '-pix_fmt', 'yuv420p',
+      '-vf', vfScale,
+      '-g', String(fps * 2),
+      '-c:a', 'aac',
+      '-b:a', `${audioBitrate}k`,
+      '-ar', '48000',
+      '-ac', '2',
+      ...(ext === 'mp4' ? ['-movflags', 'frag_keyframe+empty_moov'] : []),
+      '-y',
+      filePath
+    ];
+
+    activeRecordProcess = spawn('ffmpeg', args);
+    activeRecordProcess.stdin.on('error', () => {});
+    activeRecordProcess.on('close', () => {
+      activeRecordProcess = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('recording-ended', { filePath });
+      }
+    });
+    return { success: true, filePath };
+  } catch (err) {
+    activeRecordProcess = null;
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.on('recording-data', (_event, chunk) => {
+  if (activeRecordProcess && activeRecordProcess.stdin && !activeRecordProcess.stdin.destroyed && activeRecordProcess.stdin.writable) {
+    try {
+      activeRecordProcess.stdin.write(Buffer.from(chunk));
+    } catch (e) {}
+  }
+});
+
+ipcMain.handle('stop-recording', async () => {
+  if (activeRecordProcess) {
+    try {
+      if (activeRecordProcess.stdin && !activeRecordProcess.stdin.destroyed) {
+        activeRecordProcess.stdin.end();
+      }
+    } catch (e) {}
+    const proc = activeRecordProcess;
+    activeRecordProcess = null;
+    setTimeout(() => {
+      try { proc.kill('SIGINT'); } catch (e) {}
+    }, 800);
+  }
+  return { success: true };
+});
+
+ipcMain.handle('get-native-media-devices', async () => {
+  const result = { video: [], audio: [] };
+  try {
+    if (process.platform === 'linux') {
+      await new Promise((resolve) => {
+        execFile('sh', ['-c', 'ls /dev/video* 2>/dev/null'], (err, stdout = '') => {
+          if (!err && stdout.trim()) {
+            stdout.trim().split('\n').forEach((dev, i) => {
+              result.video.push({ id: dev.trim(), label: `Video Device (${dev.trim()})` });
+            });
+          }
+          resolve();
+        });
+      });
+      await new Promise((resolve) => {
+        execFile('pactl', ['list', 'short', 'sources'], (err, stdout = '') => {
+          if (!err && stdout.trim()) {
+            stdout.trim().split('\n').forEach((line) => {
+              const parts = line.split('\t');
+              if (parts[1] && !parts[1].includes('.monitor')) {
+                result.audio.push({ id: parts[1], label: parts[1] });
+              }
+            });
+          }
+          resolve();
+        });
+      });
+    } else if (process.platform === 'win32') {
+      await new Promise((resolve) => {
+        execFile('ffmpeg', ['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], (_err, _stdout, stderr = '') => {
+          const lines = stderr.split('\n');
+          let mode = '';
+          for (const l of lines) {
+            if (l.includes('DirectShow video devices')) { mode = 'video'; continue; }
+            if (l.includes('DirectShow audio devices')) { mode = 'audio'; continue; }
+            const m = l.match(/"([^"]+)"/);
+            if (m && !l.includes('Alternative name')) {
+              if (mode === 'video') result.video.push({ id: m[1], label: m[1] });
+              if (mode === 'audio') result.audio.push({ id: m[1], label: m[1] });
+            }
+          }
+          resolve();
+        });
+      });
+    }
+  } catch (e) {}
+  return result;
+});
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  try {
+    session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+      if (['media', 'mediaKeySystem', 'display-capture', 'audioCapture', 'videoCapture'].includes(permission)) {
+        callback(true);
+      } else {
+        callback(true);
+      }
+    });
+    session.defaultSession.setPermissionCheckHandler(() => true);
+  } catch (e) {}
   createMainWindow();
   startLocalNetworkServer();
+
+  const broadcastDisplayChange = async () => {
+    const list = await getConnectedDisplaysList();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('displays-changed', list);
+    }
+  };
+  screen.on('display-added', broadcastDisplayChange);
+  screen.on('display-removed', broadcastDisplayChange);
+  screen.on('display-metrics-changed', broadcastDisplayChange);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
