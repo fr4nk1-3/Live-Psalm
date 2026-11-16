@@ -234,11 +234,14 @@ export interface ChurchProfile {
   logoSize?: number; // percentage height on projection screen (20-90)
 }
 
+export type AudienceViewMode = 'near' | 'far';
+
 export interface AppSettings {
   apiBibleEnabled: boolean;
   networkServerPort: number;
   churchProfile: ChurchProfile;
   obsAlphaBackground: boolean;
+  audienceViewMode?: AudienceViewMode;
   defaultTransition?: 'fade' | 'slide' | 'cut';
   transitionDurationMs?: number;
   showVerseNumbers?: boolean;

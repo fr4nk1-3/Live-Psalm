@@ -12,7 +12,9 @@ import {
   Save, 
   Sliders,
   Radio,
-  Layers
+  Layers,
+  Eye,
+  Maximize2
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -28,6 +30,8 @@ interface HeaderProps {
   onExportPackage: () => void;
   onImportPackage: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isAudienceActive: boolean;
+  audienceViewMode?: 'near' | 'far';
+  onToggleAudienceViewMode?: () => void;
   isStageActive: boolean;
   isLedActive?: boolean;
   isSaved: boolean;
@@ -47,6 +51,8 @@ export const Header: React.FC<HeaderProps> = ({
   onExportPackage,
   onImportPackage,
   isAudienceActive,
+  audienceViewMode = 'near',
+  onToggleAudienceViewMode,
   isStageActive,
   isLedActive = false,
   isSaved,
@@ -174,6 +180,29 @@ export const Header: React.FC<HeaderProps> = ({
           <span>Audience</span>
           <span className={`w-1.5 h-1.5 rounded-full ${isAudienceActive ? 'bg-rose-500 glow-live' : 'bg-slate-600'}`} />
         </button>
+
+        {onToggleAudienceViewMode && (
+          <button
+            onClick={onToggleAudienceViewMode}
+            className={`h-8 px-2 rounded-lg border font-bold text-[10px] flex items-center gap-1 transition whitespace-nowrap ${
+              audienceViewMode === 'far'
+                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                : 'bg-[#182338] border-[#26334a] text-slate-300 hover:border-slate-500'
+            }`}
+            title={
+              audienceViewMode === 'far'
+                ? 'Audience Distance Mode: FAR (Enhanced Long-Distance Visibility) — Click to switch to Near (Stage-Side)'
+                : 'Audience Distance Mode: NEAR (Close / Stage-Side) — Click to switch to Far (Long-Distance Visibility)'
+            }
+          >
+            {audienceViewMode === 'far' ? (
+              <Maximize2 className="w-3 h-3 text-emerald-400 shrink-0" />
+            ) : (
+              <Eye className="w-3 h-3 text-slate-400 shrink-0" />
+            )}
+            <span>{audienceViewMode === 'far' ? 'Far' : 'Near'}</span>
+          </button>
+        )}
 
         <button
           onClick={onOpenStageOutput}

@@ -116,6 +116,7 @@ export const App: React.FC = () => {
           type: detail.defaultTransition || prev.type,
           durationMs: detail.transitionDurationMs ?? prev.durationMs
         }));
+        setAudienceViewMode(detail.audienceViewMode || 'near');
       }
     };
     window.addEventListener('app-settings-updated', handleSettingsUpdate);
@@ -136,6 +137,9 @@ export const App: React.FC = () => {
 
   // Display Windows Active Status
   const [isAudienceActive, setIsAudienceActive] = useState<boolean>(false);
+  const [audienceViewMode, setAudienceViewMode] = useState<'near' | 'far'>(
+    () => StorageService.getSettings().audienceViewMode || 'near'
+  );
   const [isStageActive, setIsStageActive] = useState<boolean>(false);
   const [isLedActive, setIsLedActive] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(true);
@@ -531,6 +535,7 @@ export const App: React.FC = () => {
         BroadcastService.postMessage({ type: 'ITEM_VIDEO_BG_CHANGE', itemVideoBgUrl });
         BroadcastService.postMessage({ type: 'LIVE_SLIDE_CHANGE', liveSlide });
         BroadcastService.postMessage({ type: 'LOWER_THIRD_TRIGGER', lowerThirdText: activeLowerThirdText });
+        BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: StorageService.getSettings() });
         BroadcastService.postMessage({
           type: 'COUNTDOWN_UPDATE',
           countdownRemaining: countdownSeconds,
@@ -2078,6 +2083,15 @@ export const App: React.FC = () => {
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
+        audienceViewMode={audienceViewMode}
+        onToggleAudienceViewMode={() => {
+          const nextMode: 'near' | 'far' = audienceViewMode === 'far' ? 'near' : 'far';
+          setAudienceViewMode(nextMode);
+          const current = StorageService.getSettings();
+          const nextSettings = { ...current, audienceViewMode: nextMode };
+          StorageService.saveSettings(nextSettings);
+          BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: nextSettings });
+        }}
         isStageActive={isStageActive}
         isLedActive={isLedActive}
         isSaved={isSaved}

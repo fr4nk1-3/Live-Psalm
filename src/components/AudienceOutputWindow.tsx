@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Slide, Theme, EmergencyState, TransitionSettings, AudienceAlert } from '../types/presentation';
+import { Slide, Theme, EmergencyState, TransitionSettings, AudienceAlert, AudienceViewMode } from '../types/presentation';
 import { BroadcastService, BroadcastPayload } from '../services/broadcast';
 import { StorageService } from '../services/storage';
 import { Flame, Megaphone, Bell } from 'lucide-react';
@@ -77,6 +77,9 @@ export const AudienceOutputWindow: React.FC = () => {
   const [transition, setTransition] = useState<TransitionSettings>({
     type: 'fade',
     durationMs: 400
+  });
+  const [audienceViewMode, setAudienceViewMode] = useState<AudienceViewMode>(() => {
+    return StorageService.getSettings().audienceViewMode || 'near';
   });
 
   // ── Fullscreen video state ──
@@ -291,6 +294,9 @@ export const AudienceOutputWindow: React.FC = () => {
       if (payload.type === 'TRANSITION_CHANGE' && payload.transition) {
         setTransition(payload.transition);
       }
+      if (payload.type === 'APP_SETTINGS_UPDATE' && payload.appSettings) {
+        setAudienceViewMode(payload.appSettings.audienceViewMode || 'near');
+      }
       if (payload.type === 'COUNTDOWN_UPDATE') {
         setCountdownState(prev => ({
           remaining: payload.countdownRemaining !== undefined ? payload.countdownRemaining : prev.remaining,
@@ -319,12 +325,23 @@ export const AudienceOutputWindow: React.FC = () => {
         setGlobalVideoBgUrl(e.newValue || null);
       } else if (e.key === 'live_psalms_item_video_bg_v1') {
         setItemVideoBgUrl(e.newValue || null);
+      } else if (e.key === 'live_psalms_app_settings_v1') {
+        try {
+          const parsed = e.newValue ? JSON.parse(e.newValue) : null;
+          setAudienceViewMode(parsed?.audienceViewMode || 'near');
+        } catch (err) {}
       }
     };
+    const handleSettingsUpdated = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail) setAudienceViewMode(detail.audienceViewMode || 'near');
+    };
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('app-settings-updated', handleSettingsUpdated);
     return () => {
       unsubscribe();
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('app-settings-updated', handleSettingsUpdated);
     };
   }, []);
 
@@ -382,11 +399,13 @@ export const AudienceOutputWindow: React.FC = () => {
   const isVideoBg = isPureMediaSlide ? isSlideVideoBg : (!!activeMotionLoopUrl || isVideoUrl(bgUrl));
 
   // Compute font style for current slide content
+  const isFarMode = audienceViewMode === 'far';
   const slideText = liveSlide?.content || '';
   const { fontSize: dynFontSize, lineHeight: dynLineHeight, maxWidth: dynMaxWidth } =
-    getOutputFontSize(slideText, baseFontVw, screenInfo.width);
+    getOutputFontSize(slideText, baseFontVw, screenInfo.width, audienceViewMode);
 
-  const contentPadding = 'py-[4vh] px-[5vw]';
+  const contentPadding = isFarMode ? 'py-[3vh] px-[3vw]' : 'py-[4vh] px-[5vw]';
+  const effectiveScrimOpacity = isFarMode ? Math.max(theme.scrimOpacity, 0.72) : theme.scrimOpacity;
 
   // Compute transition animation style
   const getTransitionClass = () => {
@@ -532,7 +551,10 @@ export const AudienceOutputWindow: React.FC = () => {
             <div
               className="absolute inset-0 z-10"
               style={{
-                backgroundColor: `rgba(0,0,0,${theme.scrimOpacity})`,
+                backgroundColor: `rgba(0,0,0,${effectiveScrimOpacity})`,
+                backgroundImage: isFarMode
+                  ? 'radial-gradient(circle at center, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.68) 100%)'
+                  : undefined,
                 backdropFilter: theme.blurAmount ? `blur(${theme.blurAmount}px)` : undefined
               }}
             />
@@ -580,29 +602,38 @@ export const AudienceOutputWindow: React.FC = () => {
 
               {/* ── LOWER-THIRD BADGE MODE ── */}
               {theme.lowerThirdStyle ? (
-                <div className="mt-auto w-full bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] pr-[4vw] py-[2.5vh] rounded-r-[1vw] shadow-2xl backdrop-blur-md text-left">
+                <div
+                  className={`mt-auto w-full border-emerald-500 pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
+                    isFarMode
+                      ? 'bg-black/95 border-l-[0.8vw] pl-[3.5vw] py-[3vh]'
+                      : 'bg-slate-950/90 border-l-[0.6vw] pl-[3vw] py-[2.5vh] backdrop-blur-md'
+                  }`}
+                >
                   {liveSlide.sectionLabel && (
                     <span
                       className="font-black uppercase text-emerald-400 tracking-widest block mb-[0.8vh]"
-                      style={{ fontSize: 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
+                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.55vw, 1.65rem)' : 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
                     >
                       {liveSlide.sectionLabel}
                     </span>
                   )}
                   <div
-                    className="font-extrabold text-white leading-snug"
+                    className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white leading-snug`}
                     style={{
                       fontFamily: theme.fontFamily,
-                      fontSize: 'clamp(1rem, 3vw, 3.5rem)',
-                      color: theme.textColor
+                      fontSize: isFarMode ? 'clamp(1.25rem, 3.6vw, 4.2rem)' : 'clamp(1rem, 3vw, 3.5rem)',
+                      color: theme.textColor,
+                      textShadow: isFarMode
+                        ? '0 4px 18px rgba(0,0,0,0.98), 0 2px 3px rgba(0,0,0,1)'
+                        : undefined
                     }}
                   >
                     {liveSlide.content}
                   </div>
                   {liveSlide.subtitle && (
                     <div
-                      className="text-slate-400 font-semibold mt-[1vh]"
-                      style={{ fontSize: 'clamp(0.6rem, 1.2vw, 1.1rem)' }}
+                      className={`${isFarMode ? 'text-amber-200 font-bold' : 'text-slate-400 font-semibold'} mt-[1vh]`}
+                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.5vw, 1.5rem)' : 'clamp(0.6rem, 1.2vw, 1.1rem)' }}
                     >
                       {liveSlide.subtitle}
                     </div>
@@ -617,8 +648,12 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Section / title badge — only for text slides */}
                   {(liveSlide.title || liveSlide.sectionLabel) && (
                     <div
-                      className="font-black uppercase text-indigo-300 tracking-[0.25em] mb-[2vh] bg-indigo-950/60 px-[2vw] py-[0.6vh] rounded-full inline-block border border-indigo-500/40"
-                      style={{ fontSize: 'clamp(0.55rem, 1.1vw, 1.1rem)' }}
+                      className={`font-black uppercase tracking-[0.25em] mb-[2vh] rounded-full inline-block ${
+                        isFarMode
+                          ? 'text-white bg-black/85 px-[2.4vw] py-[0.8vh] border-2 border-indigo-400/75 shadow-[0_6px_24px_rgba(0,0,0,0.9)]'
+                          : 'text-indigo-300 bg-indigo-950/60 px-[2vw] py-[0.6vh] border border-indigo-500/40'
+                      }`}
+                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.75vw, 1.9rem)' : 'clamp(0.55rem, 1.1vw, 1.1rem)' }}
                     >
                       {liveSlide.title || liveSlide.sectionLabel}
                     </div>
@@ -626,15 +661,21 @@ export const AudienceOutputWindow: React.FC = () => {
 
                   {/* Main text */}
                   <div
-                    className="font-extrabold text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
+                    className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]`}
                     style={{
                       fontFamily: theme.fontFamily,
                       fontSize: dynFontSize,
                       lineHeight: dynLineHeight,
                       textAlign: theme.align as any,
                       color: theme.textColor,
-                      letterSpacing: theme.letterSpacing || 'normal',
+                      letterSpacing: isFarMode
+                        ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.015em')
+                        : (theme.letterSpacing || 'normal'),
                       textTransform: (theme.textTransform as any) || 'none',
+                      textShadow: isFarMode
+                        ? '0 4px 20px rgba(0,0,0,0.98), 0 0 10px rgba(0,0,0,0.95), 0 2px 3px rgba(0,0,0,1)'
+                        : undefined,
+                      WebkitTextStroke: isFarMode ? '0.014em rgba(0,0,0,0.6)' : undefined,
                       width: '100%'
                     }}
                   >
@@ -644,8 +685,12 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Subtitle / scripture reference */}
                   {liveSlide.subtitle && (
                     <div
-                      className="font-bold text-indigo-200 mt-[3vh] tracking-wider uppercase opacity-90"
-                      style={{ fontSize: 'clamp(0.7rem, 1.4vw, 1.4rem)' }}
+                      className={`mt-[3vh] tracking-wider uppercase ${
+                        isFarMode
+                          ? 'font-black text-amber-200 drop-shadow-[0_3px_12px_rgba(0,0,0,0.98)]'
+                          : 'font-bold text-indigo-200 opacity-90'
+                      }`}
+                      style={{ fontSize: isFarMode ? 'clamp(0.95rem, 2vw, 2.2rem)' : 'clamp(0.7rem, 1.4vw, 1.4rem)' }}
                     >
                       {liveSlide.subtitle}
                     </div>

@@ -43,7 +43,8 @@ export function getFlexibleFontSize(
 export function getOutputFontSize(
   text: string,
   baseVw: number = 5.5,
-  screenW: number = 1920
+  screenW: number = 1920,
+  viewMode: 'near' | 'far' = 'near'
 ): { fontSize: string; lineHeight: string; maxWidth: string } {
   const len = text ? text.length : 0;
 
@@ -54,6 +55,18 @@ export function getOutputFontSize(
   else if (len > 250) scaledVw = baseVw * 0.60;
   else if (len > 150) scaledVw = baseVw * 0.72;
   else if (len > 90)  scaledVw = baseVw * 0.86;
+
+  if (viewMode === 'far') {
+    // Boost size for long-distance sanctuary / back-row visibility
+    scaledVw = scaledVw * 1.28;
+    const clampedFarVw = Math.min(11.5, Math.max(2.3, scaledVw));
+    const maxWidthFar = len > 200 ? '96vw' : len > 100 ? '92vw' : '86vw';
+    return {
+      fontSize: `${clampedFarVw.toFixed(2)}vw`,
+      lineHeight: len > 250 ? '1.18' : '1.28',
+      maxWidth: maxWidthFar
+    };
+  }
 
   // Clamp: never go below 1.8vw or above 10vw
   const clampedVw = Math.min(10, Math.max(1.8, scaledVw));
