@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
+const { execFile, spawn } = require('child_process');
 
 function getIconPath() {
   const prodPath = path.join(__dirname, '../dist/icon.png');
@@ -14,6 +15,68 @@ let mainWindow = null;
 let audienceWindow = null;
 let stageWindow = null;
 let ledWindow = null;
+let activeStreamProcess = null;
+
+// Default directory for Direct OBS File Output (Text GDI+ Read-from-file integration)
+function getObsOutputDir() {
+  try {
+    const docsDir = app.getPath('documents');
+    return path.join(docsDir, 'LivePsalms-OBS');
+  } catch (e) {
+    return path.join(os.homedir(), 'LivePsalms-OBS');
+  }
+}
+
+function writeObsDirectFiles(data = {}) {
+  try {
+    const outDir = getObsOutputDir();
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+    const isHidden = data.isBlack || data.isClear;
+    const slideTitle = isHidden ? '' : (data.title || '');
+    const slideContent = isHidden ? '' : (data.content || '');
+    const slideSubtitle = isHidden ? '' : (data.subtitle || '');
+    const tickerText = isHidden ? '' : (data.ticker || '');
+    const combinedSlide = [slideTitle, slideContent, slideSubtitle].filter(Boolean).join('\n');
+
+    fs.writeFileSync(path.join(outDir, 'live_title.txt'), slideTitle, 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'live_slide.txt'), slideContent, 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'live_subtitle.txt'), slideSubtitle, 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'live_combined.txt'), combinedSlide, 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'lower_third.txt'), tickerText, 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'obs_state.json'), JSON.stringify({
+      title: slideTitle,
+      content: slideContent,
+      subtitle: slideSubtitle,
+      ticker: tickerText,
+      updatedAt: Date.now()
+    }, null, 2), 'utf-8');
+    return { success: true, dir: outDir };
+  } catch (err) {
+    console.warn('Error writing OBS direct files:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Connected SSE network clients + latest state cache for instant initial sync
+const sseClients = new Set();
+const cachedBroadcastPayloads = new Map();
+
+function broadcastToSseClients(payload) {
+  if (!payload || !payload.type) return;
+  if (payload.type !== 'REQUEST_INITIAL_STATE') {
+    cachedBroadcastPayloads.set(payload.type, payload);
+  }
+  const dataStr = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const clientRes of sseClients) {
+    try {
+      clientRes.write(dataStr);
+    } catch (e) {
+      sseClients.delete(clientRes);
+    }
+  }
+}
 
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
@@ -35,6 +98,42 @@ function startLocalNetworkServer() {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const pathname = parsedUrl.pathname;
 
+      // SSE endpoint for real-time network display sync (OBS, Stage tablets, LED walls)
+      if (pathname === '/api/events') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*'
+        });
+        sseClients.add(res);
+        // Immediately push all cached state payloads to newly connected client
+        for (const payload of cachedBroadcastPayloads.values()) {
+          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        }
+        req.on('close', () => {
+          sseClients.delete(res);
+        });
+        return;
+      }
+
+      // Direct JSON state endpoint for OBS / external integrations
+      if (pathname === '/api/obs/state') {
+        const outDir = getObsOutputDir();
+        const statePath = path.join(outDir, 'obs_state.json');
+        let jsonStr = JSON.stringify({ title: '', content: '', subtitle: '', ticker: '' });
+        if (fs.existsSync(statePath)) {
+          try { jsonStr = fs.readFileSync(statePath, 'utf-8'); } catch (e) {}
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(jsonStr, 'utf-8');
+        return;
+      }
+
       const distDir = path.join(__dirname, '../dist');
       let filePath = path.join(distDir, pathname);
 
@@ -52,6 +151,7 @@ function startLocalNetworkServer() {
           '.html': 'text/html',
           '.js': 'text/javascript',
           '.css': 'text/css',
+          '.json': 'application/json',
           '.png': 'image/png',
           '.jpg': 'image/jpeg',
           '.svg': 'image/svg+xml',
@@ -80,9 +180,25 @@ function startLocalNetworkServer() {
     }
   });
 
+  server.on('error', (err) => {
+    console.warn('Local network server port warning:', err.message);
+  });
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Live Psalms Local Network Output Server running on http://0.0.0.0:${PORT}`);
   });
+}
+
+function loadAppOutputUrl(win, outputQuery) {
+  const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
+  const htmlPath = path.join(__dirname, '../dist/index.html');
+  if (isDev) {
+    win.loadURL(outputQuery ? `http://localhost:3000?output=${outputQuery}` : 'http://localhost:3000');
+  } else if (outputQuery) {
+    win.loadFile(htmlPath, { query: { output: outputQuery } });
+  } else {
+    win.loadFile(htmlPath);
+  }
 }
 
 function createMainWindow() {
@@ -93,6 +209,7 @@ function createMainWindow() {
     minHeight: 700,
     title: 'Live Psalms — Worship Media & Presentation Control',
     icon: getIconPath(),
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -101,12 +218,9 @@ function createMainWindow() {
     backgroundColor: '#090d14'
   });
 
-  const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  mainWindow.setMenuBarVisibility(false);
+
+  loadAppOutputUrl(mainWindow, null);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -114,6 +228,49 @@ function createMainWindow() {
     if (stageWindow && !stageWindow.isDestroyed()) stageWindow.close();
     if (ledWindow && !ledWindow.isDestroyed()) ledWindow.close();
   });
+}
+
+function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, externalIndex }) {
+  if (existingWin && !existingWin.isDestroyed()) {
+    existingWin.focus();
+    return existingWin;
+  }
+
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  const externalDisplays = displays.filter((d) => d.id !== primary.id);
+  const targetDisplay = externalDisplays[externalIndex] || externalDisplays[0] || primary;
+
+  const win = new BrowserWindow({
+    width: targetDisplay.bounds.width,
+    height: targetDisplay.bounds.height,
+    x: targetDisplay.bounds.x,
+    y: targetDisplay.bounds.y,
+    title,
+    icon: getIconPath(),
+    frame: false,
+    titleBarStyle: 'hidden',
+    fullscreen: true,
+    fullscreenable: true,
+    autoHideMenuBar: true,
+     thickFrame: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false
+    },
+    backgroundColor: bgColor
+  });
+
+  // Remove menu bar & title bar controls completely on Windows/Linux
+  win.setMenuBarVisibility(false);
+  if (typeof win.removeMenu === 'function') {
+    win.removeMenu();
+  }
+  win.setFullScreen(true);
+
+  loadAppOutputUrl(win, outputType);
+  return win;
 }
 
 // IPC Listener to query connected physical screens & network IPs
@@ -133,133 +290,150 @@ ipcMain.handle('get-network-ip', () => {
   return getLocalIpAddresses();
 });
 
-// IPC Listener to launch secondary & tertiary display windows
-ipcMain.on('open-audience-window', (event, arg) => {
-  if (audienceWindow && !audienceWindow.isDestroyed()) {
-    audienceWindow.focus();
-    return;
+ipcMain.handle('get-window-status', () => ({
+  audience: !!(audienceWindow && !audienceWindow.isDestroyed()),
+  stage: !!(stageWindow && !stageWindow.isDestroyed()),
+  led: !!(ledWindow && !ledWindow.isDestroyed())
+}));
+
+// Relay broadcast payloads across all open Electron windows + SSE network clients
+ipcMain.on('broadcast-payload', (event, payload) => {
+  broadcastToSseClients(payload);
+  const allWindows = [mainWindow, audienceWindow, stageWindow, ledWindow];
+  for (const win of allWindows) {
+    if (win && !win.isDestroyed() && win.webContents !== event.sender) {
+      win.webContents.send('broadcast-payload', payload);
+    }
   }
+});
 
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-  const externalDisplay = displays.find((d) => d.id !== primary.id) || displays[0];
-  const isExternalPresent = externalDisplay && externalDisplay.id !== primary.id;
-
-  audienceWindow = new BrowserWindow({
-    width: isExternalPresent ? externalDisplay.bounds.width : 1280,
-    height: isExternalPresent ? externalDisplay.bounds.height : 720,
-    x: isExternalPresent ? externalDisplay.bounds.x : undefined,
-    y: isExternalPresent ? externalDisplay.bounds.y : undefined,
+// IPC Listeners to launch or close secondary & tertiary display windows
+ipcMain.on('open-audience-window', () => {
+  audienceWindow = createOutputDisplayWindow({
+    existingWin: audienceWindow,
+    outputType: 'audience',
     title: 'Live Psalms — Audience Presentation Output',
-    frame: false,
-    fullscreen: isExternalPresent,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: false
-    },
-    backgroundColor: '#000000'
+    bgColor: '#000000',
+    externalIndex: 0
   });
-
-  const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
-  const htmlPath = path.join(__dirname, '../dist/index.html');
-
-  if (isDev) {
-    audienceWindow.loadURL('http://localhost:3000?output=audience');
-  } else {
-    audienceWindow.loadFile(htmlPath, { query: { output: 'audience' } });
-  }
-
-  audienceWindow.on('closed', () => {
-    audienceWindow = null;
-  });
+  audienceWindow.once('closed', () => { audienceWindow = null; });
 });
 
-ipcMain.on('open-stage-window', (event, arg) => {
-  if (stageWindow && !stageWindow.isDestroyed()) {
-    stageWindow.focus();
-    return;
+ipcMain.on('close-audience-window', () => {
+  if (audienceWindow && !audienceWindow.isDestroyed()) {
+    audienceWindow.close();
   }
+  audienceWindow = null;
+});
 
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-  const externalDisplays = displays.filter((d) => d.id !== primary.id);
-  const stageDisplay = externalDisplays.length > 1 ? externalDisplays[1] : (externalDisplays[0] || primary);
-  const isExternalPresent = stageDisplay && stageDisplay.id !== primary.id;
-
-  stageWindow = new BrowserWindow({
-    width: isExternalPresent ? stageDisplay.bounds.width : 1280,
-    height: isExternalPresent ? stageDisplay.bounds.height : 720,
-    x: isExternalPresent ? stageDisplay.bounds.x : undefined,
-    y: isExternalPresent ? stageDisplay.bounds.y : undefined,
+ipcMain.on('open-stage-window', () => {
+  stageWindow = createOutputDisplayWindow({
+    existingWin: stageWindow,
+    outputType: 'stage',
     title: 'Live Psalms — Stage Confidence Monitor',
-    frame: false,
-    fullscreen: isExternalPresent,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: false
-    },
-    backgroundColor: '#070b12'
+    bgColor: '#070b12',
+    externalIndex: 1
   });
+  stageWindow.once('closed', () => { stageWindow = null; });
+});
 
-  const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
-  const htmlPath = path.join(__dirname, '../dist/index.html');
-
-  if (isDev) {
-    stageWindow.loadURL('http://localhost:3000?output=stage');
-  } else {
-    stageWindow.loadFile(htmlPath, { query: { output: 'stage' } });
+ipcMain.on('close-stage-window', () => {
+  if (stageWindow && !stageWindow.isDestroyed()) {
+    stageWindow.close();
   }
+  stageWindow = null;
+});
 
-  stageWindow.on('closed', () => {
-    stageWindow = null;
+ipcMain.on('open-led-window', () => {
+  ledWindow = createOutputDisplayWindow({
+    existingWin: ledWindow,
+    outputType: 'led',
+    title: 'Live Psalms — LED Wall & Motion Display Output',
+    bgColor: '#000000',
+    externalIndex: 2
+  });
+  ledWindow.once('closed', () => { ledWindow = null; });
+});
+
+ipcMain.on('close-led-window', () => {
+  if (ledWindow && !ledWindow.isDestroyed()) {
+    ledWindow.close();
+  }
+  ledWindow = null;
+});
+
+// Direct OBS File Feed IPC Handlers
+ipcMain.handle('get-obs-output-dir', () => {
+  const dir = getObsOutputDir();
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  }
+  return dir;
+});
+
+ipcMain.on('write-obs-files', (_event, data) => {
+  writeObsDirectFiles(data);
+});
+
+// Live Streaming ffmpeg IPC handlers
+ipcMain.handle('check-ffmpeg', () => {
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-version'], (err) => {
+      resolve(!err);
+    });
   });
 });
 
-ipcMain.on('open-led-window', (event, arg) => {
-  if (ledWindow && !ledWindow.isDestroyed()) {
-    ledWindow.focus();
-    return;
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500 }) => {
+  if (activeStreamProcess) {
+    return { success: false, error: 'A stream is already running.' };
   }
-
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-  const externalDisplays = displays.filter((d) => d.id !== primary.id);
-  const ledDisplay = externalDisplays.length > 2 ? externalDisplays[2] : (externalDisplays[0] || primary);
-  const isExternalPresent = ledDisplay && ledDisplay.id !== primary.id;
-
-  ledWindow = new BrowserWindow({
-    width: isExternalPresent ? ledDisplay.bounds.width : 1280,
-    height: isExternalPresent ? ledDisplay.bounds.height : 720,
-    x: isExternalPresent ? ledDisplay.bounds.x : undefined,
-    y: isExternalPresent ? ledDisplay.bounds.y : undefined,
-    title: 'Live Psalms — LED Wall & Motion Display Output',
-    frame: false,
-    fullscreen: isExternalPresent,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: false
-    },
-    backgroundColor: '#000000'
-  });
-
-  const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
-  const htmlPath = path.join(__dirname, '../dist/index.html');
-
-  if (isDev) {
-    ledWindow.loadURL('http://localhost:3000?output=led');
-  } else {
-    ledWindow.loadFile(htmlPath, { query: { output: 'led' } });
+  try {
+    const args = [
+      '-re',
+      '-f', 'lavfi',
+      '-i', `color=c=black:s=${resolution}:r=${fps}`,
+      '-f', 'lavfi',
+      '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-b:v', `${bitrate}k`,
+      '-maxrate', `${bitrate}k`,
+      '-bufsize', `${bitrate * 2}k`,
+      '-pix_fmt', 'yuv420p',
+      '-g', String(fps * 2),
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-f', 'flv',
+      rtmpUrl
+    ];
+    activeStreamProcess = spawn('ffmpeg', args);
+    activeStreamProcess.stderr.on('data', (chunk) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('stream-log', chunk.toString().trim());
+      }
+    });
+    activeStreamProcess.on('close', () => {
+      activeStreamProcess = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('stream-ended');
+      }
+    });
+    return { success: true };
+  } catch (err) {
+    activeStreamProcess = null;
+    return { success: false, error: err.message };
   }
+});
 
-  ledWindow.on('closed', () => {
-    ledWindow = null;
-  });
+ipcMain.handle('stop-stream', async () => {
+  if (activeStreamProcess) {
+    try {
+      activeStreamProcess.kill('SIGINT');
+    } catch (e) {}
+    activeStreamProcess = null;
+  }
+  return { success: true };
 });
 
 app.whenReady().then(() => {

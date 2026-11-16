@@ -188,7 +188,7 @@ export const BibleBookVerseModal: React.FC<BibleBookVerseModalProps> = ({
                     type="button"
                     onClick={() => {
                       onSelectBook(book);
-                      onClose();
+                      onSelectChapter(1);
                     }}
                     className={`p-2.5 rounded-xl border text-left transition flex items-center justify-between group cursor-pointer ${
                       selectedBook === book
@@ -220,7 +220,7 @@ export const BibleBookVerseModal: React.FC<BibleBookVerseModalProps> = ({
                     type="button"
                     onClick={() => {
                       onSelectBook(book);
-                      onClose();
+                      onSelectChapter(1);
                     }}
                     className={`p-2.5 rounded-xl border text-left transition flex items-center justify-between group cursor-pointer ${
                       selectedBook === book
@@ -237,19 +237,88 @@ export const BibleBookVerseModal: React.FC<BibleBookVerseModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Chapter Grid & Verse Range Selector for Selected Book */}
+          <div className="space-y-3 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                <span>{selectedBook} — Select Chapter ({totalChapters} Chapters)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleEntireChapter(!entireChapter)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
+                    entireChapter
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                      : 'bg-amber-600/30 text-amber-300 border-amber-500/50'
+                  }`}
+                >
+                  {entireChapter ? 'Full Chapter' : `Verses ${startVerse}–${endVerse}`}
+                </button>
+              </div>
+            </div>
+
+            {!entireChapter && (
+              <div className="flex items-center gap-3 bg-[#141d2e] border border-slate-800 rounded-xl p-3 text-xs">
+                <span className="text-slate-400 font-bold">Verse Range:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">From</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={startVerse}
+                    onChange={(e) => onSelectStartVerse(parseInt(e.target.value) || 1)}
+                    className="w-16 bg-[#0d1320] border border-slate-700 rounded-lg px-2 py-1 text-white text-center font-bold"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">To</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={endVerse}
+                    onChange={(e) => onSelectEndVerse(parseInt(e.target.value) || 1)}
+                    className="w-16 bg-[#0d1320] border border-slate-700 rounded-lg px-2 py-1 text-white text-center font-bold"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1.5">
+              {chaptersList.map(ch => (
+                <button
+                  key={ch}
+                  type="button"
+                  onClick={() => {
+                    onSelectChapter(ch);
+                    onClose();
+                  }}
+                  className={`py-2 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                    selectedChapter === ch
+                      ? 'bg-indigo-600 border-indigo-400 text-white shadow'
+                      : 'bg-[#141d2e] border-slate-800 hover:border-indigo-500/50 hover:bg-[#1a263d] text-slate-300'
+                  }`}
+                >
+                  {ch}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Modal Footer */}
         <div className="p-3 bg-[#141d2e] border-t border-slate-800 flex items-center justify-between">
           <div className="text-xs text-slate-400 font-semibold">
-            Selected Book: <span className="text-indigo-300 font-bold">{selectedBook}</span>
+            Selected: <span className="text-indigo-300 font-bold">{selectedBook} {selectedChapter}{!entireChapter ? `:${startVerse}-${endVerse}` : ''}</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl shadow transition"
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow transition"
           >
-            Close
+            Done
           </button>
         </div>
       </div>

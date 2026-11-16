@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   EmergencyState, 
   TransitionSettings, 
@@ -14,12 +14,12 @@ import {
   ChevronRight, 
   Play, 
   Clock,
-  Zap,
-  Plus,
   Settings,
-  Tv,
-  Video,
-  X
+  X,
+  RotateCcw,
+  ArrowUp,
+  ArrowDown,
+  StopCircle
 } from 'lucide-react';
 
 interface BottomControlBarProps {
@@ -33,7 +33,10 @@ interface BottomControlBarProps {
   countdownSeconds: number;
   isCountdownRunning: boolean;
   onStartCountdown: (seconds: number) => void;
+  onPauseCountdown?: () => void;
   onStopCountdown: () => void;
+  countUp?: boolean;
+  onToggleCountUp?: (enabled: boolean) => void;
   isFullSlideCountdown?: boolean;
   onToggleFullSlideCountdown?: (enabled: boolean) => void;
   countdownTargetScreen?: 'audience' | 'stage' | 'both';
@@ -56,7 +59,10 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   countdownSeconds,
   isCountdownRunning,
   onStartCountdown,
+  onPauseCountdown,
   onStopCountdown,
+  countUp: countUpProp,
+  onToggleCountUp,
   isFullSlideCountdown = false,
   onToggleFullSlideCountdown,
   countdownTargetScreen = 'both',
@@ -67,269 +73,395 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   onChangeCountdownEndVideoId,
   mediaList = []
 }) => {
-  const [customMinutes, setCustomMinutes] = useState<string>('5');
-  const [showCustomInput, setShowCustomInput] = useState<boolean>(false);
-  const [showCountdownOptions, setShowCountdownOptions] = useState<boolean>(false);
+  // ProPresenter-style timer state
+  const [localCountUp, setLocalCountUp] = useState(false);           // count up vs count down
+  const countUp = countUpProp !== undefined ? countUpProp : localCountUp;
+  const toggleCountUp = () => {
+    const next = !countUp;
+    setLocalCountUp(next);
+    if (onToggleCountUp) onToggleCountUp(next);
+  };
+  const [showOptions, setShowOptions] = useState(false);
+  const [editHours, setEditHours] = useState('0');
+  const [editMins, setEditMins] = useState('05');
+  const [editSecs, setEditSecs] = useState('00');
+  const [isEditing, setIsEditing] = useState(false);
+  const hoursRef = useRef<HTMLInputElement>(null);
 
+  // Format seconds — handles negative overtime (shown as +M:SS)
   const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const isOvertime = secs < 0;
+    const totalSecs = Math.abs(secs);
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    let formatted: string;
+    if (h > 0) {
+      formatted = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    } else {
+      formatted = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return isOvertime ? `+${formatted}` : formatted;
   };
 
-  const handleStartCustomTimer = () => {
-    const mins = parseFloat(customMinutes);
-    if (!isNaN(mins) && mins > 0) {
-      onStartCountdown(Math.round(mins * 60));
-      setShowCustomInput(false);
+  const startFromInputs = () => {
+    const h = parseInt(editHours) || 0;
+    const m = parseInt(editMins) || 0;
+    const s = parseInt(editSecs) || 0;
+    const total = h * 3600 + m * 60 + s;
+    if (total > 0 || countUp) {
+      onStartCountdown(total);
+      setIsEditing(false);
     }
   };
 
-  return (
-    <footer className="h-16 bg-[#0c121e] border-t border-[#26334a] px-4 flex items-center justify-between gap-4 select-none shrink-0 z-30">
-      {/* LEFT: EMERGENCY CONTROLS */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider mr-1">
-          EMERGENCY:
-        </span>
+  const handleReset = () => {
+    onStopCountdown();
+    setIsEditing(true);
+    setTimeout(() => hoursRef.current?.focus(), 50);
+  };
 
-        {/* BLACK BUTTON */}
+  // When display is clicked and timer is stopped, open inline editor
+  const handleDisplayClick = () => {
+    if (!isCountdownRunning) {
+      setIsEditing(true);
+      setTimeout(() => hoursRef.current?.focus(), 50);
+    }
+  };
+
+  // Navigate between fields on Tab / Enter inside time inputs
+  const handleTimeKeyDown = (e: React.KeyboardEvent, _field: 'h' | 'm' | 's') => {
+    if (e.key === 'Enter') {
+      startFromInputs();
+    }
+  };
+
+  // CRITICAL: force edit mode OFF whenever the timer is running (prevents glitch when overtime starts)
+  React.useEffect(() => {
+    if (isCountdownRunning) {
+      setIsEditing(false);
+    }
+  }, [isCountdownRunning]);
+
+  const isAtZero = countdownSeconds === 0 && !isCountdownRunning;
+  const isOvertime = isCountdownRunning && countdownSeconds < 0;
+  const isWarning = isCountdownRunning && countdownSeconds >= 0 && countdownSeconds <= 180; // < 3 min
+  const isOnTime  = isCountdownRunning && countdownSeconds > 180;
+
+  return (
+    <footer className="min-h-14 py-1.5 bg-[#0c121e] border-t border-[#26334a] px-2.5 xl:px-4 flex flex-wrap xl:flex-nowrap items-center justify-between gap-2 xl:gap-4 select-none shrink-0 z-30">
+
+      {/* ─── LEFT: EMERGENCY CONTROLS ─── */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="hidden xl:inline text-[10px] font-black uppercase text-slate-500 tracking-wider mr-1">EMERGENCY:</span>
+
         <button
           onClick={() => onToggleEmergency('isBlack')}
           className={`h-9 px-3 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition border ${
-            emergency.isBlack
-              ? 'bg-rose-600 text-white border-rose-400 glow-live'
-              : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-rose-500/60'
+            emergency.isBlack ? 'bg-rose-600 text-white border-rose-400 glow-live' : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-rose-500/60'
           }`}
-          title="Black screen toggle (Hotkey: B)"
+          title="Black screen (B)"
         >
-          <Square className="w-3.5 h-3.5 fill-current" />
-          <span>BLACK</span>
+          <Square className="w-3.5 h-3.5 fill-current" /> BLACK
         </button>
 
-        {/* CLEAR BUTTON */}
         <button
           onClick={() => onToggleEmergency('isClear')}
           className={`h-9 px-3 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition border ${
-            emergency.isClear
-              ? 'bg-amber-600 text-white border-amber-400'
-              : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-amber-500/60'
+            emergency.isClear ? 'bg-amber-600 text-white border-amber-400' : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-amber-500/60'
           }`}
-          title="Clear text toggle (Hotkey: ESC)"
+          title="Clear text (ESC)"
         >
-          <EyeOff className="w-3.5 h-3.5" />
-          <span>CLEAR</span>
+          <EyeOff className="w-3.5 h-3.5" /> CLEAR
         </button>
 
-        {/* LOGO BUTTON */}
         <button
           onClick={() => onToggleEmergency('isLogo')}
           className={`h-9 px-3 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition border ${
-            emergency.isLogo
-              ? 'bg-indigo-600 text-white border-indigo-400'
-              : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-indigo-500/60'
+            emergency.isLogo ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-indigo-500/60'
           }`}
-          title="Church logo wallpaper toggle (Hotkey: L)"
+          title="Church logo (L)"
         >
-          <ImageIcon className="w-3.5 h-3.5" />
-          <span>LOGO</span>
+          <ImageIcon className="w-3.5 h-3.5" /> LOGO
         </button>
 
-        {/* FREEZE BUTTON */}
         <button
           onClick={() => onToggleEmergency('isFreeze')}
           className={`h-9 px-3 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition border ${
-            emergency.isFreeze
-              ? 'bg-sky-600 text-white border-sky-400'
-              : 'bg-[#162032] text-slate-[#300] border-[#26334a] hover:border-sky-500/60'
+            emergency.isFreeze ? 'bg-sky-600 text-white border-sky-400' : 'bg-[#162032] text-slate-300 border-[#26334a] hover:border-sky-500/60'
           }`}
-          title="Freeze frame output toggle (Hotkey: F)"
+          title="Freeze frame (F)"
         >
-          <Pause className="w-3.5 h-3.5" />
-          <span>FREEZE</span>
+          <Pause className="w-3.5 h-3.5" /> FREEZE
         </button>
       </div>
 
-      {/* CENTER: TRANSITION & MANUAL COUNTDOWN TIMER WIDGET */}
-      <div className="flex items-center gap-4">
-        {/* Transition Selector */}
-        <div className="flex items-center gap-2 bg-[#141d2e] border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Transition:</span>
+      {/* ─── CENTER: TRANSITION & TIMER WIDGET ─── */}
+      <div className="flex items-center gap-2 flex-wrap justify-center">
+
+        {/* Transition selector (matches h-9 height of left/right controls) */}
+        <div className="h-9 flex items-center gap-2 bg-[#121929] border border-[#26334a] px-2.5 rounded-lg text-xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+            Transition
+          </span>
           <select
             value={transition.type}
             onChange={(e) => onChangeTransition({ type: e.target.value as TransitionType })}
-            className="bg-[#0d1320] border border-slate-700 rounded px-2 py-0.5 text-white font-semibold outline-none focus:border-indigo-500"
+            className="h-6 bg-[#0b101b] border border-slate-700 hover:border-indigo-500/60 rounded-md px-2 text-[11px] text-white font-bold outline-none focus:border-indigo-500 cursor-pointer"
           >
             {['fade', 'cut', 'dissolve', 'slide', 'zoom'].map(t => (
               <option key={t} value={t}>{t.toUpperCase()}</option>
             ))}
           </select>
-          <span className="text-[10px] text-slate-400 font-mono">
-            {transition.durationMs}ms
-          </span>
         </div>
 
-        {/* Countdown Timer Widget with Manual Input */}
-        <div className="flex items-center gap-2 bg-[#141d2e] border border-slate-800 px-3 py-1.5 rounded-lg text-xs relative">
-          {/* Gear icon for advanced countdown options */}
+        {/* ═══ PROPRESENTER-STYLE TIMER WIDGET ═══ */}
+        <div className={`relative h-9 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs transition-all ${
+          isOnTime
+            ? 'bg-[#0a1a10] border-emerald-500/60 shadow-[0_0_12px_rgba(52,211,153,0.2)]'
+            : (isWarning || isOvertime)
+            ? 'bg-[#1a0f0f] border-rose-500/70 shadow-[0_0_12px_rgba(239,68,68,0.25)]'
+            : 'bg-[#121929] border-[#26334a]'
+        }`}>
+
+          {/* Count direction toggle pill (Clock + Up/Down) */}
           <button
             type="button"
-            onClick={() => {
-              setShowCountdownOptions(!showCountdownOptions);
-              setShowCustomInput(false);
-            }}
-            className={`p-1 rounded transition ${showCountdownOptions ? 'text-amber-400 bg-slate-800' : 'text-slate-400 hover:text-white'}`}
-            title="Configure full slide countdown, target screen, and completion actions"
+            onClick={toggleCountUp}
+            className={`h-6 px-1.5 rounded-md border flex items-center gap-1 text-[10px] font-bold transition shrink-0 ${
+              countUp
+                ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
+                : 'bg-[#0b101b] border-slate-700 text-slate-400 hover:text-white'
+            }`}
+            title={countUp ? 'Counting Up (click for Countdown)' : 'Counting Down (click for Count Up)'}
+          >
+            <Clock className={`w-3 h-3 ${isCountdownRunning ? 'text-rose-400' : ''}`} />
+            {countUp ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+          </button>
+
+          {/* ── Main time display / inline editor ── */}
+          {isEditing && !isCountdownRunning ? (
+            <div className="flex items-center gap-0.5 font-mono font-black text-sm text-white">
+              <input
+                ref={hoursRef}
+                type="number"
+                min={0} max={23}
+                value={editHours}
+                onChange={e => setEditHours(e.target.value)}
+                onKeyDown={e => handleTimeKeyDown(e, 'h')}
+                className="w-7 h-6 bg-[#0b101b] border border-indigo-500/60 rounded text-center text-xs font-black text-white outline-none focus:border-indigo-400 [appearance:textfield]"
+                title="Hours"
+              />
+              <span className="text-slate-500 text-[10px]">:</span>
+              <input
+                type="number"
+                min={0} max={59}
+                value={editMins}
+                onChange={e => setEditMins(e.target.value)}
+                onKeyDown={e => handleTimeKeyDown(e, 'm')}
+                className="w-8 h-6 bg-[#0b101b] border border-indigo-500/60 rounded text-center text-xs font-black text-white outline-none focus:border-indigo-400 [appearance:textfield]"
+                title="Minutes"
+              />
+              <span className="text-slate-500 text-[10px]">:</span>
+              <input
+                type="number"
+                min={0} max={59}
+                value={editSecs}
+                onChange={e => setEditSecs(e.target.value)}
+                onKeyDown={e => handleTimeKeyDown(e, 's')}
+                className="w-8 h-6 bg-[#0b101b] border border-indigo-500/60 rounded text-center text-xs font-black text-white outline-none focus:border-indigo-400 [appearance:textfield]"
+                title="Seconds"
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleDisplayClick}
+              className={`font-mono font-black text-base tracking-wider px-1.5 text-center transition-colors hover:opacity-80 whitespace-nowrap ${
+                isOvertime
+                  ? 'text-rose-400 animate-pulse'
+                  : isWarning
+                  ? 'text-rose-400 animate-pulse'
+                  : isOnTime
+                  ? 'text-emerald-400'
+                  : countdownSeconds !== 0
+                  ? 'text-amber-300'
+                  : 'text-slate-300'
+              }`}
+              title={isOvertime ? `OVERTIME: +${formatTime(countdownSeconds)}` : 'Click to set custom time'}
+            >
+              {formatTime(countdownSeconds)}
+            </button>
+          )}
+
+          {/* ── Control buttons: Start / Pause / Resume / Stop / Reset / Presets ── */}
+          <div className="flex items-center gap-1">
+            {isEditing && !isCountdownRunning ? (
+              <button
+                type="button"
+                onClick={startFromInputs}
+                className="h-6 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase rounded-md flex items-center gap-1 transition shadow"
+              >
+                <Play className="w-2.5 h-2.5 fill-current" /> Start
+              </button>
+            ) : isCountdownRunning ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onPauseCountdown ? onPauseCountdown() : onStopCountdown()}
+                  className="h-6 px-2 bg-amber-600 hover:bg-amber-500 text-white font-black text-[10px] uppercase rounded-md flex items-center gap-1 transition shadow"
+                  title="Pause timer"
+                >
+                  <Pause className="w-2.5 h-2.5" /> Pause
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onStopCountdown()}
+                  className="h-6 w-6 flex items-center justify-center bg-rose-900/60 hover:bg-rose-700 border border-rose-500/40 text-rose-300 hover:text-white rounded-md transition"
+                  title="Stop and reset"
+                >
+                  <StopCircle className="w-3 h-3" />
+                </button>
+              </>
+            ) : (
+              <>
+                {countdownSeconds !== 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onStartCountdown(countdownSeconds)}
+                      className="h-6 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase rounded-md flex items-center gap-1 transition shadow"
+                      title="Resume"
+                    >
+                      <Play className="w-2.5 h-2.5 fill-current" /> Resume
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="h-6 w-6 flex items-center justify-center bg-[#0b101b] hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-white rounded-md transition"
+                      title="Reset timer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Quick preset buttons */}
+            {!isCountdownRunning && !isEditing && (
+              <div className="flex items-center gap-1 pl-1 border-l border-slate-800">
+                {[1, 3, 5, 10].map(min => (
+                  <button
+                    key={min}
+                    type="button"
+                    onClick={() => {
+                      setEditMins(min.toString().padStart(2, '0'));
+                      setEditHours('0');
+                      setEditSecs('00');
+                      onStartCountdown(min * 60);
+                    }}
+                    className="h-6 px-1.5 bg-[#0b101b] hover:bg-indigo-600 border border-slate-700 hover:border-indigo-400 text-slate-300 hover:text-white rounded-md text-[10px] font-bold transition"
+                    title={`Start ${min}-minute countdown`}
+                  >
+                    {min}m
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Options gear */}
+          <button
+            type="button"
+            onClick={() => setShowOptions(v => !v)}
+            className={`h-6 w-6 flex items-center justify-center rounded-md transition ${
+              showOptions
+                ? 'text-amber-300 bg-slate-800 border border-amber-500/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Timer display options"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
 
-          {/* Advanced Countdown Options Popover */}
-          {showCountdownOptions && (
-            <div className="absolute right-0 bottom-12 bg-[#101726] border border-amber-500/60 p-3.5 rounded-2xl shadow-2xl space-y-3 z-50 min-w-[290px] animate-scaleUp">
-              <div className="font-extrabold text-amber-300 text-xs flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-rose-400" /> Countdown Display & Triggers
+          {/* ── Advanced options popover (anchored cleanly above the timer widget) ── */}
+          {showOptions && (
+            <div className="absolute bottom-11 right-0 bg-[#101726] border border-amber-500/50 p-4 rounded-2xl shadow-2xl space-y-3 z-[200] w-72 sm:w-80">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-black text-amber-300 text-xs flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-rose-400" /> Timer Options
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowCountdownOptions(false)}
-                  className="text-slate-400 hover:text-white"
-                >
+                <button onClick={() => setShowOptions(false)} className="text-slate-400 hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Full Slide Countdown Toggle */}
+              {/* Full slide mode */}
               <div className="flex items-center justify-between bg-[#080d16] p-2 rounded-xl border border-slate-800">
                 <label className="text-xs font-bold text-slate-200 cursor-pointer flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={isFullSlideCountdown}
-                    onChange={(e) => onToggleFullSlideCountdown && onToggleFullSlideCountdown(e.target.checked)}
+                    onChange={e => onToggleFullSlideCountdown && onToggleFullSlideCountdown(e.target.checked)}
                     className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
                   />
-                  <span>Full Slide Countdown</span>
+                  Full-slide countdown (projects large timer on output)
                 </label>
-                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${isFullSlideCountdown ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
-                  {isFullSlideCountdown ? 'FULL SLIDE' : 'BADGE'}
-                </span>
               </div>
 
-              {/* Target Screen Selector */}
+              {/* Target screen */}
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Display Screen</label>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Display</label>
                 <select
                   value={countdownTargetScreen}
-                  onChange={(e) => onChangeCountdownTargetScreen && onChangeCountdownTargetScreen(e.target.value as any)}
+                  onChange={e => onChangeCountdownTargetScreen && onChangeCountdownTargetScreen(e.target.value as any)}
                   className="w-full bg-[#080d16] border border-slate-700 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
                 >
-                  <option value="both">📺🖥️ Both Screens (Audience & Stage)</option>
-                  <option value="audience">📺 Audience Screen Only (Projector)</option>
-                  <option value="stage">🖥️ Stage Display Only (Confidence Monitor)</option>
+                  <option value="both">📺🖥️ Both (Audience + Stage)</option>
+                  <option value="audience">📺 Audience / Projector</option>
+                  <option value="stage">🖥️ Stage / Confidence Monitor</option>
                 </select>
               </div>
 
-              {/* Completion Trigger Action at 00:00 */}
+              {/* End action */}
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Completion Action at 00:00</label>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">When Timer Ends</label>
                 <select
                   value={countdownEndAction}
-                  onChange={(e) => onChangeCountdownEndAction && onChangeCountdownEndAction(e.target.value as any)}
+                  onChange={e => {
+                    const nextAction = e.target.value as any;
+                    if (onChangeCountdownEndAction) onChangeCountdownEndAction(nextAction);
+                    if (nextAction === 'play_video' && !countdownEndVideoId && onChangeCountdownEndVideoId) {
+                      const firstVideo = mediaList.find(m => m.type === 'video');
+                      if (firstVideo) onChangeCountdownEndVideoId(firstVideo.id);
+                    }
+                  }}
                   className="w-full bg-[#080d16] border border-slate-700 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
                 >
-                  <option value="none">None (Keep 00:00)</option>
-                  <option value="play_video">▶️ Play Selected Video Asset</option>
-                  <option value="start_playlist">📋 Start 1st Item in Playlist</option>
-                  <option value="go_live_active">⚡ Go Live with Active Item</option>
+                  <option value="none">Continue into overtime (+00:00)</option>
+                  <option value="play_video">▶ Play selected video</option>
+                  <option value="start_playlist">📋 Start first playlist item</option>
+                  <option value="go_live_active">⚡ Go live with active slide</option>
                 </select>
               </div>
 
-              {/* Select Video Media Asset if play_video action chosen */}
               {countdownEndAction === 'play_video' && (
                 <div className="space-y-1 pt-1.5 border-t border-slate-800">
-                  <label className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">Select Media Video Asset</label>
+                  <label className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">Video Asset</label>
                   <select
                     value={countdownEndVideoId}
-                    onChange={(e) => onChangeCountdownEndVideoId && onChangeCountdownEndVideoId(e.target.value)}
+                    onChange={e => onChangeCountdownEndVideoId && onChangeCountdownEndVideoId(e.target.value)}
                     className="w-full bg-[#080d16] border border-amber-500/50 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
                   >
-                    <option value="">-- Select Video Asset --</option>
-                    {mediaList.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.type.toUpperCase()})
-                      </option>
+                    <option value="">-- Select Video --</option>
+                    {mediaList.filter(m => m.type === 'video').map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
+                    {mediaList.filter(m => m.type === 'video').length === 0 && (
+                      <option disabled value="">No videos uploaded yet</option>
+                    )}
                   </select>
-                </div>
-              )}
-            </div>
-          )}
-          <span className="font-mono font-black text-sm text-rose-400 min-w-[50px]">
-            {formatTime(countdownSeconds)}
-          </span>
-
-          {isCountdownRunning ? (
-            <button
-              onClick={onStopCountdown}
-              className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold uppercase transition shadow"
-            >
-              STOP
-            </button>
-          ) : (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => onStartCountdown(180)}
-                className="px-1.5 py-0.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded text-[10px] font-semibold transition"
-                title="3 minutes"
-              >
-                3m
-              </button>
-              <button
-                onClick={() => onStartCountdown(300)}
-                className="px-1.5 py-0.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded text-[10px] font-semibold transition"
-                title="5 minutes"
-              >
-                5m
-              </button>
-              <button
-                onClick={() => onStartCountdown(600)}
-                className="px-1.5 py-0.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded text-[10px] font-semibold transition"
-                title="10 minutes"
-              >
-                10m
-              </button>
-              <button
-                onClick={() => setShowCustomInput(!showCustomInput)}
-                className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold transition flex items-center gap-0.5"
-                title="Enter custom timer duration manually"
-              >
-                <span>Custom</span>
-              </button>
-
-              {/* Manual Timer Entry Popover */}
-              {showCustomInput && (
-                <div className="absolute right-0 bottom-12 bg-[#162032] border border-indigo-500/60 p-2.5 rounded-xl shadow-2xl flex items-center gap-2 z-50 animate-zoom-in">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Input Minutes</span>
-                    <input
-                      type="number"
-                      min="0.1"
-                      step="0.5"
-                      value={customMinutes}
-                      onChange={(e) => setCustomMinutes(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleStartCustomTimer()}
-                      placeholder="e.g. 7"
-                      autoFocus
-                      className="w-20 bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold text-center outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleStartCustomTimer}
-                    className="h-8 px-3 mt-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded text-xs transition shadow"
-                  >
-                    Start
-                  </button>
                 </div>
               )}
             </div>
@@ -337,33 +469,30 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
         </div>
       </div>
 
-      {/* RIGHT: MASTER SLIDE STEPPERS */}
+      {/* ─── RIGHT: SLIDE NAVIGATION ─── */}
       <div className="flex items-center gap-2">
         <button
           onClick={onPrevSlide}
           className="h-9 px-3 bg-[#162032] hover:bg-indigo-600/30 border border-[#26334a] hover:border-indigo-500/60 rounded-lg text-slate-200 font-semibold text-xs flex items-center gap-1 transition active:scale-95"
-          title="Previous Slide (Up / Left Arrow)"
+          title="Previous Slide (↑)"
         >
-          <ChevronLeft className="w-4 h-4" />
-          <span>PREV</span>
+          <ChevronLeft className="w-4 h-4" /> PREV
         </button>
 
         <button
           onClick={onGoLiveCurrent}
-          className="h-9 px-4 bg-gradient-to-r from-indigo-600 to-rose-600 hover:from-indigo-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider rounded-lg shadow-lg flex items-center gap-1.5 transition transform active:scale-95"
-          title="Go Live with Preview Slide (Enter)"
+          className="h-9 px-4 bg-gradient-to-r from-indigo-600 to-rose-600 hover:from-indigo-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider rounded-lg shadow-lg flex items-center gap-1.5 transition active:scale-95"
+          title="Go Live (Enter)"
         >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          <span>GO LIVE</span>
+          <Play className="w-3.5 h-3.5 fill-current" /> GO LIVE
         </button>
 
         <button
           onClick={onNextSlide}
           className="h-9 px-3 bg-[#162032] hover:bg-indigo-600/30 border border-[#26334a] hover:border-indigo-500/60 rounded-lg text-slate-200 font-semibold text-xs flex items-center gap-1 transition active:scale-95"
-          title="Next Slide (Down / Right Arrow)"
+          title="Next Slide (↓)"
         >
-          <span>NEXT</span>
-          <ChevronRight className="w-4 h-4" />
+          NEXT <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </footer>

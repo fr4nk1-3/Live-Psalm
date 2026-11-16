@@ -1,4 +1,4 @@
-import { Song, Theme, MediaAsset, PlaylistItem, BiblePassage, AnnouncementItem, ChurchProfile, AppSettings } from '../types/presentation';
+import { Song, Theme, MediaAsset, PlaylistItem, Slide, BiblePassage, AnnouncementItem, ChurchProfile, AppSettings } from '../types/presentation';
 import { ImporterService } from './importer';
 import BIBLE_MANIFEST from '../data/bibles/manifest.json';
 
@@ -114,6 +114,24 @@ export const DEFAULT_THEMES: Theme[] = [
 
 // Default Media Assets
 export const DEFAULT_MEDIA: MediaAsset[] = [
+  {
+    id: 'media-motion-clouds',
+    name: 'Heavenly Clouds Motion Loop',
+    type: 'video',
+    url: 'https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['motion', 'clouds', 'sky', 'worship']
+  },
+  {
+    id: 'media-motion-particles',
+    name: 'Golden Worship Particles Loop',
+    type: 'video',
+    url: 'https://assets.mixkit.co/videos/preview/mixkit-stars-in-space-1610-large.mp4',
+    category: 'Backgrounds',
+    favorite: true,
+    tags: ['motion', 'particles', 'stars', 'worship']
+  },
   {
     id: 'media-bg-nebula',
     name: 'Deep Blue Nebula Loop',
@@ -433,22 +451,55 @@ export const SAMPLE_SERVICE_PLAYLIST: PlaylistItem[] = [
     type: 'bible',
     passageRef: 'John 3:16-18',
     category: 'Scripture',
+    bibleMeta: {
+      book: 'John',
+      chapter: 3,
+      startVerse: 16,
+      endVerse: 18,
+      translationId: 'bible-eng-kjv'
+    },
     slides: [
       {
-        id: 'slide-b-j316',
-        title: 'JOHN 3:16',
+        id: 'slide-bv-John-3-16',
+        title: 'John 3:16',
         content: 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.',
-        subtitle: 'King James Version',
+        subtitle: 'John 3:16 (King James Version (KJV))',
         sectionLabel: 'Scripture',
-        backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80'
+        backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80',
+        bibleMeta: {
+          book: 'John',
+          chapter: 3,
+          verse: 16,
+          translationId: 'bible-eng-kjv'
+        }
       },
       {
-        id: 'slide-b-j317',
-        title: 'JOHN 3:17-18',
-        content: 'For God sent not his Son into the world to condemn the world; but that the world through him might be saved.\n\nHe that believeth on him is not condemned...',
-        subtitle: 'King James Version',
+        id: 'slide-bv-John-3-17',
+        title: 'John 3:17',
+        content: 'For God sent not his Son into the world to condemn the world; but that the world through him might be saved.',
+        subtitle: 'John 3:17 (King James Version (KJV))',
         sectionLabel: 'Scripture',
-        backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80'
+        backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80',
+        bibleMeta: {
+          book: 'John',
+          chapter: 3,
+          verse: 17,
+          translationId: 'bible-eng-kjv'
+        }
+      },
+      {
+        id: 'slide-bv-John-3-18',
+        title: 'John 3:18',
+        content: 'He that believeth on him is not condemned: but he that believeth not is condemned already, because he hath not believed in the name of the only begotten Son of God.',
+        subtitle: 'John 3:18 (King James Version (KJV))',
+        sectionLabel: 'Scripture',
+        backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80',
+        bibleMeta: {
+          book: 'John',
+          chapter: 3,
+          verse: 18,
+          translationId: 'bible-eng-kjv'
+        }
       }
     ]
   }
@@ -459,11 +510,41 @@ export class StorageService {
   private static STORAGE_KEY = 'live_psalms_data_v1';
   private static BIBLES_KEY = 'live_psalms_custom_bibles_v1';
 
+  public static getLogoDisplayName(profile?: ChurchProfile): string {
+    const p = profile || this.getChurchProfile();
+    const rawName = (p?.name || 'Grace Community Church').trim();
+    if (/logo$/i.test(rawName)) {
+      return rawName;
+    }
+    return `${rawName} Logo`;
+  }
+
   public static getSavedData() {
+    const profile = this.getChurchProfile();
+    const logoDisplayName = this.getLogoDisplayName(profile);
     try {
       const raw = localStorage.getItem(this.STORAGE_KEY);
       if (raw) {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.media)) {
+          const defaultMotions = DEFAULT_MEDIA.filter(dm => dm.type === 'video');
+          defaultMotions.forEach(dm => {
+            if (!parsed.media.some((m: MediaAsset) => m.id === dm.id)) {
+              parsed.media.unshift(dm);
+            }
+          });
+          parsed.media = parsed.media.map((m: MediaAsset) => {
+            if (m.id === 'media-logo-main' || m.type === 'logo') {
+              return {
+                ...m,
+                name: logoDisplayName,
+                url: profile.logoUrl || m.url
+              };
+            }
+            return m;
+          });
+        }
+        return parsed;
       }
     } catch (e) {
       console.warn('Could not read saved Live Psalms data:', e);
@@ -472,7 +553,11 @@ export class StorageService {
       playlist: SAMPLE_SERVICE_PLAYLIST,
       songs: DEFAULT_SONGS,
       themes: DEFAULT_THEMES,
-      media: DEFAULT_MEDIA,
+      media: DEFAULT_MEDIA.map(m =>
+        m.id === 'media-logo-main' || m.type === 'logo'
+          ? { ...m, name: logoDisplayName, url: profile.logoUrl || m.url }
+          : m
+      ),
       activeThemeId: DEFAULT_THEMES[0].id
     };
   }
@@ -498,29 +583,49 @@ export class StorageService {
     return BIBLE_MANIFEST;
   }
 
-  public static async loadBibleById(translationId: string): Promise<CustomBibleTranslation | null> {
-    if (!translationId || translationId === 'kjv') return null;
+  public static resolveTranslationId(translationId: string): string {
+    if (!translationId) return 'bible-eng-kjv';
+    const lower = translationId.toLowerCase().trim();
+    if (lower === 'kjv') return 'bible-eng-kjv';
+    if (lower === 'nkjv') return 'bible-eng-nkjv';
+    if (lower === 'bible-swh-suv' || lower === 'suv') return 'bible-swahili-suv';
+    if (lower === 'bible-kik-gky19') return 'bible-kikuyu-2019';
+    if (lower === 'bible-luo-luo20') return 'bible-luo-2020';
+    if (lower === 'bible-kal-klj19') return 'bible-kalenjin-2019';
+    if (lower === 'bible-kam-kmb') return 'bible-kamba-std';
+    if (lower === 'bible-mas-mas20') return 'bible-maasai-2020';
+    const manifestMatch = BIBLE_MANIFEST.find(
+      m => m.id.toLowerCase() === lower || m.abbreviation.toLowerCase() === lower
+    );
+    return manifestMatch ? manifestMatch.id : translationId;
+  }
 
-    if (loadedBiblesCache[translationId]) {
-      return loadedBiblesCache[translationId];
+  public static async loadBibleById(translationId: string): Promise<CustomBibleTranslation | null> {
+    const resolvedId = this.resolveTranslationId(translationId);
+
+    if (loadedBiblesCache[resolvedId]) {
+      return loadedBiblesCache[resolvedId];
     }
 
     // Check user-saved custom bibles in localStorage first
     const customBibles = this.getUserSavedBibles();
     const userFound = customBibles.find(b => 
-      b.id === translationId || 
-      b.abbreviation.toLowerCase() === translationId.toLowerCase() ||
-      b.name.toLowerCase() === translationId.toLowerCase()
+      b.id === resolvedId || 
+      b.id === translationId ||
+      b.abbreviation.toLowerCase() === resolvedId.toLowerCase() ||
+      b.name.toLowerCase() === resolvedId.toLowerCase()
     );
     if (userFound) {
-      loadedBiblesCache[translationId] = userFound;
+      loadedBiblesCache[resolvedId] = userFound;
+      loadedBiblesCache[userFound.id] = userFound;
+      loadedBiblesCache[userFound.abbreviation.toLowerCase()] = userFound;
       return userFound;
     }
 
     // Check pre-loaded bibles in manifest
     const manifestItem = BIBLE_MANIFEST.find(m => 
-      m.id === translationId || 
-      m.abbreviation.toLowerCase() === translationId.toLowerCase()
+      m.id === resolvedId || 
+      m.abbreviation.toLowerCase() === resolvedId.toLowerCase()
     );
 
     if (manifestItem) {
@@ -530,8 +635,16 @@ export class StorageService {
           const mod: any = await lazyBibleLoaders[globKey]();
           const bible = mod.default || mod;
           if (bible && bible.books) {
-            loadedBiblesCache[translationId] = bible;
-            return bible;
+            const normalizedBible: CustomBibleTranslation = {
+              id: manifestItem.id,
+              name: manifestItem.name,
+              abbreviation: manifestItem.abbreviation,
+              books: bible.books
+            };
+            loadedBiblesCache[manifestItem.id] = normalizedBible;
+            loadedBiblesCache[manifestItem.abbreviation.toLowerCase()] = normalizedBible;
+            loadedBiblesCache[translationId] = normalizedBible;
+            return normalizedBible;
           }
         } catch (e) {
           console.warn(`Failed to lazy load bible ${translationId}:`, e);
@@ -584,6 +697,7 @@ export class StorageService {
   public static saveCustomBible(bible: CustomBibleTranslation): boolean {
     try {
       loadedBiblesCache[bible.id] = bible;
+      loadedBiblesCache[bible.abbreviation.toLowerCase()] = bible;
       const existing = this.getUserSavedBibles();
       const updated = [...existing.filter(b => b.id !== bible.id), bible];
       localStorage.setItem(this.BIBLES_KEY, JSON.stringify(updated));
@@ -598,12 +712,324 @@ export class StorageService {
   }
 
   public static getAvailableTranslations(): { id: string; name: string }[] {
-    const list = [{ id: 'kjv', name: 'King James Version (KJV)' }];
-    const custom = this.getCustomBibles();
-    custom.forEach(b => {
-      list.push({ id: b.id, name: `${b.name} (${b.abbreviation})` });
+    return this.getCustomBibles().map(b => ({
+      id: b.id,
+      name: `${b.name} (${b.abbreviation})`
+    }));
+  }
+
+  public static getTranslationAbbreviation(translationId: string): string {
+    const resolved = this.resolveTranslationId(translationId);
+    const manifestMatch = BIBLE_MANIFEST.find(
+      m => m.id === resolved || m.id === translationId || m.abbreviation.toLowerCase() === translationId.toLowerCase()
+    );
+    if (manifestMatch) return manifestMatch.abbreviation;
+    const customMatch = this.getCustomBibles().find(
+      b => b.id === resolved || b.id === translationId || b.abbreviation.toLowerCase() === translationId.toLowerCase()
+    );
+    if (customMatch) return customMatch.abbreviation;
+    return translationId.replace(/^bible-(eng-)?/i, '').toUpperCase();
+  }
+
+  private static readonly CANONICAL_BIBLE_BOOKS = new Set([
+    'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy', 'Joshua', 'Judges', 'Ruth',
+    '1 Samuel', '2 Samuel', '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles', 'Ezra',
+    'Nehemiah', 'Esther', 'Job', 'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon',
+    'Isaiah', 'Jeremiah', 'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos',
+    'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah',
+    'Malachi', 'Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans', '1 Corinthians',
+    '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians',
+    '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus', 'Philemon', 'Hebrews', 'James',
+    '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude', 'Revelation'
+  ]);
+
+  /** Parse any scripture reference string into canonical { book, chapter, startVerse?, endVerse? } */
+  public static parseBibleReference(
+    raw?: string | null
+  ): { book: string; chapter: number; startVerse?: number; endVerse?: number } | null {
+    if (!raw || !raw.trim()) return null;
+    const cleaned = raw
+      .replace(/^(Scripture Reading|Scripture Focus|Scripture Comfort|Scripture|Bible)\s*[-:]\s*/i, '')
+      .replace(/\([^)]*\)/g, '')
+      .split('|')[0]
+      .trim();
+
+    const m = cleaned.match(/^([1-3]?\s*[A-Za-z\s]+?)\s+(\d+)(?::(\d+)(?:[-–](\d+))?)?$/);
+    if (!m) return null;
+
+    const rawBook = m[1].trim();
+    const normBook = ImporterService.normalizeBookName(rawBook);
+    // Validate against canonical 66 Bible books (case-insensitive)
+    const canonicalMatch = Array.from(this.CANONICAL_BIBLE_BOOKS).find(
+      b => b.toLowerCase() === normBook.toLowerCase() || b.toLowerCase() === rawBook.toLowerCase()
+    );
+    if (!canonicalMatch) return null;
+
+    const chapter = parseInt(m[2], 10);
+    if (!chapter || chapter < 1) return null;
+
+    const startVerse = m[3] ? parseInt(m[3], 10) : undefined;
+    const endVerse = m[4] ? parseInt(m[4], 10) : startVerse;
+
+    return {
+      book: canonicalMatch,
+      chapter,
+      startVerse,
+      endVerse
+    };
+  }
+
+  /** Extract exact { book, chapter, verse, endVerse } from any Slide */
+  public static extractSlideBibleCoords(
+    slide?: Slide | null,
+    fallbackItem?: { title?: string; passageRef?: string; bibleMeta?: { book: string; chapter: number } } | null
+  ): { book: string; chapter: number; verse: number; endVerse?: number } | null {
+    if (!slide) return null;
+
+    if (slide.bibleMeta?.book && slide.bibleMeta?.chapter && slide.bibleMeta?.verse !== undefined) {
+      const normBook = ImporterService.normalizeBookName(slide.bibleMeta.book);
+      return {
+        book: normBook,
+        chapter: slide.bibleMeta.chapter,
+        verse: slide.bibleMeta.verse
+      };
+    }
+
+    if (slide.id) {
+      const bvMatch = slide.id.match(/^slide-bv-(.+)-(\d+)-(\d+)$/);
+      if (bvMatch) {
+        const normBook = ImporterService.normalizeBookName(bvMatch[1]);
+        return {
+          book: normBook,
+          chapter: parseInt(bvMatch[2], 10),
+          verse: parseInt(bvMatch[3], 10)
+        };
+      }
+    }
+
+    for (const candidate of [slide.title, slide.subtitle]) {
+      const parsed = this.parseBibleReference(candidate);
+      if (parsed && parsed.startVerse !== undefined) {
+        return {
+          book: parsed.book,
+          chapter: parsed.chapter,
+          verse: parsed.startVerse,
+          endVerse: parsed.endVerse
+        };
+      }
+    }
+
+    if (fallbackItem) {
+      const fallbackBook =
+        fallbackItem.bibleMeta?.book ||
+        this.parseBibleReference(fallbackItem.passageRef || fallbackItem.title)?.book;
+      const fallbackChapter =
+        fallbackItem.bibleMeta?.chapter ||
+        this.parseBibleReference(fallbackItem.passageRef || fallbackItem.title)?.chapter;
+      const vMatch = (slide.title || '').match(/:(\d+)(?:[-–](\d+))?/);
+      if (fallbackBook && fallbackChapter && vMatch) {
+        return {
+          book: ImporterService.normalizeBookName(fallbackBook),
+          chapter: fallbackChapter,
+          verse: parseInt(vMatch[1], 10),
+          endVerse: vMatch[2] ? parseInt(vMatch[2], 10) : undefined
+        };
+      }
+    }
+
+    return null;
+  }
+
+  public static async buildBiblePassageSlidesAsync(
+    book: string,
+    chapter: number,
+    startVerse: number,
+    endVerse: number,
+    primaryTranslationId: string = 'bible-eng-nkjv',
+    parallelTranslationId?: string | null
+  ): Promise<{ passage: BiblePassage | null; parallelPassage: BiblePassage | null; slides: Slide[] }> {
+    const resolvedPrimary = this.resolveTranslationId(primaryTranslationId);
+    const resolvedParallel =
+      parallelTranslationId && parallelTranslationId !== 'none' && parallelTranslationId !== primaryTranslationId
+        ? this.resolveTranslationId(parallelTranslationId)
+        : null;
+
+    const [passage, parallelPassage] = await Promise.all([
+      this.queryBibleAsync(book, chapter, startVerse, endVerse, resolvedPrimary),
+      resolvedParallel ? this.queryBibleAsync(book, chapter, startVerse, endVerse, resolvedParallel) : Promise.resolve(null)
+    ]);
+
+    if (!passage || !passage.verses || passage.verses.length === 0) {
+      return { passage: null, parallelPassage: null, slides: [] };
+    }
+
+    const primaryAbbr = this.getTranslationAbbreviation(resolvedPrimary);
+    const parallelAbbr = resolvedParallel ? this.getTranslationAbbreviation(resolvedParallel) : null;
+    const parallelVerseMap = new Map<number, string>();
+    if (parallelPassage && parallelPassage.verses) {
+      parallelPassage.verses.forEach(pv => {
+        parallelVerseMap.set(pv.number, pv.text);
+      });
+    }
+
+    const slides: Slide[] = passage.verses.map(v => {
+      const parallelText = parallelVerseMap.get(v.number);
+      const hasParallel = !!(resolvedParallel && parallelText);
+      const content = hasParallel
+        ? `[${primaryAbbr}] ${v.text}\n\n[${parallelAbbr}] ${parallelText}`
+        : v.text;
+      const subtitle = hasParallel
+        ? `${passage.book} ${passage.chapter}:${v.number} (${primaryAbbr} + ${parallelAbbr})`
+        : `${passage.book} ${passage.chapter}:${v.number} (${passage.translation})`;
+
+      return {
+        id: `slide-bv-${passage.book}-${passage.chapter}-${v.number}`,
+        title: `${passage.book} ${passage.chapter}:${v.number}`,
+        content,
+        subtitle,
+        sectionLabel: 'Scripture' as const,
+        bibleMeta: {
+          book: passage.book,
+          chapter: passage.chapter,
+          verse: v.number,
+          translationId: resolvedPrimary,
+          parallelTranslationId: resolvedParallel
+        }
+      };
     });
-    return list;
+
+    return { passage, parallelPassage, slides };
+  }
+
+  /** Translate a single Scripture slide to its exact (book, chapter, verse) in the target translation */
+  public static async translateSingleBibleSlideAsync(
+    slide: Slide,
+    primaryTranslationId: string,
+    parallelTranslationId?: string | null,
+    fallbackItem?: { title?: string; passageRef?: string; bibleMeta?: { book: string; chapter: number } } | null
+  ): Promise<Slide | null> {
+    const coords = this.extractSlideBibleCoords(slide, fallbackItem);
+    if (!coords) return null;
+
+    const built = await this.buildBiblePassageSlidesAsync(
+      coords.book,
+      coords.chapter,
+      coords.verse,
+      coords.verse,
+      primaryTranslationId,
+      parallelTranslationId
+    );
+    if (!built || built.slides.length === 0) return null;
+
+    const translated = built.slides[0];
+    return {
+      ...translated,
+      backgroundUrl: slide.backgroundUrl ?? translated.backgroundUrl,
+      backgroundType: slide.backgroundType ?? translated.backgroundType
+    };
+  }
+
+  /**
+   * Translate a Bible PlaylistItem or QuickPinnedItem to targetTranslationId while preserving
+   * exact Book -> Book, Chapter -> Chapter, and Verse -> Verse mapping.
+   */
+  public static async translateBibleItemSlidesAsync(
+    item: {
+      title?: string;
+      passageRef?: string;
+      sourceRef?: string;
+      slides: Slide[];
+      bibleMeta?: PlaylistItem['bibleMeta'];
+    },
+    primaryTranslationId: string,
+    parallelTranslationId?: string | null
+  ): Promise<{ slides: Slide[]; bibleMeta?: PlaylistItem['bibleMeta'] } | null> {
+    const resolvedPrimary = this.resolveTranslationId(primaryTranslationId);
+    const resolvedParallel =
+      parallelTranslationId && parallelTranslationId !== 'none' && parallelTranslationId !== primaryTranslationId
+        ? this.resolveTranslationId(parallelTranslationId)
+        : null;
+
+    const slideCoords = item.slides
+      .map(s => ({ slide: s, coords: this.extractSlideBibleCoords(s, item) }))
+      .filter((x): x is { slide: Slide; coords: NonNullable<ReturnType<typeof StorageService.extractSlideBibleCoords>> } => !!x.coords);
+
+    // Check if the item contains slides from multiple distinct (book, chapter) pairs
+    const uniqueBookChapters = new Set(slideCoords.map(x => `${x.coords.book}__${x.coords.chapter}`));
+
+    if (uniqueBookChapters.size > 1) {
+      // Translate slide-by-slide so each slide retains its own exact book, chapter, and verse
+      const nextSlides: Slide[] = [];
+      for (const s of item.slides) {
+        const tr = await this.translateSingleBibleSlideAsync(s, resolvedPrimary, resolvedParallel, item);
+        nextSlides.push(tr || s);
+      }
+      return {
+        slides: nextSlides,
+        bibleMeta: item.bibleMeta
+          ? {
+              ...item.bibleMeta,
+              translationId: resolvedPrimary,
+              parallelTranslationId: resolvedParallel || undefined
+            }
+          : undefined
+      };
+    }
+
+    // Single (book, chapter) item
+    const refParsed =
+      this.parseBibleReference(item.passageRef) ||
+      this.parseBibleReference(item.sourceRef) ||
+      this.parseBibleReference(item.title);
+
+    const book = ImporterService.normalizeBookName(
+      slideCoords[0]?.coords.book || item.bibleMeta?.book || refParsed?.book || ''
+    );
+    const chapter =
+      slideCoords[0]?.coords.chapter || item.bibleMeta?.chapter || refParsed?.chapter || 0;
+
+    if (!book || !chapter) return null;
+
+    let startVerse = item.bibleMeta?.startVerse;
+    let endVerse = item.bibleMeta?.endVerse;
+
+    if (startVerse === undefined || endVerse === undefined) {
+      if (refParsed?.startVerse !== undefined) {
+        startVerse = refParsed.startVerse;
+        endVerse = refParsed.endVerse ?? refParsed.startVerse;
+      } else if (slideCoords.length > 0) {
+        const minV = Math.min(...slideCoords.map(x => x.coords.verse));
+        const maxV = Math.max(...slideCoords.map(x => x.coords.endVerse ?? x.coords.verse));
+        // If starting at verse 1 and has > 10 slides, treat as full chapter (1..999)
+        startVerse = minV;
+        endVerse = minV === 1 && slideCoords.length >= 10 ? 999 : maxV;
+      } else {
+        startVerse = 1;
+        endVerse = 999;
+      }
+    }
+
+    const built = await this.buildBiblePassageSlidesAsync(
+      book,
+      chapter,
+      startVerse,
+      endVerse,
+      resolvedPrimary,
+      resolvedParallel
+    );
+    if (!built || built.slides.length === 0) return null;
+
+    return {
+      slides: built.slides,
+      bibleMeta: {
+        book: built.passage?.book || book,
+        chapter: built.passage?.chapter || chapter,
+        startVerse,
+        endVerse,
+        translationId: resolvedPrimary,
+        parallelTranslationId: resolvedParallel || undefined
+      }
+    };
   }
 
   // Async Bible query (lazy loads pre-loaded Bible dataset on demand if needed)
@@ -612,12 +1038,47 @@ export class StorageService {
     chapter: number, 
     startVerse: number, 
     endVerse: number,
-    translationId: string = 'kjv'
+    translationId: string = 'bible-eng-kjv'
   ): Promise<BiblePassage | null> {
-    if (translationId && translationId !== 'kjv') {
-      await this.loadBibleById(translationId);
+    const resolvedId = this.resolveTranslationId(translationId);
+    await this.loadBibleById(resolvedId);
+    return this.queryBible(book, chapter, startVerse, endVerse, resolvedId);
+  }
+
+  private static getDatasetForTranslation(translationId: string): {
+    dataset: Record<string, Record<number, Record<number, string>>>;
+    translationName: string;
+  } {
+    const resolvedId = this.resolveTranslationId(translationId);
+    const cached = loadedBiblesCache[resolvedId] || loadedBiblesCache[translationId];
+    if (cached && cached.books && Object.keys(cached.books).length > 0) {
+      return {
+        dataset: cached.books,
+        translationName: `${cached.name} (${cached.abbreviation})`
+      };
     }
-    return this.queryBible(book, chapter, startVerse, endVerse, translationId);
+
+    const customBibles = this.getCustomBibles();
+    const found = customBibles.find(b => 
+      b.id === resolvedId || 
+      b.id === translationId ||
+      b.abbreviation.toLowerCase() === resolvedId.toLowerCase() ||
+      b.name.toLowerCase() === resolvedId.toLowerCase()
+    );
+    if (found && found.books && Object.keys(found.books).length > 0) {
+      return {
+        dataset: found.books,
+        translationName: `${found.name} (${found.abbreviation})`
+      };
+    }
+
+    // Trigger lazy load in the background if not yet cached
+    this.loadBibleById(resolvedId).catch(() => {});
+
+    return {
+      dataset: OFFLINE_BIBLE_DATABASE,
+      translationName: found ? `${found.name} (${found.abbreviation})` : 'King James Version (KJV)'
+    };
   }
 
   // Parse Bible query, supporting both built-in KJV and imported custom translations
@@ -626,25 +1087,12 @@ export class StorageService {
     chapter: number, 
     startVerse: number, 
     endVerse: number,
-    translationId: string = 'kjv'
+    translationId: string = 'bible-eng-kjv'
   ): BiblePassage | null {
-    let dataset: Record<string, Record<number, Record<number, string>>> = OFFLINE_BIBLE_DATABASE;
-    let translationName = 'King James Version (KJV)';
-
-    if (translationId !== 'kjv') {
-      const customBibles = this.getCustomBibles();
-      const found = customBibles.find(b => 
-        b.id === translationId || 
-        b.abbreviation.toLowerCase() === translationId.toLowerCase() ||
-        b.name.toLowerCase() === translationId.toLowerCase()
-      );
-      if (found && found.books) {
-        dataset = found.books;
-        translationName = `${found.name} (${found.abbreviation})`;
-      }
-    }
+    const { dataset, translationName } = this.getDatasetForTranslation(translationId);
 
     let bookData = dataset[book];
+    let resolvedBookName = book;
     if (!bookData) {
       const normBook = ImporterService.normalizeBookName(book);
       const matchedKey = Object.keys(dataset).find(k => 
@@ -654,14 +1102,22 @@ export class StorageService {
       );
       if (matchedKey) {
         bookData = dataset[matchedKey];
+        resolvedBookName = normBook || matchedKey;
       }
     }
     if (!bookData) return null;
     const chapterData = bookData[chapter];
     if (!chapterData) return null;
 
+    const availableVerseNums = Object.keys(chapterData).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    if (availableVerseNums.length === 0) return null;
+
+    const maxAvailable = availableVerseNums[availableVerseNums.length - 1];
+    const effectiveStart = Math.max(1, startVerse);
+    const effectiveEnd = Math.min(maxAvailable, endVerse);
+
     const versesList: { number: number; text: string }[] = [];
-    for (let v = startVerse; v <= endVerse; v++) {
+    for (let v = effectiveStart; v <= effectiveEnd; v++) {
       if (chapterData[v]) {
         versesList.push({ number: v, text: chapterData[v] });
       }
@@ -669,14 +1125,16 @@ export class StorageService {
 
     if (versesList.length === 0) return null;
 
-    const refString = startVerse === endVerse ? `${book} ${chapter}:${startVerse}` : `${book} ${chapter}:${startVerse}–${endVerse}`;
+    const minV = versesList[0].number;
+    const maxV = versesList[versesList.length - 1].number;
+    const refString = minV === maxV ? `${resolvedBookName} ${chapter}:${minV}` : `${resolvedBookName} ${chapter}:${minV}–${maxV}`;
 
     return {
       translation: translationName,
-      book,
+      book: resolvedBookName,
       chapter,
-      startVerse,
-      endVerse,
+      startVerse: minV,
+      endVerse: maxV,
       verses: versesList,
       formattedRef: refString
     };
@@ -685,41 +1143,28 @@ export class StorageService {
   // Search Bible verses by keyword or passage reference
   public static searchBibleVerses(
     query: string,
-    translationId: string = 'kjv'
+    translationId: string = 'bible-eng-kjv'
   ): { book: string; chapter: number; verse: number; text: string; formattedRef: string; translation: string }[] {
     const q = query.trim().toLowerCase();
     if (!q) return [];
 
-    let dataset: Record<string, Record<number, Record<number, string>>> = OFFLINE_BIBLE_DATABASE;
-    let translationName = 'King James Version (KJV)';
-
-    if (translationId !== 'kjv') {
-      const customBibles = this.getCustomBibles();
-      const found = customBibles.find(b => 
-        b.id === translationId || 
-        b.abbreviation.toLowerCase() === translationId.toLowerCase() ||
-        b.name.toLowerCase() === translationId.toLowerCase()
-      );
-      if (found && found.books) {
-        dataset = found.books;
-        translationName = `${found.name} (${found.abbreviation})`;
-      }
-    }
-
+    const { dataset, translationName } = this.getDatasetForTranslation(translationId);
     const results: { book: string; chapter: number; verse: number; text: string; formattedRef: string; translation: string }[] = [];
 
-    // 1. Check passage reference pattern (e.g., "John 3:16", "1 John 4:8", "Psalm 23:1", "Gen 1:1")
-    const refRegex = /^(?:([123])\s+)?([a-zA-Z\s]+?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$/i;
+    // 1. Check passage reference pattern (e.g., "John 3:16", "1 John 4:8", "Psalm 23:1-6", "Gen 1:1")
+    const refRegex = /^((?:[123]\s*)?[a-zA-Z\s]+?)\s+(\d+)(?::(\d+)(?:[-–](\d+))?)?$/i;
     const match = q.match(refRegex);
     if (match) {
-      const prefix = match[1] ? match[1] + ' ' : '';
-      const rawBook = prefix + match[2].trim();
-      const ch = parseInt(match[3]);
-      const sVerse = match[4] ? parseInt(match[4]) : 1;
-      const eVerse = match[5] ? parseInt(match[5]) : (match[4] ? parseInt(match[4]) : 999);
+      const rawBook = match[1].trim();
+      const normBook = ImporterService.normalizeBookName(rawBook);
+      const ch = parseInt(match[2], 10);
+      const sVerse = match[3] ? parseInt(match[3], 10) : 1;
+      const eVerse = match[4] ? parseInt(match[4], 10) : (match[3] ? parseInt(match[3], 10) : 999);
 
       const matchedBookKey = Object.keys(dataset).find(b =>
+        b.toLowerCase() === normBook.toLowerCase() ||
         b.toLowerCase() === rawBook.toLowerCase() ||
+        ImporterService.normalizeBookName(b).toLowerCase() === normBook.toLowerCase() ||
         b.toLowerCase().startsWith(rawBook.toLowerCase())
       );
 
@@ -745,10 +1190,10 @@ export class StorageService {
     for (const book of Object.keys(dataset)) {
       const chapters = dataset[book];
       for (const chStr of Object.keys(chapters)) {
-        const ch = parseInt(chStr);
+        const ch = parseInt(chStr, 10);
         const verses = chapters[ch];
         for (const vStr of Object.keys(verses)) {
-          const vNum = parseInt(vStr);
+          const vNum = parseInt(vStr, 10);
           const vText = verses[vNum];
           const fullRef = `${book} ${ch}:${vNum}`.toLowerCase();
 
@@ -768,6 +1213,222 @@ export class StorageService {
     }
 
     return results;
+  }
+
+  // Service Templates Generator
+  public static getServiceTemplate(templateName: string): PlaylistItem[] {
+    const uid = () => Math.random().toString(36).substring(2, 9);
+    const defaultBg = 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80';
+    const crossBg = 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80';
+    const youthBg = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1920&q=80';
+    const sunsetBg = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
+
+    switch (templateName) {
+      case 'Midweek Service':
+        return [
+          {
+            id: `item-${uid()}`,
+            title: 'Midweek Prayer & Study Welcome',
+            type: 'announcement',
+            category: 'Welcome',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'MIDWEEK SERVICE',
+              content: 'WELCOME TO MIDWEEK PRAYER & BIBLE STUDY\n"Where two or three are gathered in My name..."',
+              subtitle: 'Matthew 18:20',
+              sectionLabel: 'Title',
+              backgroundUrl: defaultBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Goodness of God',
+            type: 'song',
+            songId: 'song-goodness-of-god',
+            category: 'Worship',
+            slides: ImporterService.songToSlides(DEFAULT_SONGS[3], defaultBg)
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Scripture Focus: Philippians 4:6–7',
+            type: 'bible',
+            passageRef: 'Philippians 4:6-7',
+            category: 'Scripture',
+            slides: [
+              {
+                id: `slide-${uid()}`,
+                title: 'Philippians 4:6',
+                content: 'Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God.',
+                subtitle: 'Philippians 4:6–7 (KJV)',
+                sectionLabel: 'Scripture',
+                backgroundUrl: crossBg
+              },
+              {
+                id: `slide-${uid()}`,
+                title: 'Philippians 4:7',
+                content: 'And the peace of God, which passeth all understanding, shall keep your hearts and minds through Christ Jesus.',
+                subtitle: 'Philippians 4:6–7 (KJV)',
+                sectionLabel: 'Scripture',
+                backgroundUrl: crossBg
+              }
+            ]
+          }
+        ];
+
+      case 'Youth Worship Night':
+        return [
+          {
+            id: `item-${uid()}`,
+            title: 'Youth Night Countdown (5 Min)',
+            type: 'countdown',
+            category: 'Pre-Service',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'YOUTH NIGHT STARTS IN',
+              content: 'YOUTH WORSHIP NIGHT\nGET READY FOR ENCOUNTER',
+              subtitle: 'NextGen Youth Ministry',
+              sectionLabel: 'Title',
+              backgroundUrl: youthBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Way Maker',
+            type: 'song',
+            songId: 'song-way-maker',
+            category: 'Worship',
+            slides: ImporterService.songToSlides(DEFAULT_SONGS[0], youthBg)
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'What a Beautiful Name',
+            type: 'song',
+            songId: 'song-beautiful-name',
+            category: 'Worship',
+            slides: ImporterService.songToSlides(DEFAULT_SONGS[1], youthBg)
+          }
+        ];
+
+      case 'Funeral Service':
+        return [
+          {
+            id: `item-${uid()}`,
+            title: 'Celebration of Life',
+            type: 'announcement',
+            category: 'Memorial',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'IN LOVING MEMORY',
+              content: 'CELEBRATION OF LIFE SERVICE\n"Blessed are those who mourn, for they shall be comforted."',
+              subtitle: 'Matthew 5:4',
+              sectionLabel: 'Title',
+              backgroundUrl: sunsetBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Scripture Comfort: Psalm 23:1–6',
+            type: 'bible',
+            passageRef: 'Psalm 23:1-6',
+            category: 'Scripture',
+            slides: Object.entries(OFFLINE_BIBLE_DATABASE['Psalm'][23]).map(([vNum, text]) => ({
+              id: `slide-${uid()}`,
+              title: `Psalm 23:${vNum}`,
+              content: text,
+              subtitle: 'Psalm 23:1–6 (KJV)',
+              sectionLabel: 'Scripture' as const,
+              backgroundUrl: sunsetBg
+            }))
+          },
+          {
+            id: `item-${uid()}`,
+            title: '10,000 Reasons (Bless the Lord)',
+            type: 'song',
+            songId: 'song-10000-reasons',
+            category: 'Worship',
+            slides: ImporterService.songToSlides(DEFAULT_SONGS[2], sunsetBg)
+          }
+        ];
+
+      case 'Wedding Ceremony':
+        return [
+          {
+            id: `item-${uid()}`,
+            title: 'Wedding Ceremony Welcome',
+            type: 'announcement',
+            category: 'Ceremony',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'HOLY MATRIMONY',
+              content: 'WELCOME TO OUR WEDDING CEREMONY\n"What therefore God hath joined together, let not man put asunder."',
+              subtitle: 'Mark 10:9',
+              sectionLabel: 'Title',
+              backgroundUrl: crossBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Goodness of God',
+            type: 'song',
+            songId: 'song-goodness-of-god',
+            category: 'Worship',
+            slides: ImporterService.songToSlides(DEFAULT_SONGS[3], crossBg)
+          }
+        ];
+
+      case 'Conference Event':
+        return [
+          {
+            id: `item-${uid()}`,
+            title: 'Session Countdown',
+            type: 'countdown',
+            category: 'Pre-Session',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'SESSION BEGINS SOON',
+              content: 'WELCOME DELEGATES & GUESTS\nPLEASE TAKE YOUR SEATS',
+              subtitle: 'Main Plenary Session',
+              sectionLabel: 'Title',
+              backgroundUrl: defaultBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Keynote Scripture: Isaiah 40:31',
+            type: 'bible',
+            passageRef: 'Isaiah 40:31',
+            category: 'Scripture',
+            slides: [{
+              id: `slide-${uid()}`,
+              title: 'Isaiah 40:31',
+              content: OFFLINE_BIBLE_DATABASE['Isaiah'][40][31],
+              subtitle: 'Isaiah 40:31 (KJV)',
+              sectionLabel: 'Scripture',
+              backgroundUrl: defaultBg
+            }]
+          },
+          {
+            id: `item-${uid()}`,
+            title: 'Keynote Session Deck',
+            type: 'sermon',
+            category: 'Plenary',
+            slides: [
+              {
+                id: `slide-${uid()}`,
+                title: 'KEYNOTE SESSION',
+                content: 'RENEWED STRENGTH FOR THE VISION\n"Mounting Up With Wings As Eagles"',
+                subtitle: 'Conference Keynote',
+                sectionLabel: 'Title',
+                backgroundUrl: defaultBg
+              }
+            ]
+          }
+        ];
+
+      case 'Sunday Service':
+      default:
+        return SAMPLE_SERVICE_PLAYLIST;
+    }
   }
 
   // Announcements Storage
@@ -827,6 +1488,26 @@ export class StorageService {
     }
   }
 
+  // Persistent Bible Slide Background
+  private static BIBLE_BG_KEY = 'live_psalms_bible_bg_v1';
+
+  public static getBibleBackground(): { backgroundUrl?: string; backgroundType?: 'image' | 'video' | 'color' } {
+    try {
+      const raw = localStorage.getItem(this.BIBLE_BG_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return {
+      backgroundUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80',
+      backgroundType: 'image'
+    };
+  }
+
+  public static saveBibleBackground(bg: { backgroundUrl?: string; backgroundType?: 'image' | 'video' | 'color' }) {
+    try {
+      localStorage.setItem(this.BIBLE_BG_KEY, JSON.stringify(bg));
+    } catch (e) {}
+  }
+
   // Church Profile Storage
   private static CHURCH_PROFILE_KEY = 'live_psalms_church_profile_v1';
 
@@ -845,6 +1526,9 @@ export class StorageService {
   public static saveChurchProfile(profile: ChurchProfile) {
     try {
       localStorage.setItem(this.CHURCH_PROFILE_KEY, JSON.stringify(profile));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('church-profile-updated', { detail: profile }));
+      }
     } catch (e) {}
   }
 

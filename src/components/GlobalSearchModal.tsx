@@ -55,6 +55,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     m.category.toLowerCase().includes(query.toLowerCase())
   );
 
+  const matchedPlaylist = playlist.filter(p =>
+    p.title.toLowerCase().includes(query.toLowerCase()) ||
+    p.slides.some(s => s.content.toLowerCase().includes(query.toLowerCase()))
+  );
+
   // Search Bible Verses (Reference match + keyword text search)
   const matchedBibleVerses = query.trim() ? StorageService.searchBibleVerses(query) : [];
 
@@ -174,7 +179,40 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </div>
           )}
 
-          {query && matchedSongs.length === 0 && matchedBibleVerses.length === 0 && matchedMedia.length === 0 && (
+          {/* SERVICE PLAYLIST MATCHES */}
+          {query.trim() !== '' && matchedPlaylist.length > 0 && (
+            <div>
+              <div className="font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Zap className="w-4 h-4" /> In Active Service Playlist ({matchedPlaylist.length})
+              </div>
+              <div className="space-y-1.5">
+                {matchedPlaylist.map(item => (
+                  <div
+                    key={item.id}
+                    className="bg-[#141d2e] border border-indigo-500/30 hover:border-indigo-500 p-2.5 rounded-xl flex items-center justify-between gap-2 transition"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-200 text-sm">{item.title}</div>
+                      <div className="text-slate-400 text-[10px]">{item.category || item.type} • {item.slides.length} slides</div>
+                    </div>
+                    {item.slides.length > 0 && (
+                      <button
+                        onClick={() => {
+                          onGoLiveSlide(item.slides[0]);
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg flex items-center gap-1 shadow transition"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" /> Go Live
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {query && matchedSongs.length === 0 && matchedBibleVerses.length === 0 && matchedMedia.length === 0 && matchedPlaylist.length === 0 && (
             <div className="p-8 text-center text-slate-500">
               No results found for "{query}". Try searching for "John 3:16" or "Way Maker".
             </div>

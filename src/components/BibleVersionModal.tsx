@@ -17,11 +17,12 @@ export type LanguageGroup = 'Swahili' | 'Kalenjin' | 'Kamba' | 'Kikuyu' | 'Luo' 
 
 export function getBibleLanguageGroup(name: string, abbr: string, id: string): LanguageGroup {
   const s = (name + ' ' + abbr + ' ' + id).toLowerCase();
+  // Check Luo FIRST before Swahili to avoid 'muma' being caught by generic checks
+  if (s.includes('luo') || s.includes('muma')) return 'Luo';
   if (s.includes('swahili') || s.includes('kiswahili') || s.includes('suv') || s.includes('rsuv') || s.includes('takatifu') || s.includes('habari njema')) return 'Swahili';
   if (s.includes('kalenjin') || s.includes('baibil') || s.includes('klj')) return 'Kalenjin';
   if (s.includes('kamba') || s.includes('mbivilia') || s.includes('kmb') || s.includes('mbv')) return 'Kamba';
   if (s.includes('kikuyu') || s.includes('ibuku') || s.includes('gky')) return 'Kikuyu';
-  if (s.includes('luo') || s.includes('muma')) return 'Luo';
   if (s.includes('maasai') || s.includes('mas')) return 'Maasai';
   return 'English';
 }

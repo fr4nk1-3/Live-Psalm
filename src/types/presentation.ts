@@ -42,6 +42,14 @@ export interface Slide {
   themeId?: string;
   speakerNotes?: string;
   customElements?: SlideElement[];
+  /** Metadata for Scripture slides to support instant translation switching, parallel translations, and verse stepping */
+  bibleMeta?: {
+    book: string;
+    chapter: number;
+    verse: number;
+    translationId: string;
+    parallelTranslationId?: string | null;
+  };
 }
 
 export interface PlaylistItem {
@@ -58,6 +66,21 @@ export interface PlaylistItem {
   isCollapsed?: boolean;
   nestedItems?: PlaylistItem[];
   metadata?: Record<string, any>;
+  /** Video URL that loops silently behind ALL slides of this item (item-level BG) */
+  videoBackgroundUrl?: string;
+  /** ProPresenter auto-advance slide loop interval in seconds (0 or undefined = disabled) */
+  autoAdvanceSeconds?: number;
+  /** Remembered last viewed slide ID for this item */
+  lastViewedSlideId?: string;
+  /** Bible metadata if this item is a Scripture chapter/passage */
+  bibleMeta?: {
+    book: string;
+    chapter: number;
+    startVerse: number;
+    endVerse: number;
+    translationId: string;
+    parallelTranslationId?: string | null;
+  };
 }
 
 export interface QuickPinnedItem {
@@ -66,6 +89,17 @@ export interface QuickPinnedItem {
   type: 'bible' | 'song' | 'announcement';
   slides: Slide[];
   sourceRef?: string;
+  /** Remembered last viewed slide ID inside this pinned item */
+  lastViewedSlideId?: string;
+  /** Bible metadata if this pinned item is a Scripture chapter/passage */
+  bibleMeta?: {
+    book: string;
+    chapter: number;
+    startVerse: number;
+    endVerse: number;
+    translationId: string;
+    parallelTranslationId?: string | null;
+  };
 }
 
 export interface SongSection {
@@ -148,14 +182,24 @@ export interface TransitionSettings {
   durationMs: number;
 }
 
+export interface AudienceAlert {
+  code: string;
+  message?: string;
+  position?: 'top-right' | 'top-left' | 'bottom-right';
+  urgent?: boolean;
+}
+
 export interface StageDisplayState {
   currentSlide?: Slide;
   nextSlide?: Slide;
   currentItemTitle?: string;
   clockTime: string;
   countdownRemaining: number;
+  countdownRunning?: boolean;
   speakerNotes?: string;
   activeSection?: SectionTag;
+  stageMessage?: string | null;
+  stageMessageFlash?: boolean;
 }
 
 export interface UserRole {
@@ -187,6 +231,7 @@ export interface ChurchProfile {
   name: string;
   tagline?: string;
   logoUrl?: string;
+  logoSize?: number; // percentage height on projection screen (20-90)
 }
 
 export interface AppSettings {
@@ -194,6 +239,10 @@ export interface AppSettings {
   networkServerPort: number;
   churchProfile: ChurchProfile;
   obsAlphaBackground: boolean;
+  defaultTransition?: 'fade' | 'slide' | 'cut';
+  transitionDurationMs?: number;
+  showVerseNumbers?: boolean;
+  autoLaunchAudience?: boolean;
 }
 
 export interface LedWallDisplayState {
