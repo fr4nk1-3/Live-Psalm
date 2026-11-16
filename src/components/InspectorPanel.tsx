@@ -297,27 +297,46 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           )}
         </div>
 
-        {/* LOWER THIRD STYLING SECTION */}
-        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-1.5 text-xs">
+        {/* PROJECTOR LAYOUT SECTION */}
+        <div className="bg-[#121929] border border-slate-800 p-3 rounded-xl space-y-2 text-xs">
           <div className="flex items-center justify-between gap-2">
             <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" /> Lower Third Mode
+              <Sparkles className="w-3.5 h-3.5" /> Projector Layout
             </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={theme.lowerThirdStyle}
-              onClick={() => onUpdateTheme({ lowerThirdStyle: !theme.lowerThirdStyle })}
-              className={`w-9 h-5 rounded-full transition-colors p-0.5 flex items-center shrink-0 ${
-                theme.lowerThirdStyle ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'
-              }`}
-              title="Toggle broadcast lower-third mode"
-            >
-              <span className="w-4 h-4 rounded-full bg-white shadow" />
-            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { id: 'centered', label: 'Centered Classic' },
+              { id: 'lower_third', label: 'Lower-Third Bar' },
+              { id: 'top_banner', label: 'Top Banner' },
+              { id: 'split_left', label: 'Left Split Panel' },
+              { id: 'split_right', label: 'Right Split Panel' },
+              { id: 'boxed_card', label: 'Cinema Boxed Card' },
+              { id: 'minimal', label: 'Minimal Clean' }
+            ].map(opt => {
+              const currentLayout = theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+              const isActive = currentLayout === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onUpdateTheme({
+                    projectorLayout: opt.id as any,
+                    lowerThirdStyle: opt.id === 'lower_third'
+                  })}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-left transition truncate ${
+                    isActive
+                      ? 'bg-emerald-600/25 border-emerald-500 text-emerald-200'
+                      : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            Renders text as a broadcast lower-third overlay at the bottom of the screen.
+            Controls how slides &amp; scriptures are arranged on the Audience Projector screen.
           </p>
         </div>
 

@@ -6,9 +6,9 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  X, Radio, Youtube, Twitch, Facebook, Play, Square, Settings,
-  CheckCircle2, AlertTriangle, Info, Copy, ExternalLink, ChevronDown, ChevronRight,
-  Wifi, Eye, EyeOff, RefreshCw
+  X, Radio, Youtube, Twitch, Facebook, Square,
+  CheckCircle2, AlertTriangle, Copy, ExternalLink,
+  Eye, EyeOff, RefreshCw, Video, Mic, Volume2
 } from 'lucide-react';
 
 // Platform configurations
@@ -101,10 +101,28 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   const [ffmpegStatus, setFfmpegStatus] = useState<'checking' | 'available' | 'missing'>('checking');
   const [streamLog, setStreamLog] = useState<string[]>([]);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
-  const [showInstructions, setShowInstructions] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ipc = getIpc();
+
+  // ── Media Input Devices (Camera / Capture Card + Audio Mixer / Mic) ──
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState<string>(() => {
+    try { return JSON.parse(localStorage.getItem('live_psalms_stream_devices_v1') || '{}').videoId || ''; } catch { return ''; }
+  });
+  const [selectedAudioId, setSelectedAudioId] = useState<string>(() => {
+    try { return JSON.parse(localStorage.getItem('live_psalms_stream_devices_v1') || '{}').audioId || ''; } catch { return ''; }
+  });
+  const [studioAudioMode, setStudioAudioMode] = useState<boolean>(true);
+  const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [actualStreamStats, setActualStreamStats] = useState<string>('');
+  const [deviceError, setDeviceError] = useState<string>('');
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const activeMediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const levelRafRef = useRef<number | null>(null);
 
   // Check ffmpeg availability on open
   useEffect(() => {
@@ -136,6 +154,180 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isStreaming, streamStartTime]);
+
+  // Enumerate connected video & audio input devices
+  const refreshDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    setDeviceError('');
+    try {
+      // Request permission briefly if labels are empty so device names appear
+      let devs = await navigator.mediaDevices.enumerateDevices();
+      if (devs.some(d => (d.kind === 'videoinput' || d.kind === 'audioinput') && !d.label)) {
+        try {
+          const temp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          temp.getTracks().forEach(t => t.stop());
+          devs = await navigator.mediaDevices.enumerateDevices();
+        } catch (e) {
+          // Try audio-only or video-only permission if one is missing
+          try {
+            const tempA = await navigator.mediaDevices.getUserMedia({ audio: true });
+            tempA.getTracks().forEach(t => t.stop());
+          } catch {}
+          try {
+            const tempV = await navigator.mediaDevices.getUserMedia({ video: true });
+            tempV.getTracks().forEach(t => t.stop());
+          } catch {}
+          devs = await navigator.mediaDevices.enumerateDevices();
+        }
+      }
+      const vids = devs.filter(d => d.kind === 'videoinput');
+      const auds = devs.filter(d => d.kind === 'audioinput');
+      setVideoDevices(vids);
+      setAudioDevices(auds);
+      if (!selectedVideoId && vids.length > 0) setSelectedVideoId(vids[0].deviceId);
+      if (!selectedAudioId && auds.length > 0) setSelectedAudioId(auds[0].deviceId);
+    } catch (e: any) {
+      setDeviceError(e?.message || 'Unable to list media devices');
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    refreshDevices();
+    navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', refreshDevices);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Persist selected devices
+  useEffect(() => {
+    try {
+      localStorage.setItem('live_psalms_stream_devices_v1', JSON.stringify({
+        videoId: selectedVideoId,
+        audioId: selectedAudioId
+      }));
+    } catch {}
+  }, [selectedVideoId, selectedAudioId]);
+
+  // Open live preview MediaStream & Audio VU meter whenever devices or quality change while modal is open
+  useEffect(() => {
+    if (!isOpen || isStreaming) return;
+    let cancelled = false;
+
+    const stopPreview = () => {
+      if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+      levelRafRef.current = null;
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
+      if (activeMediaStreamRef.current) {
+        activeMediaStreamRef.current.getTracks().forEach(t => t.stop());
+        activeMediaStreamRef.current = null;
+      }
+      setAudioLevel(0);
+      setActualStreamStats('');
+    };
+
+    const startPreview = async () => {
+      stopPreview();
+      if (!navigator.mediaDevices?.getUserMedia) return;
+      if (selectedVideoId === 'none' && selectedAudioId === 'none') return;
+
+      const keyCfg = streamKeys[activePlatform] || { quality: '1080p' };
+      const q = QUALITY_OPTIONS.find(o => o.value === (keyCfg.quality || '1080p')) || QUALITY_OPTIONS[1];
+      const [w, h] = q.res.split('x').map(Number);
+
+      const videoConstraint: boolean | MediaTrackConstraints =
+        selectedVideoId === 'none'
+          ? false
+          : {
+              ...(selectedVideoId ? { deviceId: { exact: selectedVideoId } } : {}),
+              width: { ideal: w || 1920 },
+              height: { ideal: h || 1080 },
+              frameRate: { ideal: q.fps || 30 }
+            };
+
+      const audioConstraint: boolean | MediaTrackConstraints =
+        selectedAudioId === 'none'
+          ? false
+          : {
+              ...(selectedAudioId ? { deviceId: { exact: selectedAudioId } } : {}),
+              echoCancellation: !studioAudioMode,
+              noiseSuppression: !studioAudioMode,
+              autoGainControl: !studioAudioMode,
+              sampleRate: { ideal: 48000 },
+              channelCount: { ideal: 2 }
+            };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraint,
+          audio: audioConstraint
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        activeMediaStreamRef.current = stream;
+        setDeviceError('');
+
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+          previewVideoRef.current.play().catch(() => {});
+        }
+
+        const vTrack = stream.getVideoTracks()[0];
+        const aTrack = stream.getAudioTracks()[0];
+        const parts: string[] = [];
+        if (vTrack) {
+          const s = vTrack.getSettings();
+          parts.push(`${s.width || '?'}×${s.height || '?'} @ ${Math.round(s.frameRate || q.fps)}fps`);
+        }
+        if (aTrack) {
+          const s = aTrack.getSettings();
+          parts.push(`${s.sampleRate ? Math.round(s.sampleRate / 1000) + 'kHz' : '48kHz'} ${s.channelCount === 2 ? 'Stereo' : 'Audio'}`);
+        }
+        setActualStreamStats(parts.join(' • '));
+
+        if (aTrack) {
+          const ctx = new AudioContext();
+          audioCtxRef.current = ctx;
+          const src = ctx.createMediaStreamSource(new MediaStream([aTrack]));
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const tick = () => {
+            if (cancelled) return;
+            analyser.getByteTimeDomainData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+              const v = (data[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / data.length);
+            setAudioLevel(Math.min(100, Math.round(rms * 280)));
+            levelRafRef.current = requestAnimationFrame(tick);
+          };
+          tick();
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setDeviceError(e?.message || 'Could not open selected media device');
+        }
+      }
+    };
+
+    startPreview();
+    return () => {
+      cancelled = true;
+      if (!isStreaming) stopPreview();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, selectedVideoId, selectedAudioId, studioAudioMode, activePlatform, streamKeys, isStreaming]);
 
   // Listen for stream status from main process
   useEffect(() => {
@@ -193,14 +385,45 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
 
     if (ipc) {
       try {
+        const stream = activeMediaStreamRef.current;
+        const hasVideo = !!(stream && stream.getVideoTracks().length > 0);
+        const hasAudio = !!(stream && stream.getAudioTracks().length > 0);
+        const useMediaPipe = !!(stream && (hasVideo || hasAudio));
+
         const result = await ipc.invoke('start-stream', {
           rtmpUrl,
           resolution: q.res,
           fps: q.fps,
           bitrate: q.bitrate,
-          platform: activePlatform
+          platform: activePlatform,
+          useMediaPipe,
+          hasVideo,
+          hasAudio
         });
         if (result.success) {
+          if (useMediaPipe && stream) {
+            const mimeCandidates = [
+              'video/webm;codecs=h264,opus',
+              'video/webm;codecs=vp9,opus',
+              'video/webm;codecs=vp8,opus',
+              'video/webm'
+            ];
+            const mimeType = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
+            const recorder = new MediaRecorder(stream, {
+              ...(mimeType ? { mimeType } : {}),
+              videoBitsPerSecond: Math.max(q.bitrate * 1000 * 1.5, 8000000),
+              audioBitsPerSecond: 256000
+            });
+            recorder.ondataavailable = async (ev) => {
+              if (ev.data && ev.data.size > 0) {
+                const buf = await ev.data.arrayBuffer();
+                ipc.send('stream-data', new Uint8Array(buf));
+              }
+            };
+            recorder.start(250);
+            mediaRecorderRef.current = recorder;
+            setStreamLog(prev => [...prev, `🎥 Capturing ${actualStreamStats || q.res} (${mimeType || 'webm'}) → RTMP`]);
+          }
           setIsStreaming(true);
           setStreamingPlatform(activePlatform);
           setStreamStartTime(new Date());
@@ -217,6 +440,12 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   };
 
   const stopStream = async () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
+    }
     if (ipc) {
       await ipc.invoke('stop-stream').catch(() => {});
     }
@@ -374,6 +603,120 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Media Input Devices (Camera / Capture Card + Audio Mixer / Mic) */}
+            <div className="bg-[#0d1320] border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                  <Video className="w-4 h-4 text-emerald-400" /> Media Input Devices (Broadcast Capture)
+                </span>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-300 cursor-pointer bg-[#080d16] px-2 py-1 rounded-lg border border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={studioAudioMode}
+                      onChange={e => setStudioAudioMode(e.target.checked)}
+                      disabled={isStreaming}
+                      className="accent-emerald-500 w-3 h-3 rounded"
+                    />
+                    <span>Studio Audio (Raw 48kHz, No DSP)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={refreshDevices}
+                    disabled={isStreaming}
+                    className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-lg text-[10px] font-bold text-slate-200 transition"
+                    title="Rescan connected cameras, capture cards, and audio interfaces"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Live Camera / Capture Card Preview */}
+                <div className="bg-black rounded-xl border border-slate-800 overflow-hidden relative aspect-video flex items-center justify-center">
+                  <video
+                    ref={previewVideoRef}
+                    muted
+                    playsInline
+                    className={`w-full h-full object-contain ${selectedVideoId === 'none' ? 'hidden' : ''}`}
+                  />
+                  {selectedVideoId === 'none' && (
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Video Disabled (Blank)</span>
+                  )}
+                  {actualStreamStats && (
+                    <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-black/80 border border-white/15 text-[9px] font-mono font-bold text-emerald-300">
+                      {actualStreamStats}
+                    </span>
+                  )}
+                </div>
+
+                {/* Selectors + Live Audio VU Meter */}
+                <div className="flex flex-col justify-between space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mb-1">
+                      <Video className="w-3 h-3 text-sky-400" /> Video Input (Camera / Capture Card)
+                    </label>
+                    <select
+                      value={selectedVideoId}
+                      onChange={e => setSelectedVideoId(e.target.value)}
+                      disabled={isStreaming}
+                      className="w-full bg-[#080d16] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none disabled:opacity-50"
+                    >
+                      {videoDevices.map((d, idx) => (
+                        <option key={d.deviceId || idx} value={d.deviceId}>
+                          {d.label || `Camera ${idx + 1}`}
+                        </option>
+                      ))}
+                      <option value="none">None (Black Screen)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mb-1">
+                      <Mic className="w-3 h-3 text-amber-400" /> Audio Input (Mixer / USB Interface / Mic)
+                    </label>
+                    <select
+                      value={selectedAudioId}
+                      onChange={e => setSelectedAudioId(e.target.value)}
+                      disabled={isStreaming}
+                      className="w-full bg-[#080d16] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none disabled:opacity-50"
+                    >
+                      {audioDevices.map((d, idx) => (
+                        <option key={d.deviceId || idx} value={d.deviceId}>
+                          {d.label || `Microphone ${idx + 1}`}
+                        </option>
+                      ))}
+                      <option value="none">None (Silent Audio)</option>
+                    </select>
+                  </div>
+
+                  {/* Live Audio Level Meter */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                      <span className="flex items-center gap-1"><Volume2 className="w-3 h-3 text-emerald-400" /> Audio Input Level</span>
+                      <span className="font-mono text-slate-300">{selectedAudioId === 'none' ? 'Muted' : `${audioLevel}%`}</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#080d16] rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className={`h-full transition-all duration-75 ${
+                          audioLevel > 85 ? 'bg-rose-500' : audioLevel > 55 ? 'bg-amber-400' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${selectedAudioId === 'none' ? 0 : audioLevel}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {deviceError && (
+                <div className="text-[11px] font-semibold text-rose-300 bg-rose-950/50 border border-rose-500/40 rounded-lg px-3 py-1.5">
+                  {deviceError}
+                </div>
+              )}
             </div>
 
             {/* Stream Quality */}

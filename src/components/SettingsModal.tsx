@@ -53,6 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [obsOutputDir, setObsOutputDir] = useState<string>('~/Documents/LivePsalms-OBS');
   const [copiedKey, setCopiedKey] = useState<string>('');
   const [backupNotice, setBackupNotice] = useState<string>('');
+  const [profileNotice, setProfileNotice] = useState<string>('');
 
   const xmlFileInputRef = React.useRef<HTMLInputElement>(null);
   const backupFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -93,10 +94,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           })
           .catch(() => {});
       } else {
-        // Browser Multi-Screen Window Placement API (when available) + fallback
+        // Browser / Vite dev server OS-level display scan + Multi-Screen Window Placement API fallback
         let detected: any[] = [];
         try {
-          if (typeof (window as any).getScreenDetails === 'function') {
+          const res = await fetch('/api/system/displays');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data?.displays) && data.displays.length > 0) {
+              detected = data.displays;
+            }
+          }
+        } catch {}
+        try {
+          if (detected.length === 0 && typeof (window as any).getScreenDetails === 'function') {
             const details = await (window as any).getScreenDetails();
             if (details && Array.isArray(details.screens)) {
               detected = details.screens.map((s: any, idx: number) => ({
@@ -122,6 +132,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               resolution: `${window.screen.width}x${window.screen.height}`
             }
           ];
+          if ((window.screen as any).isExtended) {
+            detected.push({
+              id: '2',
+              index: 2,
+              label: 'External Display (Extended Desktop)',
+              isPrimary: false,
+              bounds: { x: window.screen.width, y: 0, width: window.screen.width, height: window.screen.height },
+              resolution: `${window.screen.width}x${window.screen.height}`
+            });
+          }
         }
         setDisplays(detected);
         try {
@@ -148,6 +168,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setBackupNotice('');
       refreshSystemInfo();
     }
+    let ipcRenderer: any = null;
+    const onDisplaysChanged = (_event: any, list: any[]) => {
+      if (Array.isArray(list)) {
+        setDisplays(list);
+        try {
+          localStorage.setItem('live_psalms_detected_displays_v1', JSON.stringify(list));
+        } catch {}
+      }
+    };
+    try {
+      if (isOpen && (window as any).require) {
+        ipcRenderer = (window as any).require('electron').ipcRenderer;
+        ipcRenderer.on('displays-changed', onDisplaysChanged);
+      }
+    } catch {}
+    return () => {
+      if (ipcRenderer) ipcRenderer.removeListener('displays-changed', onDisplaysChanged);
+    };
   }, [isOpen]);
 
   const storageStats = useMemo(() => {
@@ -174,6 +212,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleUpdateProfile = (updated: Partial<ChurchProfile>) => {
+    setProfileNotice('');
     updateSettings({
       churchProfile: {
         ...settings.churchProfile,
@@ -182,13 +221,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
+  const handleSaveProfile = () => {
+    StorageService.saveSettings(settings);
+    BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: settings });
+    setProfileNotice('Church profile & logo saved.');
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const dataUrl = evt.target?.result as string;
-      handleUpdateProfile({ logoUrl: dataUrl });
+      const rawDataUrl = evt.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 512;
+          const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            handleUpdateProfile({ logoUrl: rawDataUrl });
+            setProfileNotice('Logo uploaded and saved.');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, w, h);
+          let optimized = canvas.toDataURL('image/png');
+          if (optimized.length > 350_000) {
+            const webp = canvas.toDataURL('image/webp', 0.9);
+            if (webp.startsWith('data:image/webp') && webp.length < optimized.length) {
+              optimized = webp;
+            }
+          }
+          handleUpdateProfile({ logoUrl: optimized });
+          setProfileNotice('Logo uploaded and saved.');
+        } catch {
+          handleUpdateProfile({ logoUrl: rawDataUrl });
+          setProfileNotice('Logo uploaded and saved.');
+        }
+      };
+      img.onerror = () => {
+        handleUpdateProfile({ logoUrl: rawDataUrl });
+        setProfileNotice('Logo uploaded and saved.');
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -457,6 +537,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </div>
                 </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  {profileNotice ? (
+                    <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 rounded-lg">
+                      {profileNotice}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">
+                      Changes are saved locally and synced to all output screens.
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs shadow transition flex items-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Save Profile
+                  </button>
+                </div>
               </div>
             )}
 
@@ -698,6 +797,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                       {renderToggle(settings.autoLaunchAudience ?? false, (val) =>
                         updateSettings({ autoLaunchAudience: val })
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
+                      <div>
+                        <div className="font-bold text-slate-200">Enable Broadcast Multiview</div>
+                        <div className="text-[10px] text-slate-400">
+                          Activates a live Multiview tab in the Broadcast dock to monitor Preview, Program, and all broadcast scenes simultaneously.
+                        </div>
+                      </div>
+                      {renderToggle(settings.broadcastMultiviewEnabled ?? false, (val) =>
+                        updateSettings({ broadcastMultiviewEnabled: val })
                       )}
                     </div>
                   </div>
@@ -1085,6 +1196,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-5 py-2.5 bg-[#131b2c] border-t border-[#26334a] flex items-center justify-between shrink-0">
+          <span className="text-[10px] text-slate-400">
+            All preferences are stored locally in Live Psalms.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              StorageService.saveSettings(settings);
+              BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: settings });
+              onClose();
+            }}
+            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs shadow transition"
+          >
+            Save &amp; Close
+          </button>
         </div>
       </div>
     </div>

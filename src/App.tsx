@@ -9,7 +9,8 @@ import {
   TransitionSettings, 
   SectionTag,
   ItemType,
-  QuickPinnedItem
+  QuickPinnedItem,
+  ChurchProfile
 } from './types/presentation';
 import { StorageService } from './services/storage';
 import { BroadcastService } from './services/broadcast';
@@ -28,7 +29,7 @@ import { QuickPresentationModal } from './components/QuickPresentationModal';
 import { SermonModeModal } from './components/SermonModeModal';
 import { SlideDesignerModal } from './components/SlideDesignerModal';
 import { SettingsModal } from './components/SettingsModal';
-import { StreamingModal } from './components/StreamingModal';
+import { BroadcastDock } from './components/BroadcastDock';
 import { MediaPlayerBar } from './components/MediaPlayerBar';
 
 import { AudienceOutputWindow } from './components/AudienceOutputWindow';
@@ -94,6 +95,9 @@ export const App: React.FC = () => {
     isStopMedia: false
   });
 
+  // Church Profile (reactive across Settings updates & logo uploads)
+  const [churchProfile, setChurchProfile] = useState<ChurchProfile>(() => StorageService.getChurchProfile());
+
   // Transitions (initialized from saved AppSettings)
   const [transition, setTransition] = useState<TransitionSettings>(() => {
     const s = StorageService.getSettings();
@@ -117,10 +121,22 @@ export const App: React.FC = () => {
           durationMs: detail.transitionDurationMs ?? prev.durationMs
         }));
         setAudienceViewMode(detail.audienceViewMode || 'near');
+        if (detail.churchProfile) {
+          setChurchProfile(detail.churchProfile);
+        }
       }
     };
+    const handleProfileUpdate = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail) setChurchProfile(detail);
+      else setChurchProfile(StorageService.getChurchProfile());
+    };
     window.addEventListener('app-settings-updated', handleSettingsUpdate);
-    return () => window.removeEventListener('app-settings-updated', handleSettingsUpdate);
+    window.addEventListener('church-profile-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('app-settings-updated', handleSettingsUpdate);
+      window.removeEventListener('church-profile-updated', handleProfileUpdate);
+    };
   }, []);
 
   // Speaker / Stage Notes
@@ -265,7 +281,7 @@ export const App: React.FC = () => {
   const [isSermonModeOpen, setIsSermonModeOpen] = useState(false);
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStreamingOpen, setIsStreamingOpen] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
 
   const activeItem = playlist.find(i => i.id === activeItemId) || null;
   const activeTheme = themes.find(t => t.id === activeThemeId) || themes[0];
@@ -1200,7 +1216,7 @@ export const App: React.FC = () => {
       }
 
       // Do not trigger single-key operator shortcuts while a modal dialog or input is active
-      if (isSearchOpen || isQuickModeOpen || isSermonModeOpen || isDesignerOpen || isSettingsOpen || isStreamingOpen) {
+      if (isSearchOpen || isQuickModeOpen || isSermonModeOpen || isDesignerOpen || isSettingsOpen) {
         return;
       }
 
@@ -1268,8 +1284,7 @@ export const App: React.FC = () => {
     isQuickModeOpen,
     isSermonModeOpen,
     isDesignerOpen,
-    isSettingsOpen,
-    isStreamingOpen
+    isSettingsOpen
   ]);
 
   // Playlist Handlers
@@ -2100,7 +2115,8 @@ export const App: React.FC = () => {
           const nextState = BroadcastService.toggleLedWindow();
           setIsLedActive(nextState);
         }}
-        onOpenStreaming={() => setIsStreamingOpen(true)}
+        onOpenStreaming={() => setIsBroadcastOpen(v => !v)}
+        isBroadcastOpen={isBroadcastOpen}
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
@@ -2108,6 +2124,27 @@ export const App: React.FC = () => {
         isLedActive={isLedActive}
         isSaved={isSaved}
         onOpenSlideDesigner={() => setIsDesignerOpen(true)}
+      />
+
+      {/* Unified Live Broadcast & Recording Dock (coherent with Presentation Console) */}
+      <BroadcastDock
+        isOpen={isBroadcastOpen}
+        onClose={() => setIsBroadcastOpen(false)}
+        liveSlide={liveSlide}
+        activeTheme={activeTheme}
+        globalVideoBgUrl={globalVideoBgUrl}
+        itemVideoBgUrl={activeItem?.videoBackgroundUrl || null}
+        isFullSlideCountdown={isFullSlideCountdown}
+        isCountdownRunning={isCountdownRunning}
+        countdownTargetScreen={countdownTargetScreen}
+        countdownSeconds={countdownSeconds}
+        countdownTitle={countdownTitle}
+        lowerThird={activeLowerThirdText}
+        churchProfile={churchProfile}
+        mediaList={media}
+        isAudienceActive={isAudienceActive}
+        isStageActive={isStageActive}
+        isLedActive={isLedActive}
       />
 
       {/* Main Studio Body Workspace Layout */}
@@ -2420,11 +2457,6 @@ export const App: React.FC = () => {
           localStorage.clear();
           window.location.reload();
         }}
-      />
-
-      <StreamingModal
-        isOpen={isStreamingOpen}
-        onClose={() => setIsStreamingOpen(false)}
       />
     </div>
   );

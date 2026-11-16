@@ -1856,23 +1856,39 @@ export class StorageService {
   private static SETTINGS_KEY = 'live_psalms_app_settings_v1';
 
   public static getSettings(): AppSettings {
+    const profile = this.getChurchProfile();
     try {
       const raw = localStorage.getItem(this.SETTINGS_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          ...parsed,
+          churchProfile: profile.logoUrl || profile.name ? profile : (parsed.churchProfile || profile)
+        };
+      }
     } catch (e) {}
     return {
       apiBibleEnabled: false, // OFF by default as requested by user
       networkServerPort: 3000,
-      churchProfile: this.getChurchProfile(),
+      churchProfile: profile,
       obsAlphaBackground: false
     };
   }
 
   public static saveSettings(settings: AppSettings) {
     try {
-      localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(settings));
       if (settings.churchProfile) {
         this.saveChurchProfile(settings.churchProfile);
+      }
+      try {
+        localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(settings));
+      } catch (quotaErr) {
+        // Fallback: keep logo only in CHURCH_PROFILE_KEY if combined payload exceeds localStorage quota
+        const slim = {
+          ...settings,
+          churchProfile: settings.churchProfile ? { ...settings.churchProfile, logoUrl: '' } : undefined
+        };
+        localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(slim));
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app-settings-updated', { detail: settings }));

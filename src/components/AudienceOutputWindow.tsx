@@ -623,17 +623,24 @@ export const AudienceOutputWindow: React.FC = () => {
           )}
 
           {/* MAIN CONTENT — only shown for text slides (not pure video/image slides or full-slide countdown) */}
-          {!emergency.isClear && !showFullSlideCountdown && liveSlide && !isPureMediaSlide && (
+          {!emergency.isClear && !showFullSlideCountdown && liveSlide && !isPureMediaSlide && (() => {
+            const layout = theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+            const isBanner = layout === 'lower_third' || layout === 'top_banner';
+            const isSplit = layout === 'split_left' || layout === 'split_right';
+            const isBoxed = layout === 'boxed_card';
+            const isMinimal = layout === 'minimal';
+
+            return (
             <div
               key={liveSlide.id}
               style={{ animationDuration: `${transition.durationMs}ms` }}
               className={`absolute inset-0 z-20 flex flex-col ${contentPadding} ${getTransitionClass()}`}
             >
 
-              {/* ── LOWER-THIRD BADGE MODE ── */}
-              {theme.lowerThirdStyle ? (
+              {/* ── LOWER-THIRD / TOP BANNER MODE ── */}
+              {isBanner ? (
                 <div
-                  className={`mt-auto w-full pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
+                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} w-full pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
                     isFarMode
                       ? 'bg-black/95 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[3.5vh]'
                       : 'bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.5vh] backdrop-blur-md'
@@ -671,13 +678,21 @@ export const AudienceOutputWindow: React.FC = () => {
                   )}
                 </div>
               ) : (
-                /* ── FULLSCREEN CENTERED MODE ── */
+                /* ── CENTERED / SPLIT / BOXED / MINIMAL MODES ── */
                 <div
-                  className="m-auto flex flex-col items-center justify-center text-center h-full max-h-[90vh]"
-                  style={{ maxWidth: dynMaxWidth, width: '100%' }}
+                  className={`flex flex-col justify-center h-full max-h-[90vh] ${
+                    layout === 'split_left'
+                      ? 'mr-auto items-start text-left bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-[2vw] px-[4vw] py-[4vh]'
+                      : layout === 'split_right'
+                      ? 'ml-auto items-end text-right bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-[2vw] px-[4vw] py-[4vh]'
+                      : isBoxed
+                      ? 'm-auto items-center text-center bg-slate-950/75 backdrop-blur-md border-2 border-white/15 rounded-[2.2vw] px-[4.5vw] py-[4.5vh] shadow-2xl'
+                      : 'm-auto items-center text-center'
+                  }`}
+                  style={{ maxWidth: isSplit ? '56vw' : dynMaxWidth, width: '100%' }}
                 >
-                  {/* Section / title badge — only for text slides */}
-                  {(liveSlide.title || liveSlide.sectionLabel) && (
+                  {/* Section / title badge — hidden in minimal mode */}
+                  {!isMinimal && (liveSlide.title || liveSlide.sectionLabel) && (
                     <div
                       className={`font-black uppercase tracking-[0.25em] mb-[2vh] rounded-full inline-block shrink-0 ${
                         isFarMode
@@ -702,7 +717,7 @@ export const AudienceOutputWindow: React.FC = () => {
                         fontFamily: theme.fontFamily,
                         fontSize: audienceFittedPx ? `${audienceFittedPx}px` : dynFontSize,
                         lineHeight: dynLineHeight,
-                        textAlign: theme.align as any,
+                        textAlign: layout === 'split_left' ? 'left' : layout === 'split_right' ? 'right' : (theme.align as any),
                         color: isFarMode ? '#ffffff' : theme.textColor,
                         letterSpacing: isFarMode
                           ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.02em')
@@ -719,8 +734,8 @@ export const AudienceOutputWindow: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Subtitle / scripture reference */}
-                  {liveSlide.subtitle && (
+                  {/* Subtitle / scripture reference — hidden in minimal mode */}
+                  {!isMinimal && liveSlide.subtitle && (
                     <div
                       className={`mt-[2.5vh] tracking-wider uppercase shrink-0 ${
                         isFarMode
@@ -735,7 +750,8 @@ export const AudienceOutputWindow: React.FC = () => {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* ── PROPRESENTER NURSERY PAGER / AUDIENCE ALERT PROP ── */}
           {audienceAlert && (

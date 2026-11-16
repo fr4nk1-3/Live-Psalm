@@ -22,6 +22,7 @@ interface HeaderProps {
   onOpenSermonMode: () => void;
   onOpenSettings: () => void;
   onOpenStreaming?: () => void;
+  isBroadcastOpen?: boolean;
   onOpenAudienceOutput: () => void;
   onOpenStageOutput: () => void;
   onOpenLedOutput?: () => void;
@@ -41,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSermonMode,
   onOpenSettings,
   onOpenStreaming,
+  isBroadcastOpen = false,
   onOpenAudienceOutput,
   onOpenStageOutput,
   onOpenLedOutput,
@@ -55,20 +57,61 @@ export const Header: React.FC<HeaderProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [displayCount, setDisplayCount] = React.useState<number>(1);
 
-  React.useEffect(() => {
+  const refreshDisplayCount = React.useCallback(async () => {
     try {
       if ((window as any).require) {
         const { ipcRenderer } = (window as any).require('electron');
-        ipcRenderer.invoke('get-connected-displays').then((displays: any[]) => {
-          if (Array.isArray(displays)) {
-            setDisplayCount(displays.length);
-          }
-        }).catch(() => {});
+        const displays = await ipcRenderer.invoke('get-connected-displays');
+        if (Array.isArray(displays)) {
+          setDisplayCount(displays.length);
+        }
+        return;
       }
-    } catch (e) {
-      // Browser preview mode fallback
-    }
+      try {
+        const res = await fetch('/api/system/displays');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.displays) && data.displays.length > 0) {
+            setDisplayCount(data.displays.length);
+            return;
+          }
+        }
+      } catch {}
+      if (typeof (window as any).getScreenDetails === 'function') {
+        try {
+          const details = await (window as any).getScreenDetails();
+          if (details && Array.isArray(details.screens) && details.screens.length > 0) {
+            setDisplayCount(details.screens.length);
+            return;
+          }
+        } catch {}
+      }
+      if ((window.screen as any).isExtended) {
+        setDisplayCount(2);
+      } else {
+        setDisplayCount(1);
+      }
+    } catch {}
   }, []);
+
+  React.useEffect(() => {
+    refreshDisplayCount();
+    let ipcRenderer: any = null;
+    const onDisplaysChanged = (_event: any, list: any[]) => {
+      if (Array.isArray(list)) setDisplayCount(list.length);
+    };
+    try {
+      if ((window as any).require) {
+        ipcRenderer = (window as any).require('electron').ipcRenderer;
+        ipcRenderer.on('displays-changed', onDisplaysChanged);
+      }
+    } catch {}
+    window.addEventListener('focus', refreshDisplayCount);
+    return () => {
+      if (ipcRenderer) ipcRenderer.removeListener('displays-changed', onDisplaysChanged);
+      window.removeEventListener('focus', refreshDisplayCount);
+    };
+  }, [refreshDisplayCount]);
 
   return (
     <header className="h-14 bg-[#0d131f] border-b border-[#26334a] px-3.5 flex items-center justify-between gap-3 select-none shrink-0 z-30">
@@ -87,17 +130,19 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider whitespace-nowrap">
               PRO
             </span>
-            <span
-              className={`hidden lg:flex text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider items-center gap-1 whitespace-nowrap ${
+            <button
+              type="button"
+              onClick={refreshDisplayCount}
+              className={`hidden lg:flex text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider items-center gap-1 whitespace-nowrap transition hover:brightness-110 ${
                 displayCount > 1
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
                   : 'bg-slate-800/90 text-slate-400 border-slate-700'
               }`}
-              title={displayCount > 1 ? `${displayCount} displays connected` : 'Single display (Borderless mode)'}
+              title={displayCount > 1 ? `${displayCount} displays connected (click to refresh)` : 'Single display detected (click to re-scan external screens)'}
             >
               <Tv className={`w-2.5 h-2.5 ${displayCount > 1 ? 'text-emerald-400' : 'text-slate-400'}`} />
               <span>{displayCount > 1 ? `${displayCount} Screens` : '1 Screen'}</span>
-            </span>
+            </button>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium leading-tight mt-0.5">
             <span className="truncate max-w-[175px] text-slate-300">{serviceTitle}</span>
@@ -208,11 +253,15 @@ export const Header: React.FC<HeaderProps> = ({
         {onOpenStreaming && (
           <button
             onClick={onOpenStreaming}
-            className="h-8 px-2.5 bg-[#182338] hover:bg-rose-600/20 border border-[#26334a] hover:border-rose-500/50 rounded-lg text-rose-300 font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap"
-            title="Live Stream to YouTube, Twitch, or Facebook Live"
+            className={`h-8 px-2.5 border rounded-lg font-semibold text-[11px] flex items-center gap-1.5 transition whitespace-nowrap ${
+              isBroadcastOpen
+                ? 'bg-rose-500/20 border-rose-500 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.28)]'
+                : 'bg-[#182338] hover:bg-rose-600/20 border-[#26334a] hover:border-rose-500/50 text-rose-300'
+            }`}
+            title="Toggle Integrated Live Broadcast & Recording Panel"
           >
-            <Radio className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span>Stream</span>
+            <Radio className={`w-3.5 h-3.5 shrink-0 ${isBroadcastOpen ? 'text-rose-400 animate-pulse' : 'text-rose-400'}`} />
+            <span>Broadcast</span>
           </button>
         )}
 
