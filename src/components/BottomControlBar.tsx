@@ -111,13 +111,13 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   });
 
   const BUILTIN_COUNTDOWN_PRESETS = [
-    { id: 'service', label: 'SERVICE STARTING IN', overtimeLabel: 'SERVICE IN PROGRESS' },
-    { id: 'newyear', label: 'NEW YEAR COUNTDOWN', overtimeLabel: 'HAPPY NEW YEAR!' },
-    { id: 'worship', label: 'WORSHIP STARTING IN', overtimeLabel: 'WORSHIP IN PROGRESS' },
-    { id: 'sermon', label: 'SERMON STARTING IN', overtimeLabel: 'WORD IN PROGRESS' },
-    { id: 'conference', label: 'CONFERENCE SESSION IN', overtimeLabel: 'SESSION IN PROGRESS' },
-    { id: 'break', label: 'BREAK / INTERMISSION', overtimeLabel: 'RESUMING NOW' },
-    { id: 'prayer', label: 'PRAYER SESSION IN', overtimeLabel: 'PRAYER IN PROGRESS' }
+    { id: 'service', shortLabel: 'Service', label: 'SERVICE STARTING IN', overtimeLabel: 'SERVICE IN PROGRESS' },
+    { id: 'newyear', shortLabel: 'New Year', label: 'NEW YEAR COUNTDOWN', overtimeLabel: 'HAPPY NEW YEAR!' },
+    { id: 'worship', shortLabel: 'Worship', label: 'WORSHIP STARTING IN', overtimeLabel: 'WORSHIP IN PROGRESS' },
+    { id: 'sermon', shortLabel: 'Sermon', label: 'SERMON STARTING IN', overtimeLabel: 'WORD IN PROGRESS' },
+    { id: 'conference', shortLabel: 'Conference', label: 'CONFERENCE SESSION IN', overtimeLabel: 'SESSION IN PROGRESS' },
+    { id: 'break', shortLabel: 'Break', label: 'BREAK / INTERMISSION', overtimeLabel: 'RESUMING NOW' },
+    { id: 'prayer', shortLabel: 'Prayer', label: 'PRAYER SESSION IN', overtimeLabel: 'PRAYER IN PROGRESS' }
   ];
 
   const toLocalDateTimeStr = (d: Date) => {
@@ -451,247 +451,265 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
             <Settings className="w-3.5 h-3.5" />
           </button>
 
-          {/* ── Advanced options popover (anchored cleanly above the timer widget) ── */}
+          {/* ── Advanced options popover (compact 2-column layout anchored above timer widget) ── */}
           {showOptions && (
-            <div className="absolute bottom-11 right-0 bg-[#101726] border border-amber-500/50 p-4 rounded-2xl shadow-2xl space-y-3 z-[200] w-80 sm:w-96 max-h-[78vh] overflow-y-auto">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="font-black text-amber-300 text-xs flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-rose-400" /> Timer &amp; Clock Countdown Options
-                </span>
-                <button onClick={() => setShowOptions(false)} className="text-slate-400 hover:text-white">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Full slide mode */}
-              <div className="flex items-center justify-between bg-[#080d16] p-2 rounded-xl border border-slate-800">
-                <label className="text-xs font-bold text-slate-200 cursor-pointer flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isFullSlideCountdown}
-                    onChange={e => onToggleFullSlideCountdown && onToggleFullSlideCountdown(e.target.checked)}
-                    className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
-                  />
-                  Full-slide countdown (projects large timer on output)
-                </label>
-              </div>
-
-              {/* Full-Slide Countdown Heading & Custom Options */}
-              <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">
-                    Countdown Title / Event
+            <div className="absolute bottom-11 right-0 bg-[#0e1524] border border-amber-500/40 p-3.5 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] space-y-3 z-[200] w-[92vw] sm:w-[540px] max-h-[76vh] overflow-y-auto">
+              {/* Header + Full-Slide Toggle */}
+              <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="font-black text-amber-300 text-xs tracking-wide">Timer &amp; Clock Options</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#080d16] border border-slate-700 hover:border-amber-500/50 cursor-pointer text-[11px] font-bold text-slate-200 transition">
+                    <input
+                      type="checkbox"
+                      checked={isFullSlideCountdown}
+                      onChange={e => onToggleFullSlideCountdown && onToggleFullSlideCountdown(e.target.checked)}
+                      className="accent-amber-500 w-3.5 h-3.5 rounded cursor-pointer"
+                    />
+                    <span>Full-Slide</span>
                   </label>
                   <button
                     type="button"
-                    onClick={saveCustomCountdownPreset}
-                    className="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 rounded text-[9px] font-bold text-indigo-200 transition"
-                    title="Save current title & done label as a reusable option"
+                    onClick={() => setShowOptions(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
                   >
-                    + Save Option
+                    <X className="w-4 h-4" />
                   </button>
-                </div>
-
-                {/* Preset & Custom Option Pills */}
-                <div className="flex flex-wrap gap-1">
-                  {BUILTIN_COUNTDOWN_PRESETS.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
-                      className={`px-2 py-0.5 rounded text-[9px] font-bold border transition ${
-                        countdownTitle === p.label
-                          ? 'bg-indigo-600 border-indigo-400 text-white'
-                          : 'bg-[#0f172a] border-slate-700 text-slate-300 hover:border-indigo-400/60'
-                      }`}
-                    >
-                      {p.label.replace(' IN', '').replace(' COUNTDOWN', '')}
-                    </button>
-                  ))}
-                  {customPresets.map(p => (
-                    <span
-                      key={p.id}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border ${
-                        countdownTitle === p.label
-                          ? 'bg-emerald-600/80 border-emerald-400 text-white'
-                          : 'bg-[#0f172a] border-emerald-500/40 text-emerald-300'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
-                      >
-                        {p.label}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteCustomCountdownPreset(p.id)}
-                        className="text-slate-300 hover:text-rose-300 leading-none"
-                        title="Remove saved option"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 gap-1.5 pt-1">
-                  <input
-                    type="text"
-                    value={countdownTitle}
-                    onChange={e => onChangeCountdownLabels?.(e.target.value, countdownOvertimeTitle)}
-                    placeholder="Heading (e.g. NEW YEAR COUNTDOWN)"
-                    className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1 text-xs text-white font-semibold outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={countdownOvertimeTitle}
-                    onChange={e => onChangeCountdownLabels?.(countdownTitle, e.target.value)}
-                    placeholder="When timer reaches 00:00 (e.g. HAPPY NEW YEAR!)"
-                    className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 font-medium outline-none"
-                  />
                 </div>
               </div>
 
-              {/* System Clock Target Time (e.g., Midnight / New Year's Eve) */}
-              <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider">
-                    Link to System Clock (Target Time)
-                  </label>
-                  {countdownTargetTimestamp && (
-                    <button
-                      type="button"
-                      onClick={() => onClearClockCountdown?.()}
-                      className="text-[9px] font-bold text-rose-300 hover:text-rose-200 underline"
-                    >
-                      Unlink Clock
-                    </button>
-                  )}
-                </div>
+              {/* 2-Column Body */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* LEFT: Countdown Title & Custom Options */}
+                <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">
+                        Countdown Event
+                      </label>
+                      <button
+                        type="button"
+                        onClick={saveCustomCountdownPreset}
+                        className="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 rounded text-[9px] font-bold text-indigo-200 transition"
+                        title="Save current heading & done label as a reusable option"
+                      >
+                        + Save
+                      </button>
+                    </div>
 
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setHours(24, 0, 0, 0);
-                      setTargetDateTimeInput(toLocalDateTimeStr(d));
-                      onStartClockCountdown?.(d.getTime());
-                    }}
-                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
-                  >
-                    Midnight Tonight (00:00)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const now = new Date();
-                      const d = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
-                      setTargetDateTimeInput(toLocalDateTimeStr(d));
-                      onChangeCountdownLabels?.('NEW YEAR COUNTDOWN', 'HAPPY NEW YEAR!');
-                      onStartClockCountdown?.(d.getTime());
-                    }}
-                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
-                  >
-                    New Year (Jan 1, 00:00)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setHours(d.getHours() + 1, 0, 0, 0);
-                      setTargetDateTimeInput(toLocalDateTimeStr(d));
-                      onStartClockCountdown?.(d.getTime());
-                    }}
-                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
-                  >
-                    Next Hour (:00)
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="datetime-local"
-                    value={targetDateTimeInput}
-                    onChange={e => setTargetDateTimeInput(e.target.value)}
-                    className="flex-1 bg-[#0c121e] border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1 text-[11px] text-white font-semibold outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ms = new Date(targetDateTimeInput).getTime();
-                      if (!isNaN(ms)) {
-                        onStartClockCountdown?.(ms);
-                      }
-                    }}
-                    className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition shrink-0"
-                  >
-                    Start
-                  </button>
-                </div>
-
-                {countdownTargetTimestamp && (
-                  <div className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 rounded-lg px-2 py-1">
-                    Linked to clock: {new Date(countdownTargetTimestamp).toLocaleString()}
+                    <div className="flex flex-wrap gap-1">
+                      {BUILTIN_COUNTDOWN_PRESETS.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition ${
+                            countdownTitle === p.label
+                              ? 'bg-indigo-600 border-indigo-400 text-white'
+                              : 'bg-[#0f172a] border-slate-700/80 text-slate-300 hover:border-indigo-400/60'
+                          }`}
+                        >
+                          {p.shortLabel}
+                        </button>
+                      ))}
+                      {customPresets.map(p => (
+                        <span
+                          key={p.id}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            countdownTitle === p.label
+                              ? 'bg-emerald-600/80 border-emerald-400 text-white'
+                              : 'bg-[#0f172a] border-emerald-500/40 text-emerald-300'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
+                          >
+                            {p.label}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomCountdownPreset(p.id)}
+                            className="text-slate-300 hover:text-rose-300 leading-none"
+                            title="Remove saved option"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Target screen */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Display</label>
-                <select
-                  value={countdownTargetScreen}
-                  onChange={e => onChangeCountdownTargetScreen && onChangeCountdownTargetScreen(e.target.value as any)}
-                  className="w-full bg-[#080d16] border border-slate-700 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
-                >
-                  <option value="both">📺🖥️ Both (Audience + Stage)</option>
-                  <option value="audience">📺 Audience / Projector</option>
-                  <option value="stage">🖥️ Stage / Confidence Monitor</option>
-                </select>
-              </div>
-
-              {/* End action */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">When Timer Ends</label>
-                <select
-                  value={countdownEndAction}
-                  onChange={e => {
-                    const nextAction = e.target.value as any;
-                    if (onChangeCountdownEndAction) onChangeCountdownEndAction(nextAction);
-                    if (nextAction === 'play_video' && !countdownEndVideoId && onChangeCountdownEndVideoId) {
-                      const firstVideo = mediaList.find(m => m.type === 'video');
-                      if (firstVideo) onChangeCountdownEndVideoId(firstVideo.id);
-                    }
-                  }}
-                  className="w-full bg-[#080d16] border border-slate-700 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
-                >
-                  <option value="none">Continue into overtime (+00:00)</option>
-                  <option value="play_video">▶ Play selected video</option>
-                  <option value="start_playlist">📋 Start first playlist item</option>
-                  <option value="go_live_active">⚡ Go live with active slide</option>
-                </select>
-              </div>
-
-              {countdownEndAction === 'play_video' && (
-                <div className="space-y-1 pt-1.5 border-t border-slate-800">
-                  <label className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">Video Asset</label>
-                  <select
-                    value={countdownEndVideoId}
-                    onChange={e => onChangeCountdownEndVideoId && onChangeCountdownEndVideoId(e.target.value)}
-                    className="w-full bg-[#080d16] border border-amber-500/50 rounded-lg p-1.5 text-xs text-white font-bold outline-none focus:border-amber-500"
-                  >
-                    <option value="">-- Select Video --</option>
-                    {mediaList.filter(m => m.type === 'video').map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                    {mediaList.filter(m => m.type === 'video').length === 0 && (
-                      <option disabled value="">No videos uploaded yet</option>
-                    )}
-                  </select>
+                  <div className="space-y-1.5 pt-1">
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Active Heading</span>
+                      <input
+                        type="text"
+                        value={countdownTitle}
+                        onChange={e => onChangeCountdownLabels?.(e.target.value, countdownOvertimeTitle)}
+                        placeholder="e.g. NEW YEAR COUNTDOWN"
+                        className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-[11px] text-white font-semibold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">When 00:00 Reached</span>
+                      <input
+                        type="text"
+                        value={countdownOvertimeTitle}
+                        onChange={e => onChangeCountdownLabels?.(countdownTitle, e.target.value)}
+                        placeholder="e.g. HAPPY NEW YEAR!"
+                        className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-[11px] text-slate-200 font-medium outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {/* RIGHT: System Clock Target + Display Routing */}
+                <div className="space-y-2.5 flex flex-col justify-between">
+                  <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider">
+                        System Clock Target
+                      </label>
+                      {countdownTargetTimestamp && (
+                        <button
+                          type="button"
+                          onClick={() => onClearClockCountdown?.()}
+                          className="text-[9px] font-bold text-rose-300 hover:text-rose-200 underline"
+                        >
+                          Unlink
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setHours(24, 0, 0, 0);
+                          setTargetDateTimeInput(toLocalDateTimeStr(d));
+                          onStartClockCountdown?.(d.getTime());
+                        }}
+                        className="px-1.5 py-1 rounded-md bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition truncate"
+                        title="Count down to 12:00 AM tonight"
+                      >
+                        Midnight
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const d = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+                          setTargetDateTimeInput(toLocalDateTimeStr(d));
+                          onChangeCountdownLabels?.('NEW YEAR COUNTDOWN', 'HAPPY NEW YEAR!');
+                          onStartClockCountdown?.(d.getTime());
+                        }}
+                        className="px-1.5 py-1 rounded-md bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition truncate"
+                        title="Count down to Jan 1st 12:00 AM"
+                      >
+                        New Year
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setHours(d.getHours() + 1, 0, 0, 0);
+                          setTargetDateTimeInput(toLocalDateTimeStr(d));
+                          onStartClockCountdown?.(d.getTime());
+                        }}
+                        className="px-1.5 py-1 rounded-md bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition truncate"
+                        title="Count down to top of the next hour"
+                      >
+                        Next Hour
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="datetime-local"
+                        value={targetDateTimeInput}
+                        onChange={e => setTargetDateTimeInput(e.target.value)}
+                        className="flex-1 min-w-0 bg-[#0c121e] border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1 text-[10px] text-white font-semibold outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ms = new Date(targetDateTimeInput).getTime();
+                          if (!isNaN(ms)) {
+                            onStartClockCountdown?.(ms);
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition shrink-0"
+                      >
+                        Start
+                      </button>
+                    </div>
+
+                    {countdownTargetTimestamp && (
+                      <div className="text-[9px] font-semibold text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 rounded-md px-2 py-0.5 truncate">
+                        Clock: {new Date(countdownTargetTimestamp).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Target Display & End Action */}
+                  <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-0.5">Target Display</label>
+                      <select
+                        value={countdownTargetScreen}
+                        onChange={e => onChangeCountdownTargetScreen && onChangeCountdownTargetScreen(e.target.value as any)}
+                        className="w-full bg-[#0c121e] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white font-bold outline-none focus:border-amber-500"
+                      >
+                        <option value="both">Both (Audience + Stage)</option>
+                        <option value="audience">Audience / Projector</option>
+                        <option value="stage">Stage Monitor</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-0.5">When Timer Ends</label>
+                      <select
+                        value={countdownEndAction}
+                        onChange={e => {
+                          const nextAction = e.target.value as any;
+                          if (onChangeCountdownEndAction) onChangeCountdownEndAction(nextAction);
+                          if (nextAction === 'play_video' && !countdownEndVideoId && onChangeCountdownEndVideoId) {
+                            const firstVideo = mediaList.find(m => m.type === 'video');
+                            if (firstVideo) onChangeCountdownEndVideoId(firstVideo.id);
+                          }
+                        }}
+                        className="w-full bg-[#0c121e] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white font-bold outline-none focus:border-amber-500"
+                      >
+                        <option value="none">Continue into overtime (+00:00)</option>
+                        <option value="play_video">Play selected video</option>
+                        <option value="start_playlist">Start first playlist item</option>
+                        <option value="go_live_active">Go live with active slide</option>
+                      </select>
+                    </div>
+                    {countdownEndAction === 'play_video' && (
+                      <div>
+                        <label className="text-[9px] font-extrabold text-amber-400 uppercase tracking-wider block mb-0.5">Video Asset</label>
+                        <select
+                          value={countdownEndVideoId}
+                          onChange={e => onChangeCountdownEndVideoId && onChangeCountdownEndVideoId(e.target.value)}
+                          className="w-full bg-[#0c121e] border border-amber-500/50 rounded-lg px-2 py-1 text-[11px] text-white font-bold outline-none focus:border-amber-500"
+                        >
+                          <option value="">-- Select Video --</option>
+                          {mediaList.filter(m => m.type === 'video').map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                          {mediaList.filter(m => m.type === 'video').length === 0 && (
+                            <option disabled value="">No videos uploaded yet</option>
+                          )}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
