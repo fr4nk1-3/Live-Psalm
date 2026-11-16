@@ -74,9 +74,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="h-14 bg-[#0d131f] border-b border-[#26334a] px-3.5 flex items-center justify-between gap-3 select-none shrink-0 z-30">
       {/* Brand & Project Title */}
       <div className="flex items-center gap-2.5 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-md shrink-0">
-          <Flame className="w-4 h-4 text-white" />
-        </div>
+        <img
+          src="./logo.png"
+          alt="Live Psalms"
+          className="w-8 h-8 rounded-lg object-cover shadow-md shrink-0 border border-slate-700/80"
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="font-black text-sm tracking-wide bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent whitespace-nowrap">
