@@ -196,50 +196,62 @@ export const StageDisplayWindow: React.FC = () => {
             document.documentElement.requestFullscreen?.().catch(() => {});
           }
         }}
-        className="w-screen h-screen bg-black text-white select-none px-[3vw] py-[2.5vh] flex flex-col justify-between overflow-hidden"
+        className="w-screen h-screen bg-gradient-to-b from-[#070b14] via-[#0a101d] to-[#05070e] text-slate-50 select-none px-[3.5vw] py-[2.8vh] flex flex-col justify-between overflow-hidden relative"
       >
-        {/* TOP FOCUS BAR: BOOK/VERSE + TRANSLATION ON LEFT, GIANT COUNTER ON RIGHT */}
-        <div className="flex items-center justify-between gap-4 pb-[2vh] border-b-2 border-slate-800 shrink-0">
+        {/* Subtle ambient radial glow matching timer state */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            background: isOvertime || isWarning
+              ? 'radial-gradient(circle at 82% 10%, rgba(244,63,94,0.14), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.06), transparent 60%)'
+              : isOnTime
+              ? 'radial-gradient(circle at 82% 10%, rgba(16,185,129,0.12), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.06), transparent 60%)'
+              : 'radial-gradient(circle at 82% 10%, rgba(245,158,11,0.10), transparent 45%), radial-gradient(circle at 50% 55%, rgba(99,102,241,0.07), transparent 60%)'
+          }}
+        />
+
+        {/* TOP ELEGANT GLASS BAR: BOOK/VERSE + TRANSLATION ON LEFT, HERO COUNTER ON RIGHT */}
+        <div className="relative z-10 flex items-center justify-between gap-6 px-6 py-4 rounded-3xl bg-white/[0.04] backdrop-blur-md border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.45)] shrink-0">
           <div className="flex flex-wrap items-center gap-3 min-w-0">
             {bookVerseText && (
-              <div className="flex items-center gap-2.5 bg-amber-500 text-black px-5 py-2 rounded-2xl shadow-[0_0_24px_rgba(245,158,11,0.35)]">
-                <BookOpen className="w-6 h-6 shrink-0" />
-                <span className="text-2xl xl:text-3xl font-black tracking-wide truncate max-w-[40vw]">
+              <div className="flex items-center gap-3 bg-amber-400/15 border border-amber-400/45 text-amber-200 px-5 py-2 rounded-2xl shadow-[0_4px_20px_rgba(245,158,11,0.15)]">
+                <BookOpen className="w-6 h-6 text-amber-300 shrink-0" />
+                <span className="text-2xl xl:text-3xl font-bold tracking-tight truncate max-w-[38vw]">
                   {bookVerseText}
                 </span>
               </div>
             )}
             {translationBadge && (
-              <span className="px-4 py-2 rounded-2xl bg-sky-500/20 border-2 border-sky-400 text-sky-200 text-xl xl:text-2xl font-black uppercase tracking-wider">
+              <span className="px-4 py-2 rounded-2xl bg-sky-400/15 border border-sky-400/40 text-sky-200 text-lg xl:text-xl font-bold uppercase tracking-widest">
                 {translationBadge}
               </span>
             )}
             {!meta && currentSlide?.sectionLabel && (
-              <span className="px-4 py-2 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-200 text-xl xl:text-2xl font-black uppercase tracking-wider">
+              <span className="px-4 py-2 rounded-2xl bg-emerald-400/15 border border-emerald-400/40 text-emerald-200 text-lg xl:text-xl font-bold uppercase tracking-widest">
                 {currentSlide.sectionLabel}
               </span>
             )}
             {!bookVerseText && !translationBadge && (
-              <span className="text-xl font-black uppercase tracking-widest text-slate-400">
-                FAR STAGE DISPLAY
+              <span className="text-lg font-bold uppercase tracking-[0.25em] text-slate-400">
+                Stage Display
               </span>
             )}
           </div>
 
-          {/* GIANT HIGH-VISIBILITY COUNTER OR CLOCK */}
+          {/* HERO COUNTER OR CLOCK */}
           <div className="font-mono shrink-0">
             {showTimer ? (
               <div
-                className={`flex items-center gap-4 px-7 py-2.5 rounded-2xl border-2 ${
+                className={`flex items-center gap-4 px-6 py-2.5 rounded-2xl border backdrop-blur-md transition-all ${
                   isOvertime || isWarning
-                    ? 'bg-rose-950 border-rose-400 shadow-[0_0_32px_rgba(244,63,94,0.65)]'
+                    ? 'bg-rose-500/15 border-rose-400/60 shadow-[0_0_28px_rgba(244,63,94,0.3)]'
                     : isOnTime
-                    ? 'bg-emerald-950 border-emerald-400 shadow-[0_0_28px_rgba(16,185,129,0.45)]'
-                    : 'bg-slate-900 border-slate-500'
+                    ? 'bg-emerald-500/15 border-emerald-400/50 shadow-[0_0_24px_rgba(16,185,129,0.22)]'
+                    : 'bg-white/[0.05] border-white/15'
                 }`}
               >
                 <Timer
-                  className={`w-10 h-10 ${
+                  className={`w-8 h-8 ${
                     isOvertime || isWarning
                       ? 'text-rose-300 animate-pulse'
                       : isOnTime
@@ -249,14 +261,14 @@ export const StageDisplayWindow: React.FC = () => {
                 />
                 <div className="flex flex-col leading-none">
                   <span
-                    className={`text-xs font-black uppercase tracking-[0.22em] mb-1 ${
+                    className={`text-[10px] font-bold uppercase tracking-[0.26em] mb-1 ${
                       isOvertime || isWarning ? 'text-rose-300' : isOnTime ? 'text-emerald-300' : 'text-slate-400'
                     }`}
                   >
-                    {isOvertime ? 'OVERTIME' : isWarning ? 'COUNTDOWN' : isOnTime ? 'TIMER' : 'PAUSED'}
+                    {isOvertime ? 'Overtime' : isWarning ? 'Countdown' : isOnTime ? 'Remaining' : 'Paused'}
                   </span>
                   <span
-                    className={`text-6xl xl:text-7xl font-black tabular-nums tracking-wider ${
+                    className={`text-5xl xl:text-7xl font-black tabular-nums tracking-tight ${
                       isOvertime || isWarning
                         ? 'text-rose-300 animate-pulse'
                         : isOnTime
@@ -269,9 +281,9 @@ export const StageDisplayWindow: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3.5 bg-slate-950 border-2 border-amber-400/80 px-6 py-2.5 rounded-2xl shadow-[0_0_24px_rgba(245,158,11,0.25)]">
-                <ClockIcon className="w-9 h-9 text-amber-300" />
-                <span className="text-5xl xl:text-6xl font-black tabular-nums text-amber-300 tracking-wider">
+              <div className="flex items-center gap-3.5 bg-amber-400/10 border border-amber-400/35 px-6 py-2.5 rounded-2xl">
+                <ClockIcon className="w-8 h-8 text-amber-300/90" />
+                <span className="text-4xl xl:text-6xl font-black tabular-nums text-amber-200 tracking-tight">
                   {stageState.clockTime}
                 </span>
               </div>
@@ -282,25 +294,25 @@ export const StageDisplayWindow: React.FC = () => {
         {/* STAGE MESSAGE BANNER (IF ACTIVE) */}
         {stageState.stageMessage && (
           <div
-            className={`mt-[1.5vh] px-7 py-3 rounded-2xl border-2 flex items-center gap-4 shrink-0 ${
+            className={`relative z-10 mt-[1.5vh] px-7 py-3 rounded-2xl border flex items-center gap-4 shrink-0 backdrop-blur-md ${
               stageState.stageMessageFlash
-                ? 'bg-rose-600 border-white text-white animate-pulse'
-                : 'bg-amber-500/25 border-amber-400 text-amber-200'
+                ? 'bg-rose-600/90 border-rose-300 text-white animate-pulse shadow-[0_0_32px_rgba(244,63,94,0.5)]'
+                : 'bg-amber-500/15 border-amber-400/50 text-amber-100'
             }`}
           >
-            <span className="px-3 py-1 rounded-lg bg-black/50 text-xs font-black uppercase tracking-widest border border-white/25">
-              CUE
+            <span className="px-3 py-1 rounded-lg bg-black/35 text-xs font-bold uppercase tracking-widest border border-white/15">
+              Cue
             </span>
-            <span className="text-3xl xl:text-4xl font-black tracking-wide">
+            <span className="text-2xl xl:text-3xl font-bold tracking-wide">
               {stageState.stageMessage}
             </span>
           </div>
         )}
 
-        {/* HERO LIVE SLIDE AREA — FULL REMAINING HEIGHT, NO NEXT SLIDE OR NOTES CLUTTER */}
-        <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden py-[2vh]">
+        {/* HERO LIVE SLIDE CARD — ELEGANT FRAMING, FULL FOCUS ON SLIDE */}
+        <div className="relative z-10 flex-1 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]">
           {isMediaOnly && currentSlide?.backgroundUrl ? (
-            <div className="w-full h-full flex items-center justify-center bg-black">
+            <div className="w-full h-full flex items-center justify-center">
               {isVideo ? (
                 <video
                   ref={stageVideoRef}
@@ -309,56 +321,64 @@ export const StageDisplayWindow: React.FC = () => {
                   autoPlay
                   muted
                   playsInline
-                  className="w-full h-full object-contain bg-black"
+                  className="w-full h-full object-contain rounded-2xl"
                 />
               ) : (
                 <img
                   key={currentSlide.backgroundUrl}
                   src={currentSlide.backgroundUrl}
                   alt={currentSlide.title || 'Stage Media'}
-                  className="w-full h-full object-contain bg-black"
+                  className="w-full h-full object-contain rounded-2xl"
                 />
               )}
             </div>
           ) : currentSlide ? (
             <div className="w-full flex flex-col items-center justify-center text-center" style={{ maxWidth: farSlideStyle.maxWidth }}>
               <div
-                className="font-black text-white whitespace-pre-line"
+                className="font-extrabold text-slate-50 whitespace-pre-line"
                 style={{
                   fontSize: farSlideStyle.fontSize,
-                  lineHeight: farSlideStyle.lineHeight,
-                  letterSpacing: '0.02em',
-                  textShadow: '0 6px 24px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.95)'
+                  lineHeight: '1.26',
+                  letterSpacing: '0.015em',
+                  textShadow: '0 6px 28px rgba(0,0,0,0.95)'
                 }}
               >
                 {currentSlide.content}
               </div>
             </div>
           ) : (
-            <span className="text-slate-600 text-4xl font-black uppercase tracking-[0.25em]">
-              [ OUTPUT CLEAR ]
+            <span className="text-slate-500 text-3xl font-bold uppercase tracking-[0.3em]">
+              Output Clear
             </span>
           )}
         </div>
 
-        {/* BOTTOM REFERENCE FOOTER: ALWAYS KEEPS BOOK, VERSE & TRANSLATION VISIBLE */}
+        {/* SUBTLE BOTTOM REFERENCE STRIP: BOOK, VERSE & TRANSLATION */}
         {(bookVerseText || translationBadge || currentSlide?.subtitle) && (
-          <div className="pt-[1.5vh] border-t border-slate-900 flex items-center justify-center gap-4 shrink-0">
-            {bookVerseText && (
-              <span className="text-xl xl:text-2xl font-black text-amber-300 tracking-wide uppercase">
-                {bookVerseText}
-              </span>
-            )}
-            {translationBadge && (
-              <span className="text-lg xl:text-xl font-black text-sky-300 bg-sky-950/80 border border-sky-500/50 px-3.5 py-0.5 rounded-full uppercase tracking-wider">
-                {translationBadge}
-              </span>
-            )}
-            {currentSlide?.subtitle && currentSlide.subtitle !== translationBadge && (
-              <span className="text-lg xl:text-xl font-bold text-slate-300 tracking-wider">
-                {currentSlide.subtitle}
-              </span>
-            )}
+          <div className="relative z-10 flex items-center justify-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-white/[0.04] border border-white/10">
+              {bookVerseText && (
+                <span className="text-lg xl:text-xl font-bold text-amber-200 tracking-wide">
+                  {bookVerseText}
+                </span>
+              )}
+              {bookVerseText && translationBadge && (
+                <span className="text-slate-500">•</span>
+              )}
+              {translationBadge && (
+                <span className="text-base xl:text-lg font-bold text-sky-300 uppercase tracking-widest">
+                  {translationBadge}
+                </span>
+              )}
+              {currentSlide?.subtitle && currentSlide.subtitle !== translationBadge && (
+                <>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-base xl:text-lg font-medium text-slate-300 tracking-wide">
+                    {currentSlide.subtitle}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

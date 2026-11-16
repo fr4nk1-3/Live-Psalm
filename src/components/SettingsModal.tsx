@@ -577,53 +577,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Audience Screen Distance / Visibility Mode */}
-                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
-                      Audience Screen Visibility Mode
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => updateSettings({ audienceViewMode: 'near' })}
-                        className={`p-3 rounded-xl border text-left transition ${
-                          (settings.audienceViewMode || 'near') === 'near'
-                            ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.2)]'
-                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Close / Stage-Side</span>
-                          {(settings.audienceViewMode || 'near') === 'near' && (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[9px] font-black uppercase">Active</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                          Standard theme layout &amp; balanced typography when the screen is close to the stage or smaller rooms.
-                        </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateSettings({ audienceViewMode: 'far' })}
-                        className={`p-3 rounded-xl border text-left transition ${
-                          settings.audienceViewMode === 'far'
-                            ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                            : 'bg-[#0b101b] border-slate-800 text-slate-300 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Far / Long-Distance</span>
-                          {settings.audienceViewMode === 'far' && (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 text-[9px] font-black uppercase">Active</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                          Enhanced visibility (+55% larger bold white text, dark high-contrast scrim, crisp outline &amp; amber badges) for back-of-hall viewing.
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Stage Display Distance / Visibility Mode */}
                   <div className="pt-3 border-t border-slate-800 space-y-2.5">
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-300">
