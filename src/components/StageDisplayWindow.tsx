@@ -4,6 +4,7 @@ import { BroadcastService, BroadcastPayload } from '../services/broadcast';
 import { StorageService } from '../services/storage';
 import { Clock as ClockIcon, FileText, ArrowRight, Zap, Timer, BookOpen, Film, Image as ImageIcon } from 'lucide-react';
 import { getFlexibleFontSize, getOutputFontSize } from '../utils/fontSize';
+import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
 
 function formatTranslationBadge(translationId?: string | null): string | null {
   if (!translationId) return null;
@@ -41,6 +42,24 @@ export const StageDisplayWindow: React.FC = () => {
     () => StorageService.getSettings().stageViewMode || 'near'
   );
   const stageVideoRef = useRef<HTMLVideoElement | null>(null);
+  const farContainerRef = useRef<HTMLDivElement | null>(null);
+  const farTextRef = useRef<HTMLDivElement | null>(null);
+  const nearContainerRef = useRef<HTMLDivElement | null>(null);
+  const nearTextRef = useRef<HTMLDivElement | null>(null);
+
+  const farFittedPx = useAutoFitFontSize(
+    farContainerRef,
+    farTextRef,
+    [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
+    { minPx: 18, maxPx: 140, startVw: 6.5 }
+  );
+
+  const nearFittedPx = useAutoFitFontSize(
+    nearContainerRef,
+    nearTextRef,
+    [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
+    { minPx: 16, maxPx: 64, startVw: 3.4 }
+  );
 
   useEffect(() => {
     // Clock tick interval
@@ -310,7 +329,10 @@ export const StageDisplayWindow: React.FC = () => {
         )}
 
         {/* HERO LIVE SLIDE CARD — ELEGANT FRAMING, FULL FOCUS ON SLIDE */}
-        <div className="relative z-10 flex-1 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]">
+        <div
+          ref={farContainerRef}
+          className="relative z-10 flex-1 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]"
+        >
           {isMediaOnly && currentSlide?.backgroundUrl ? (
             <div className="w-full h-full flex items-center justify-center">
               {isVideo ? (
@@ -333,12 +355,13 @@ export const StageDisplayWindow: React.FC = () => {
               )}
             </div>
           ) : currentSlide ? (
-            <div className="w-full flex flex-col items-center justify-center text-center" style={{ maxWidth: farSlideStyle.maxWidth }}>
+            <div className="w-full h-full flex flex-col items-center justify-center text-center" style={{ maxWidth: farSlideStyle.maxWidth }}>
               <div
-                className="font-extrabold text-slate-50 whitespace-pre-line"
+                ref={farTextRef}
+                className="font-extrabold text-slate-50 whitespace-pre-line w-full"
                 style={{
-                  fontSize: farSlideStyle.fontSize,
-                  lineHeight: '1.26',
+                  fontSize: farFittedPx ? `${farFittedPx}px` : farSlideStyle.fontSize,
+                  lineHeight: farSlideStyle.lineHeight,
                   letterSpacing: '0.015em',
                   textShadow: '0 6px 28px rgba(0,0,0,0.95)'
                 }}
@@ -562,12 +585,19 @@ export const StageDisplayWindow: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="my-auto text-center px-4 overflow-y-auto max-h-[60vh] flex flex-col gap-3 items-center justify-center">
+              <div
+                ref={nearContainerRef}
+                className="flex-1 text-center px-4 overflow-hidden flex flex-col gap-3 items-center justify-center"
+              >
                 {currentSlide ? (
                   <>
                     <div
-                      className="font-extrabold text-white leading-tight whitespace-pre-line tracking-wide drop-shadow"
-                      style={getFlexibleFontSize(currentSlide.content, 48)}
+                      ref={nearTextRef}
+                      className="font-extrabold text-white leading-tight whitespace-pre-line tracking-wide drop-shadow w-full"
+                      style={{
+                        ...getFlexibleFontSize(currentSlide.content, 48),
+                        ...(nearFittedPx ? { fontSize: `${nearFittedPx}px` } : {})
+                      }}
                     >
                       {currentSlide.content}
                     </div>

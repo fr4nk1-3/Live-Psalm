@@ -4,6 +4,7 @@ import { BroadcastService, BroadcastPayload } from '../services/broadcast';
 import { StorageService } from '../services/storage';
 import { Flame, Megaphone, Bell } from 'lucide-react';
 import { getOutputFontSize } from '../utils/fontSize';
+import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
 
 function isVideoUrl(url?: string | null, bgType?: Slide['backgroundType']): boolean {
@@ -100,6 +101,8 @@ export const AudienceOutputWindow: React.FC = () => {
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(() => !!fullscreenVideoUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgVideoRef = useRef<HTMLVideoElement>(null);
+  const audienceSlideContainerRef = useRef<HTMLDivElement>(null);
+  const audienceSlideTextRef = useRef<HTMLDivElement>(null);
 
   // Global and item-level looping video backgrounds
   const [globalVideoBgUrl, setGlobalVideoBgUrl] = useState<string | null>(() => {
@@ -404,6 +407,13 @@ export const AudienceOutputWindow: React.FC = () => {
   const { fontSize: dynFontSize, lineHeight: dynLineHeight, maxWidth: dynMaxWidth } =
     getOutputFontSize(slideText, baseFontVw, screenInfo.width, audienceViewMode);
 
+  const audienceFittedPx = useAutoFitFontSize(
+    audienceSlideContainerRef,
+    audienceSlideTextRef,
+    [liveSlide?.id, liveSlide?.content, theme.fontSize, theme.fontFamily, audienceViewMode],
+    { minPx: 20, maxPx: 140, startVw: Math.max(3.5, baseFontVw * 1.15) }
+  );
+
   const contentPadding = isFarMode ? 'py-[2.5vh] px-[2.5vw]' : 'py-[4vh] px-[5vw]';
   const effectiveScrimOpacity = isFarMode ? Math.max(theme.scrimOpacity, 0.88) : theme.scrimOpacity;
 
@@ -643,13 +653,14 @@ export const AudienceOutputWindow: React.FC = () => {
               ) : (
                 /* ── FULLSCREEN CENTERED MODE ── */
                 <div
-                  className="m-auto flex flex-col items-center text-center"
+                  ref={audienceSlideContainerRef}
+                  className="m-auto flex flex-col items-center justify-center text-center h-full max-h-[88vh] overflow-hidden"
                   style={{ maxWidth: dynMaxWidth, width: '100%' }}
                 >
                   {/* Section / title badge — only for text slides */}
                   {(liveSlide.title || liveSlide.sectionLabel) && (
                     <div
-                      className={`font-black uppercase tracking-[0.25em] mb-[2.2vh] rounded-full inline-block ${
+                      className={`font-black uppercase tracking-[0.25em] mb-[2vh] rounded-full inline-block shrink-0 ${
                         isFarMode
                           ? 'text-amber-200 bg-black/90 px-[2.6vw] py-[0.9vh] border-2 border-amber-400/80 shadow-[0_8px_28px_rgba(0,0,0,0.95)]'
                           : 'text-indigo-300 bg-indigo-950/60 px-[2vw] py-[0.6vh] border border-indigo-500/40'
@@ -662,10 +673,11 @@ export const AudienceOutputWindow: React.FC = () => {
 
                   {/* Main text */}
                   <div
+                    ref={audienceSlideTextRef}
                     className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]`}
                     style={{
                       fontFamily: theme.fontFamily,
-                      fontSize: dynFontSize,
+                      fontSize: audienceFittedPx ? `${audienceFittedPx}px` : dynFontSize,
                       lineHeight: dynLineHeight,
                       textAlign: theme.align as any,
                       color: isFarMode ? '#ffffff' : theme.textColor,
@@ -686,7 +698,7 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Subtitle / scripture reference */}
                   {liveSlide.subtitle && (
                     <div
-                      className={`mt-[3vh] tracking-wider uppercase ${
+                      className={`mt-[2.5vh] tracking-wider uppercase shrink-0 ${
                         isFarMode
                           ? 'font-black text-amber-300 drop-shadow-[0_4px_14px_rgba(0,0,0,1)]'
                           : 'font-bold text-indigo-200 opacity-90'
