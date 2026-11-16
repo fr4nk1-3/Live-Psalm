@@ -2206,6 +2206,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
         customBibles={customBibles}
         onlineVersions={onlineVersions}
         apiBibleEnabled={settings.apiBibleEnabled}
+        mode="primary"
       />
 
       {/* Bible Version Selection Modal Popup (Parallel Translation) */}
@@ -2217,6 +2218,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
         customBibles={customBibles}
         onlineVersions={onlineVersions}
         apiBibleEnabled={settings.apiBibleEnabled}
+        mode="parallel"
       />
 
       {/* Bible Book & Chapter Selection Modal Popup */}
