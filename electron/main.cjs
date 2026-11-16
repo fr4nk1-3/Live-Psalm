@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu } = require('electron');
 const path = require('path');
 
 // Prevent Chromium zygote/sandbox crash on Linux (e.g., Ubuntu 24.04 AppArmor & space-in-path /opt/Live Psalms)
@@ -224,6 +224,21 @@ function createMainWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
+  mainWindow.setMenu(null);
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({
+    action: 'allow',
+    overrideBrowserWindowOptions: {
+      frame: false,
+      autoHideMenuBar: true,
+      fullscreen: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        webSecurity: false
+      }
+    }
+  }));
 
   loadAppOutputUrl(mainWindow, null);
 
@@ -267,11 +282,11 @@ function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, ex
     title,
     icon: getIconPath(),
     frame: false,
-    titleBarStyle: 'hidden',
     fullscreen: true,
     fullscreenable: true,
+    resizable: false,
     autoHideMenuBar: true,
-     thickFrame: false,
+    show: false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -281,11 +296,18 @@ function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, ex
   });
 
   // Remove menu bar & title bar controls completely on Windows/Linux
+  win.setMenu(null);
   win.setMenuBarVisibility(false);
   if (typeof win.removeMenu === 'function') {
     win.removeMenu();
   }
-  win.setFullScreen(true);
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) {
+      win.setMenu(null);
+      win.setFullScreen(true);
+      win.show();
+    }
+  });
 
   loadAppOutputUrl(win, outputType);
   return win;
@@ -471,6 +493,7 @@ ipcMain.handle('stop-stream', async () => {
 });
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createMainWindow();
   startLocalNetworkServer();
 
