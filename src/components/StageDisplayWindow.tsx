@@ -160,11 +160,14 @@ export const StageDisplayWindow: React.FC = () => {
   const formatCountdown = (secs: number) => {
     const isOvertime = secs < 0;
     const totalSecs = Math.abs(secs);
-    const h = Math.floor(totalSecs / 3600);
+    const d = Math.floor(totalSecs / 86400);
+    const h = Math.floor((totalSecs % 86400) / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
     let formatted: string;
-    if (h > 0) {
+    if (d > 0) {
+      formatted = `${d}d ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    } else if (h > 0) {
       formatted = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
     } else {
       formatted = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;

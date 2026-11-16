@@ -126,11 +126,15 @@ export const AudienceOutputWindow: React.FC = () => {
     running: boolean;
     isFullSlide: boolean;
     targetScreen: 'audience' | 'stage' | 'both';
+    title: string;
+    overtimeTitle: string;
   }>({
     remaining: 0,
     running: false,
     isFullSlide: false,
-    targetScreen: 'both'
+    targetScreen: 'both',
+    title: 'SERVICE STARTING IN',
+    overtimeTitle: 'SERVICE IN PROGRESS'
   });
 
   // Freeze state buffer refs so we can hold display while frozen and apply pending changes on unfreeze
@@ -305,7 +309,9 @@ export const AudienceOutputWindow: React.FC = () => {
           remaining: payload.countdownRemaining !== undefined ? payload.countdownRemaining : prev.remaining,
           running: payload.countdownRunning !== undefined ? payload.countdownRunning : prev.running,
           isFullSlide: payload.isFullSlideCountdown !== undefined ? payload.isFullSlideCountdown : prev.isFullSlide,
-          targetScreen: payload.countdownTargetScreen || prev.targetScreen
+          targetScreen: payload.countdownTargetScreen || prev.targetScreen,
+          title: payload.countdownTitle !== undefined ? payload.countdownTitle : prev.title,
+          overtimeTitle: payload.countdownOvertimeTitle !== undefined ? payload.countdownOvertimeTitle : prev.overtimeTitle
         }));
       }
     });
@@ -428,10 +434,13 @@ export const AudienceOutputWindow: React.FC = () => {
   const formatCountdownDisplay = (secs: number) => {
     const isOvertime = secs < 0;
     const totalSecs = Math.abs(secs);
-    const h = Math.floor(totalSecs / 3600);
+    const d = Math.floor(totalSecs / 86400);
+    const h = Math.floor((totalSecs % 86400) / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
-    const base = h > 0
+    const base = d > 0
+      ? `${d}d ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+      : h > 0
       ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
       : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     return isOvertime ? `+${base}` : base;
@@ -575,20 +584,30 @@ export const AudienceOutputWindow: React.FC = () => {
           {showFullSlideCountdown && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-[6vw] animate-slide-fade">
               <div
-                className="font-black uppercase tracking-[0.35em] text-indigo-300 bg-indigo-950/70 px-[3vw] py-[1vh] rounded-full border border-indigo-500/40 mb-[3vh]"
-                style={{ fontSize: 'clamp(0.8rem, 1.8vw, 2rem)' }}
+                className="font-black uppercase tracking-[0.28em] text-indigo-200 bg-indigo-950/75 px-[3vw] py-[1vh] rounded-full border border-indigo-400/50 mb-[3vh] max-w-[88vw] truncate"
+                style={{ fontSize: 'clamp(0.8rem, 1.9vw, 2.1rem)' }}
               >
-                {countdownState.remaining < 0 ? 'SERVICE IN PROGRESS' : 'SERVICE STARTING IN'}
+                {countdownState.remaining < 0
+                  ? (countdownState.overtimeTitle || 'IN PROGRESS')
+                  : (countdownState.title || 'SERVICE STARTING IN')}
               </div>
               <div
-                className={`font-mono font-black tracking-wider drop-shadow-[0_8px_30px_rgba(0,0,0,0.95)] ${
+                className={`font-mono font-black tracking-wider drop-shadow-[0_8px_30px_rgba(0,0,0,0.95)] tabular-nums ${
                   countdownState.remaining < 0
                     ? 'text-rose-400 animate-pulse'
                     : countdownState.remaining <= 60
                     ? 'text-amber-300 animate-pulse'
                     : 'text-white'
                 }`}
-                style={{ fontSize: 'clamp(4rem, 16vw, 18rem)', lineHeight: 1 }}
+                style={{
+                  fontSize:
+                    Math.abs(countdownState.remaining) >= 86400
+                      ? 'clamp(2.5rem, 10vw, 11rem)'
+                      : Math.abs(countdownState.remaining) >= 3600
+                      ? 'clamp(3rem, 12.5vw, 14rem)'
+                      : 'clamp(4rem, 16vw, 18rem)',
+                  lineHeight: 1
+                }}
               >
                 {formatCountdownDisplay(countdownState.remaining)}
               </div>

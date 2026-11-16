@@ -132,6 +132,13 @@ export const App: React.FC = () => {
   const [countUp, setCountUp] = useState<boolean>(false);
   const [isFullSlideCountdown, setIsFullSlideCountdown] = useState<boolean>(false);
   const [countdownTargetScreen, setCountdownTargetScreen] = useState<'audience' | 'stage' | 'both'>('both');
+  const [countdownTitle, setCountdownTitle] = useState<string>(
+    () => localStorage.getItem('live_psalms_countdown_title_v1') || 'SERVICE STARTING IN'
+  );
+  const [countdownOvertimeTitle, setCountdownOvertimeTitle] = useState<string>(
+    () => localStorage.getItem('live_psalms_countdown_overtime_title_v1') || 'SERVICE IN PROGRESS'
+  );
+  const [countdownTargetTimestamp, setCountdownTargetTimestamp] = useState<number | null>(null);
   const [countdownEndAction, setCountdownEndAction] = useState<'none' | 'play_video' | 'start_playlist' | 'go_live_active'>('none');
   const [countdownEndVideoId, setCountdownEndVideoId] = useState<string>('');
 
@@ -386,11 +393,21 @@ export const App: React.FC = () => {
     }
   };
 
-  // Countdown Ticker Timer
+  // Countdown Ticker Timer (supports both duration mode and system-clock-linked target timestamp)
   useEffect(() => {
     if (!isCountdownRunning) return;
 
     const timer = setInterval(() => {
+      if (countdownTargetTimestamp !== null) {
+        const diff = Math.round((countdownTargetTimestamp - Date.now()) / 1000);
+        if (diff <= 0 && countdownEndAction !== 'none') {
+          setCountdownSeconds(0);
+        } else {
+          setCountdownSeconds(diff);
+        }
+        return;
+      }
+
       setCountdownSeconds(prev => {
         if (countUp) {
           return prev + 1;
@@ -402,10 +419,10 @@ export const App: React.FC = () => {
         }
         return prev - 1;
       });
-    }, 1000);
+    }, 500);
 
     return () => clearInterval(timer);
-  }, [isCountdownRunning, countUp, countdownEndAction]);
+  }, [isCountdownRunning, countUp, countdownEndAction, countdownTargetTimestamp]);
 
   // Trigger completion action & stop timer when countdown hits 00:00
   useEffect(() => {
@@ -503,9 +520,11 @@ export const App: React.FC = () => {
       countdownRemaining: countdownSeconds,
       countdownRunning: isCountdownRunning,
       isFullSlideCountdown,
-      countdownTargetScreen
+      countdownTargetScreen,
+      countdownTitle,
+      countdownOvertimeTitle
     });
-  }, [countdownSeconds, isCountdownRunning, isFullSlideCountdown, countdownTargetScreen]);
+  }, [countdownSeconds, isCountdownRunning, isFullSlideCountdown, countdownTargetScreen, countdownTitle, countdownOvertimeTitle]);
 
   // Broadcast Updates to Stage Display (Confidence Monitor)
   useEffect(() => {
@@ -541,7 +560,9 @@ export const App: React.FC = () => {
           countdownRemaining: countdownSeconds,
           countdownRunning: isCountdownRunning,
           isFullSlideCountdown,
-          countdownTargetScreen
+          countdownTargetScreen,
+          countdownTitle,
+          countdownOvertimeTitle
         });
         BroadcastService.postMessage({
           type: 'STAGE_DISPLAY_UPDATE',
@@ -2274,6 +2295,7 @@ export const App: React.FC = () => {
         countdownSeconds={countdownSeconds}
         isCountdownRunning={isCountdownRunning}
         onStartCountdown={(secs) => {
+          setCountdownTargetTimestamp(null);
           setCountdownSeconds(secs);
           setIsCountdownRunning(true);
         }}
@@ -2282,6 +2304,7 @@ export const App: React.FC = () => {
         }}
         onStopCountdown={() => {
           setIsCountdownRunning(false);
+          setCountdownTargetTimestamp(null);
           setCountdownSeconds(0);
         }}
         countUp={countUp}
@@ -2290,6 +2313,26 @@ export const App: React.FC = () => {
         onToggleFullSlideCountdown={setIsFullSlideCountdown}
         countdownTargetScreen={countdownTargetScreen}
         onChangeCountdownTargetScreen={setCountdownTargetScreen}
+        countdownTitle={countdownTitle}
+        countdownOvertimeTitle={countdownOvertimeTitle}
+        onChangeCountdownLabels={(title, overtimeTitle) => {
+          setCountdownTitle(title);
+          setCountdownOvertimeTitle(overtimeTitle);
+          try {
+            localStorage.setItem('live_psalms_countdown_title_v1', title);
+            localStorage.setItem('live_psalms_countdown_overtime_title_v1', overtimeTitle);
+          } catch (e) {}
+        }}
+        countdownTargetTimestamp={countdownTargetTimestamp}
+        onStartClockCountdown={(targetMs) => {
+          setCountUp(false);
+          setCountdownTargetTimestamp(targetMs);
+          setCountdownSeconds(Math.round((targetMs - Date.now()) / 1000));
+          setIsCountdownRunning(true);
+        }}
+        onClearClockCountdown={() => {
+          setCountdownTargetTimestamp(null);
+        }}
         countdownEndAction={countdownEndAction}
         onChangeCountdownEndAction={setCountdownEndAction}
         countdownEndVideoId={countdownEndVideoId}

@@ -41,6 +41,12 @@ interface BottomControlBarProps {
   onToggleFullSlideCountdown?: (enabled: boolean) => void;
   countdownTargetScreen?: 'audience' | 'stage' | 'both';
   onChangeCountdownTargetScreen?: (screen: 'audience' | 'stage' | 'both') => void;
+  countdownTitle?: string;
+  countdownOvertimeTitle?: string;
+  onChangeCountdownLabels?: (title: string, overtimeTitle: string) => void;
+  countdownTargetTimestamp?: number | null;
+  onStartClockCountdown?: (targetTimestampMs: number) => void;
+  onClearClockCountdown?: () => void;
   countdownEndAction?: 'none' | 'play_video' | 'start_playlist' | 'go_live_active';
   onChangeCountdownEndAction?: (action: 'none' | 'play_video' | 'start_playlist' | 'go_live_active') => void;
   countdownEndVideoId?: string;
@@ -67,6 +73,12 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   onToggleFullSlideCountdown,
   countdownTargetScreen = 'both',
   onChangeCountdownTargetScreen,
+  countdownTitle = 'SERVICE STARTING IN',
+  countdownOvertimeTitle = 'SERVICE IN PROGRESS',
+  onChangeCountdownLabels,
+  countdownTargetTimestamp = null,
+  onStartClockCountdown,
+  onClearClockCountdown,
   countdownEndAction = 'none',
   onChangeCountdownEndAction,
   countdownEndVideoId = '',
@@ -83,6 +95,57 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   };
   const [showOptions, setShowOptions] = useState(false);
   const [editHours, setEditHours] = useState('0');
+  const [customPresets, setCustomPresets] = useState<{ id: string; label: string; overtimeLabel: string }[]>(() => {
+    try {
+      const raw = localStorage.getItem('live_psalms_countdown_presets_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [targetDateTimeInput, setTargetDateTimeInput] = useState<string>(() => {
+    const d = new Date();
+    d.setHours(24, 0, 0, 0); // default tonight midnight
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+
+  const BUILTIN_COUNTDOWN_PRESETS = [
+    { id: 'service', label: 'SERVICE STARTING IN', overtimeLabel: 'SERVICE IN PROGRESS' },
+    { id: 'newyear', label: 'NEW YEAR COUNTDOWN', overtimeLabel: 'HAPPY NEW YEAR!' },
+    { id: 'worship', label: 'WORSHIP STARTING IN', overtimeLabel: 'WORSHIP IN PROGRESS' },
+    { id: 'sermon', label: 'SERMON STARTING IN', overtimeLabel: 'WORD IN PROGRESS' },
+    { id: 'conference', label: 'CONFERENCE SESSION IN', overtimeLabel: 'SESSION IN PROGRESS' },
+    { id: 'break', label: 'BREAK / INTERMISSION', overtimeLabel: 'RESUMING NOW' },
+    { id: 'prayer', label: 'PRAYER SESSION IN', overtimeLabel: 'PRAYER IN PROGRESS' }
+  ];
+
+  const toLocalDateTimeStr = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const saveCustomCountdownPreset = () => {
+    const trimmed = countdownTitle.trim();
+    if (!trimmed) return;
+    const overtime = countdownOvertimeTitle.trim() || 'IN PROGRESS';
+    const next = [
+      ...customPresets.filter(p => p.label.toLowerCase() !== trimmed.toLowerCase()),
+      { id: `custom-${Date.now()}`, label: trimmed, overtimeLabel: overtime }
+    ];
+    setCustomPresets(next);
+    try {
+      localStorage.setItem('live_psalms_countdown_presets_v1', JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  const deleteCustomCountdownPreset = (id: string) => {
+    const next = customPresets.filter(p => p.id !== id);
+    setCustomPresets(next);
+    try {
+      localStorage.setItem('live_psalms_countdown_presets_v1', JSON.stringify(next));
+    } catch (e) {}
+  };
   const [editMins, setEditMins] = useState('05');
   const [editSecs, setEditSecs] = useState('00');
   const [isEditing, setIsEditing] = useState(false);
@@ -92,11 +155,14 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   const formatTime = (secs: number) => {
     const isOvertime = secs < 0;
     const totalSecs = Math.abs(secs);
-    const h = Math.floor(totalSecs / 3600);
+    const d = Math.floor(totalSecs / 86400);
+    const h = Math.floor((totalSecs % 86400) / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
     let formatted: string;
-    if (h > 0) {
+    if (d > 0) {
+      formatted = `${d}d ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    } else if (h > 0) {
       formatted = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     } else {
       formatted = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -387,10 +453,10 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
 
           {/* ── Advanced options popover (anchored cleanly above the timer widget) ── */}
           {showOptions && (
-            <div className="absolute bottom-11 right-0 bg-[#101726] border border-amber-500/50 p-4 rounded-2xl shadow-2xl space-y-3 z-[200] w-72 sm:w-80">
+            <div className="absolute bottom-11 right-0 bg-[#101726] border border-amber-500/50 p-4 rounded-2xl shadow-2xl space-y-3 z-[200] w-80 sm:w-96 max-h-[78vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="font-black text-amber-300 text-xs flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-rose-400" /> Timer Options
+                  <Clock className="w-4 h-4 text-rose-400" /> Timer &amp; Clock Countdown Options
                 </span>
                 <button onClick={() => setShowOptions(false)} className="text-slate-400 hover:text-white">
                   <X className="w-4 h-4" />
@@ -408,6 +474,168 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
                   />
                   Full-slide countdown (projects large timer on output)
                 </label>
+              </div>
+
+              {/* Full-Slide Countdown Heading & Custom Options */}
+              <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">
+                    Countdown Title / Event
+                  </label>
+                  <button
+                    type="button"
+                    onClick={saveCustomCountdownPreset}
+                    className="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 rounded text-[9px] font-bold text-indigo-200 transition"
+                    title="Save current title & done label as a reusable option"
+                  >
+                    + Save Option
+                  </button>
+                </div>
+
+                {/* Preset & Custom Option Pills */}
+                <div className="flex flex-wrap gap-1">
+                  {BUILTIN_COUNTDOWN_PRESETS.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
+                      className={`px-2 py-0.5 rounded text-[9px] font-bold border transition ${
+                        countdownTitle === p.label
+                          ? 'bg-indigo-600 border-indigo-400 text-white'
+                          : 'bg-[#0f172a] border-slate-700 text-slate-300 hover:border-indigo-400/60'
+                      }`}
+                    >
+                      {p.label.replace(' IN', '').replace(' COUNTDOWN', '')}
+                    </button>
+                  ))}
+                  {customPresets.map(p => (
+                    <span
+                      key={p.id}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border ${
+                        countdownTitle === p.label
+                          ? 'bg-emerald-600/80 border-emerald-400 text-white'
+                          : 'bg-[#0f172a] border-emerald-500/40 text-emerald-300'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onChangeCountdownLabels?.(p.label, p.overtimeLabel)}
+                      >
+                        {p.label}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteCustomCountdownPreset(p.id)}
+                        className="text-slate-300 hover:text-rose-300 leading-none"
+                        title="Remove saved option"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={countdownTitle}
+                    onChange={e => onChangeCountdownLabels?.(e.target.value, countdownOvertimeTitle)}
+                    placeholder="Heading (e.g. NEW YEAR COUNTDOWN)"
+                    className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1 text-xs text-white font-semibold outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={countdownOvertimeTitle}
+                    onChange={e => onChangeCountdownLabels?.(countdownTitle, e.target.value)}
+                    placeholder="When timer reaches 00:00 (e.g. HAPPY NEW YEAR!)"
+                    className="w-full bg-[#0c121e] border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 font-medium outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* System Clock Target Time (e.g., Midnight / New Year's Eve) */}
+              <div className="space-y-2 bg-[#080d16] p-2.5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider">
+                    Link to System Clock (Target Time)
+                  </label>
+                  {countdownTargetTimestamp && (
+                    <button
+                      type="button"
+                      onClick={() => onClearClockCountdown?.()}
+                      className="text-[9px] font-bold text-rose-300 hover:text-rose-200 underline"
+                    >
+                      Unlink Clock
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setHours(24, 0, 0, 0);
+                      setTargetDateTimeInput(toLocalDateTimeStr(d));
+                      onStartClockCountdown?.(d.getTime());
+                    }}
+                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
+                  >
+                    Midnight Tonight (00:00)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const d = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+                      setTargetDateTimeInput(toLocalDateTimeStr(d));
+                      onChangeCountdownLabels?.('NEW YEAR COUNTDOWN', 'HAPPY NEW YEAR!');
+                      onStartClockCountdown?.(d.getTime());
+                    }}
+                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
+                  >
+                    New Year (Jan 1, 00:00)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setHours(d.getHours() + 1, 0, 0, 0);
+                      setTargetDateTimeInput(toLocalDateTimeStr(d));
+                      onStartClockCountdown?.(d.getTime());
+                    }}
+                    className="px-2 py-1 rounded bg-[#0f172a] hover:bg-amber-600/30 border border-slate-700 hover:border-amber-400 text-[9px] font-bold text-amber-200 transition"
+                  >
+                    Next Hour (:00)
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="datetime-local"
+                    value={targetDateTimeInput}
+                    onChange={e => setTargetDateTimeInput(e.target.value)}
+                    className="flex-1 bg-[#0c121e] border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1 text-[11px] text-white font-semibold outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ms = new Date(targetDateTimeInput).getTime();
+                      if (!isNaN(ms)) {
+                        onStartClockCountdown?.(ms);
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition shrink-0"
+                  >
+                    Start
+                  </button>
+                </div>
+
+                {countdownTargetTimestamp && (
+                  <div className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 rounded-lg px-2 py-1">
+                    Linked to clock: {new Date(countdownTargetTimestamp).toLocaleString()}
+                  </div>
+                )}
               </div>
 
               {/* Target screen */}

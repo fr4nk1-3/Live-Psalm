@@ -54,6 +54,8 @@ export interface BroadcastPayload {
   countdownRunning?: boolean;
   isFullSlideCountdown?: boolean;
   countdownTargetScreen?: 'audience' | 'stage' | 'both';
+  countdownTitle?: string;
+  countdownOvertimeTitle?: string;
   mediaState?: { playing: boolean; volume: number; url?: string };
   lowerThirdText?: { title?: string; subtitle?: string; content?: string } | null;
   /** Global looping video BG URL — null to clear */
