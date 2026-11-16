@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  NODE_OPTIONS: --max-old-space-size=8192
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -19,7 +22,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build:win
+      - run: npx tsc && npx vite build && npx electron-builder --win --publish never
       - name: Upload Windows Assets to v1.1.0 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -39,7 +42,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build:deb
+      - run: npx tsc && npx vite build && npx electron-builder --linux deb --publish never
       - name: Upload Ubuntu .deb Asset to v1.1.0 Release
         uses: softprops/action-gh-release@v2
         with:
