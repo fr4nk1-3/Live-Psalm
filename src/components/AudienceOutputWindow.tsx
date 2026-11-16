@@ -407,11 +407,12 @@ export const AudienceOutputWindow: React.FC = () => {
   const { fontSize: dynFontSize, lineHeight: dynLineHeight, maxWidth: dynMaxWidth } =
     getOutputFontSize(slideText, baseFontVw, screenInfo.width, audienceViewMode);
 
+  const dynFontVw = parseFloat(dynFontSize) || Math.max(2.5, baseFontVw);
   const audienceFittedPx = useAutoFitFontSize(
     audienceSlideContainerRef,
     audienceSlideTextRef,
-    [liveSlide?.id, liveSlide?.content, theme.fontSize, theme.fontFamily, audienceViewMode],
-    { minPx: 20, maxPx: 140, startVw: Math.max(3.5, baseFontVw * 1.15) }
+    [liveSlide?.id, liveSlide?.content, theme.fontSize, theme.fontFamily, audienceViewMode, dynFontSize],
+    { minPx: 18, maxPx: 140, startVw: dynFontVw }
   );
 
   const contentPadding = isFarMode ? 'py-[2.5vh] px-[2.5vw]' : 'py-[4vh] px-[5vw]';
@@ -673,7 +674,7 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Main text */}
                   <div
                     ref={audienceSlideContainerRef}
-                    className="w-full max-h-[70vh] flex items-center justify-center overflow-hidden"
+                    className="w-full flex-1 min-h-0 max-h-[72vh] flex items-center justify-center overflow-hidden"
                   >
                     <div
                       ref={audienceSlideTextRef}

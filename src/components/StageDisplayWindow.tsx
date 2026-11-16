@@ -331,7 +331,7 @@ export const StageDisplayWindow: React.FC = () => {
         {/* HERO LIVE SLIDE CARD — ELEGANT FRAMING, FULL FOCUS ON SLIDE */}
         <div
           ref={farContainerRef}
-          className="relative z-10 flex-1 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]"
+          className="relative z-10 flex-1 min-h-0 my-[2vh] rounded-3xl bg-white/[0.025] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center overflow-hidden px-[4vw] py-[3vh]"
         >
           {isMediaOnly && currentSlide?.backgroundUrl ? (
             <div className="w-full h-full flex items-center justify-center">
@@ -512,7 +512,7 @@ export const StageDisplayWindow: React.FC = () => {
 
         return (
           <div
-            className={`flex-1 my-4 bg-[#0d1320] border-2 border-emerald-500/80 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col justify-between ${
+            className={`flex-1 min-h-0 my-4 bg-[#0d1320] border-2 border-emerald-500/80 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col justify-between ${
               isMediaOnly ? 'p-0 bg-black' : 'p-8'
             }`}
           >
