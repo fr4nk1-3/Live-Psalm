@@ -50,7 +50,7 @@
         "deb"
       ],
       "maintainer": "Live Psalms <support@livepsalms.app>",
-      "icon": "public/icon.png",
+      "icon": "build/icons",
       "category": "AudioVideo",
       "artifactName": "LivePsalms-Ubuntu-${arch}.deb"
     },

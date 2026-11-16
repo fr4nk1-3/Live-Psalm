@@ -17,3 +17,11 @@ chmod 0755 /usr/bin/live-psalms
 if [ -f /usr/share/applications/live-psalms.desktop ]; then
   sed -i 's|^Exec=.*|Exec="/opt/Live Psalms/live-psalms" --no-sandbox %U|' /usr/share/applications/live-psalms.desktop
 fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+fi
