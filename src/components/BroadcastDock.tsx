@@ -713,45 +713,42 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
   if (!isOpen && !isStreaming && !isRecording) return null;
 
   return (
-    <div className={isOpen ? 'bg-[#0a101d] border-b border-[#26334a] px-3 py-2.5 shrink-0 select-none' : 'hidden'}>
+    <div className={isOpen ? 'bg-card border-b border-border px-3 py-2.5 shrink-0 select-none' : 'hidden'}>
       {/* Confirm Stop Stream */}
       {confirmStop && (
         <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center">
-          <div className="bg-[#101726] border border-rose-500/50 rounded-2xl p-5 w-96 shadow-2xl space-y-3">
-            <div className="flex items-center gap-2 text-rose-300 font-black text-sm">
+          <div className="bg-popover border border-live/50 rounded-lg p-5 w-96 shadow-2xl space-y-3">
+            <div className="flex items-center gap-2 text-live font-medium text-sm">
               <AlertTriangle className="w-5 h-5" /> End Live Broadcast?
             </div>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-foreground">
               Your stream has been live for <strong>{fmtElapsed(streamElapsed)}</strong>. Stop streaming?
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmStop(false)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-bold text-slate-200">Keep Live</button>
-              <button onClick={stopBroadcast} className="px-3 py-1.5 rounded-lg bg-rose-600 text-xs font-black text-white">Stop Stream</button>
+              <button onClick={() => setConfirmStop(false)} className="px-3 py-1.5 rounded-lg bg-secondary text-xs font-bold text-foreground">Keep Live</button>
+              <button onClick={stopBroadcast} className="px-3 py-1.5 rounded-lg bg-live text-xs font-medium text-foreground">Stop Stream</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── UNIFIED BROADCAST BAR HEADER ── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 mb-2 border-b border-[#1c273b]">
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-            <Radio className="w-4 h-4 text-rose-400" /> Live Broadcast &amp; Recording
-          </span>
+      {/* Broadcast bar header */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Broadcast</span>
 
-          {/* Sub-tabs integrated into Live Psalms */}
-          <div className="flex items-center gap-1 bg-[#070b14] p-0.5 rounded-lg border border-[#1f2b42]">
+          <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/60 p-0.5">
             {[
-              { id: 'live', label: 'Broadcast Monitor' },
+              { id: 'live', label: 'Monitor' },
               ...(multiviewEnabled ? [{ id: 'multiview', label: 'Multiview' }] : []),
-              { id: 'layers', label: 'Scenes & Layers' },
-              { id: 'setup', label: 'Stream & Audio Setup' }
+              { id: 'layers', label: 'Scenes' },
+              { id: 'setup', label: 'Setup' }
             ].map(t => (
               <button
                 key={t.id}
                 onClick={() => setSubPanel(t.id as any)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
-                  subPanel === t.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`h-6 rounded-sm px-2 text-2xs font-medium transition-colors ${
+                  subPanel === t.id ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {t.label}
@@ -759,55 +756,69 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
             ))}
           </div>
 
-          {/* Independent Output Status Pills */}
-          <div className="hidden lg:flex items-center gap-1.5 text-[10px] font-bold">
-            <span className={`px-2 py-0.5 rounded border ${isAudienceActive ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
-              Projector: {isAudienceActive ? 'ON' : 'OFF'}
+          <div className="hidden items-center gap-3 text-2xs lg:flex">
+            <span className={isAudienceActive ? 'text-live' : 'text-muted-foreground/60'}>
+              Projector {isAudienceActive ? 'on' : 'off'}
             </span>
-            <span className={`px-2 py-0.5 rounded border ${isStageActive ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
-              Stage: {isStageActive ? 'ON' : 'OFF'}
+            <span className={isStageActive ? 'text-live' : 'text-muted-foreground/60'}>
+              Stage {isStageActive ? 'on' : 'off'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {streamStatusMsg && (
-            <span className="text-[10px] text-slate-400 font-semibold max-w-xs truncate">{streamStatusMsg}</span>
+            <span className="max-w-[220px] truncate text-2xs text-muted-foreground">{streamStatusMsg}</span>
           )}
 
           <button
             onClick={() => setBroadcastBlack(b => !b)}
-            className={`h-7 px-2.5 rounded-lg border text-[10px] font-black uppercase flex items-center gap-1 transition ${
-              broadcastBlack ? 'bg-rose-600 border-rose-400 text-white' : 'bg-[#121a2b] border-[#26334a] text-slate-300 hover:border-slate-500'
+            className={`h-7 rounded-md px-2 text-2xs font-medium transition-colors ${
+              broadcastBlack ? 'bg-live text-live-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
-            title="Black out Broadcast ONLY (Projector stays live)"
+            title="Black out the broadcast only; the projector stays live"
           >
-            <ShieldAlert className="w-3 h-3" />
-            <span>{broadcastBlack ? 'Stream Black ON' : 'Stream Black'}</span>
+            {broadcastBlack ? 'Stream black on' : 'Stream black'}
           </button>
 
           {isRecording ? (
-            <button onClick={stopRecording} className="h-7 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black flex items-center gap-1">
-              <Square className="w-3 h-3 fill-white" /> REC {fmtElapsed(recordElapsed)}
+            <button
+              onClick={stopRecording}
+              className="h-7 rounded-md bg-warning px-2 text-2xs font-medium text-warning-foreground"
+            >
+              Stop rec · {fmtElapsed(recordElapsed)}
             </button>
           ) : (
-            <button onClick={startRecording} className="h-7 px-2.5 rounded-lg bg-[#121a2b] hover:bg-amber-600/30 border border-amber-500/40 text-amber-200 text-[11px] font-bold flex items-center gap-1">
-              <Circle className="w-3 h-3 fill-amber-400 text-amber-400" /> Record
+            <button
+              onClick={startRecording}
+              className="h-7 rounded-md border border-border px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              Record
             </button>
           )}
 
           {isStreaming ? (
-            <button onClick={() => setConfirmStop(true)} className="h-7 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-black flex items-center gap-1">
-              <Square className="w-3 h-3 fill-white" /> LIVE {fmtElapsed(streamElapsed)}
+            <button
+              onClick={() => setConfirmStop(true)}
+              className="h-7 rounded-md bg-live px-2.5 text-2xs font-medium text-live-foreground"
+            >
+              Live · {fmtElapsed(streamElapsed)}
             </button>
           ) : (
-            <button onClick={startBroadcast} className="h-7 px-3 rounded-lg bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-[11px] font-black flex items-center gap-1">
-              <Radio className="w-3 h-3" /> Go Live
+            <button
+              onClick={startBroadcast}
+              className="h-7 rounded-md bg-live px-2.5 text-2xs font-medium text-live-foreground transition-colors hover:bg-live/90"
+            >
+              Go live
             </button>
           )}
 
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800" title="Collapse Broadcast Panel (Stream continues if active)">
-            <X className="w-4 h-4" />
+          <button
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Close the broadcast panel"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -816,7 +827,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
       <div className={`flex items-stretch gap-3 ${subPanel === 'multiview' ? 'h-[320px]' : isBroadcastExpanded ? 'h-[290px]' : 'h-[146px]'}`}>
         {/* LIVE BROADCAST MONITOR (Always mounted so captureStream stays active) */}
         <div className={`${isBroadcastExpanded ? 'w-[490px]' : 'w-[254px]'} shrink-0 flex flex-col transition-all`}>
-          <div className="bg-black rounded-xl border border-rose-500/50 overflow-hidden relative h-full w-full shadow-lg">
+          <div className="bg-black rounded-md border border-live/50 overflow-hidden relative h-full w-full shadow-lg">
             <div
               className="w-full h-full relative"
               onMouseDown={e => {
@@ -857,13 +868,13 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 />
               )}
             </div>
-            <span className="absolute top-1 left-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-black text-rose-300 border border-rose-500/40">
+            <span className="absolute top-1 left-1.5 px-1.5 py-0.5 rounded bg-black/80 text-2xs font-medium text-live border border-live/40">
               OUTGOING BROADCAST • {resW}×{resH}
             </span>
             <button
               type="button"
               onClick={() => setIsBroadcastExpanded(v => !v)}
-              className="absolute top-1 right-1.5 p-1 rounded bg-black/75 hover:bg-slate-800 text-slate-200 border border-white/15 transition"
+              className="absolute top-1 right-1.5 p-1 rounded bg-black/75 hover:bg-accent text-foreground border border-white/15 transition"
               title={isBroadcastExpanded ? 'Compact Broadcast Monitor' : 'Enlarge Broadcast Monitor'}
             >
               {isBroadcastExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
@@ -875,17 +886,17 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
         {subPanel === 'multiview' && multiviewEnabled && (
           <div className="flex-1 min-w-0 flex gap-2.5 h-full">
             {/* Preview (PVW) + Take Controls */}
-            <div className="w-[260px] shrink-0 bg-[#070b14] border border-emerald-500/40 rounded-xl p-2 flex flex-col justify-between">
+            <div className="w-[260px] shrink-0 bg-background/50 border border-emerald-500/40 rounded-md p-2 flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <span className="text-2xs font-medium uppercase tracking-wider text-success flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   Preview (PVW)
                 </span>
-                <span className="text-[10px] text-slate-300 font-bold truncate max-w-[135px]">
+                <span className="text-2xs text-foreground font-bold truncate max-w-[135px]">
                   {studio.scenes.find(s => s.id === studio.activePreviewSceneId)?.name || activeScene?.name}
                 </span>
               </div>
-              <div className="bg-black rounded-lg border border-emerald-500/50 overflow-hidden aspect-video w-full my-1.5">
+              <div className="bg-black rounded-lg border border-success/50 overflow-hidden aspect-video w-full my-1.5">
                 <canvas ref={previewCanvasRef} width={384} height={216} className="w-full h-full object-contain block" />
               </div>
               <div className="flex items-center gap-1.5">
@@ -896,7 +907,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                     setAutoFollowLive(false);
                     setStudio(p => ({ ...p, activeProgramSceneId: nextId }));
                   }}
-                  className="flex-1 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider transition shadow"
+                  className="flex-1 py-1.5 rounded-lg bg-live hover:bg-live/90 text-foreground text-2xs font-medium uppercase tracking-wider transition shadow"
                   title="Send Preview scene live to Outgoing Broadcast (PGM)"
                 >
                   Cut to Program
@@ -904,10 +915,10 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 <button
                   type="button"
                   onClick={() => setAutoFollowLive(v => !v)}
-                  className={`px-2 py-1.5 rounded-lg text-[9px] font-bold border transition ${
+                  className={`px-2 py-1.5 rounded-lg text-2xs font-bold border transition ${
                     autoFollowLive
-                      ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
-                      : 'bg-slate-900 border-slate-700 text-slate-400'
+                      ? 'bg-success/20 border-success/50 text-success'
+                      : 'bg-background/60 border-border text-muted-foreground'
                   }`}
                   title="Automatically match broadcast layout to live Bible verses, songs, and countdowns"
                 >
@@ -917,12 +928,12 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
             </div>
 
             {/* Live Scene Multiview Grid */}
-            <div className="flex-1 min-w-0 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 flex flex-col overflow-hidden">
+            <div className="flex-1 min-w-0 bg-background/50 border border-border rounded-md p-2 flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-1.5 shrink-0">
-                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300">
+                <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                   Broadcast Multiview ({studio.scenes.length} Scenes)
                 </span>
-                <span className="text-[9px] text-slate-400">
+                <span className="text-2xs text-muted-foreground">
                   Click = Preview (PVW) • Double-click or LIVE = Cut to Program (PGM)
                 </span>
               </div>
@@ -940,10 +951,10 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                       }}
                       className={`group relative rounded-lg overflow-hidden border-2 cursor-pointer transition bg-black ${
                         isPgm
-                          ? 'border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.35)]'
+                          ? 'border-live '
                           : isPvw
-                          ? 'border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.25)]'
-                          : 'border-slate-800 hover:border-slate-500'
+                          ? 'border-success '
+                          : 'border-border hover:border-ring/60'
                       }`}
                     >
                       <div className="aspect-video w-full bg-black">
@@ -957,17 +968,17 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                           className="w-full h-full object-contain block"
                         />
                       </div>
-                      <div className="px-1.5 py-1 bg-[#0b101d] border-t border-slate-800/80 flex items-center justify-between gap-1">
+                      <div className="px-1.5 py-1 bg-background/60 border-t border-border flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="text-[9px] font-mono font-bold text-slate-500">{idx + 1}</span>
-                          <span className="text-[10px] font-bold text-slate-200 truncate">{sc.name}</span>
+                          <span className="text-2xs font-mono font-bold text-muted-foreground">{idx + 1}</span>
+                          <span className="text-2xs font-bold text-foreground truncate">{sc.name}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {isPgm && (
-                            <span className="px-1 py-0.2 rounded bg-rose-600 text-white text-[8px] font-black uppercase">PGM</span>
+                            <span className="px-1 py-0.2 rounded bg-live text-foreground text-2xs font-medium uppercase">PGM</span>
                           )}
                           {isPvw && !isPgm && (
-                            <span className="px-1 py-0.2 rounded bg-emerald-500 text-slate-950 text-[8px] font-black uppercase">PVW</span>
+                            <span className="px-1 py-0.2 rounded bg-success text-success-foreground text-2xs font-medium uppercase">PVW</span>
                           )}
                           {!isPgm && (
                             <button
@@ -977,7 +988,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                                 setAutoFollowLive(false);
                                 setStudio(p => ({ ...p, activeProgramSceneId: sc.id, activePreviewSceneId: sc.id }));
                               }}
-                              className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-[8px] font-black uppercase transition"
+                              className="px-1.5 py-0.5 rounded bg-secondary hover:bg-live text-foreground hover:text-foreground text-2xs font-medium uppercase transition"
                               title={`Cut ${sc.name} directly to Program`}
                             >
                               Live
@@ -996,16 +1007,16 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
         {/* SUB-PANEL: LIVE (Compact Layouts + Camera & Audio Strip) */}
         {subPanel === 'live' && (
           <div className="flex-1 min-w-0 grid grid-cols-12 gap-2.5 h-full">
-            <div className="col-span-6 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 flex flex-col justify-between overflow-hidden">
+            <div className="col-span-6 bg-background/50 border border-border rounded-md p-2 flex flex-col justify-between overflow-hidden">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider">Broadcast Layout</span>
+                <span className="text-2xs font-medium uppercase text-muted-foreground tracking-wider">Broadcast Layout</span>
                 <button
                   type="button"
                   onClick={() => setAutoFollowLive(v => !v)}
-                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition ${
+                  className={`px-2 py-0.5 rounded text-2xs font-bold border transition ${
                     autoFollowLive
-                      ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
-                      : 'bg-slate-900 border-slate-700 text-slate-400'
+                      ? 'bg-success/20 border-success/50 text-success'
+                      : 'bg-background/60 border-border text-muted-foreground'
                   }`}
                   title="Automatically match broadcast layout to live Bible verses, songs, and countdowns"
                 >
@@ -1020,27 +1031,27 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                       setAutoFollowLive(false);
                       setStudio(p => ({ ...p, activeProgramSceneId: sc.id, activePreviewSceneId: sc.id }));
                     }}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border text-left truncate transition ${
+                    className={`px-2 py-1 rounded-lg text-2xs font-bold border text-left truncate transition ${
                       sc.id === studio.activeProgramSceneId
-                        ? 'bg-rose-600/25 border-rose-500 text-white shadow-[0_0_8px_rgba(244,63,94,0.2)]'
-                        : 'bg-[#0d1320] border-slate-800 text-slate-300 hover:border-slate-600'
+                        ? 'bg-live/25 border-live text-foreground '
+                        : 'bg-background/60 border-border text-foreground hover:border-ring/50'
                     }`}
                   >
                     {sc.name}
                   </button>
                 ))}
               </div>
-              <div className="text-[9px] text-slate-500 truncate pt-1">
+              <div className="text-2xs text-muted-foreground truncate pt-1">
                 Live lyrics, Bible verses, countdown &amp; lower-thirds feed automatically into active overlays.
               </div>
             </div>
 
-            <div className="col-span-6 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 flex flex-col justify-between overflow-hidden">
+            <div className="col-span-6 bg-background/50 border border-border rounded-md p-2 flex flex-col justify-between overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-emerald-300 tracking-wider">Camera &amp; Audio Input</span>
+                <span className="text-2xs font-medium uppercase text-success tracking-wider">Camera &amp; Audio Input</span>
                 <div className="flex items-center gap-2">
-                  {deviceStatus && <span className="text-[9px] font-semibold text-slate-400">{deviceStatus}</span>}
-                  <button onClick={refreshDevices} className="text-slate-300 hover:text-white flex items-center gap-1 text-[9px] font-bold bg-slate-800 px-1.5 py-0.5 rounded">
+                  {deviceStatus && <span className="text-2xs font-semibold text-muted-foreground">{deviceStatus}</span>}
+                  <button onClick={refreshDevices} className="text-foreground hover:text-foreground flex items-center gap-1 text-2xs font-bold bg-secondary px-1.5 py-0.5 rounded">
                     <RefreshCw className="w-3 h-3" /> Detect
                   </button>
                 </div>
@@ -1051,7 +1062,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 const camSrc = activeScene?.sources.find(s => s.type === 'camera');
                 return (
                   <div className="flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <Video className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <select
                       value={camSrc?.deviceId || ''}
                       onChange={e => {
@@ -1061,7 +1072,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                           sources: sc.sources.map(s => s.type === 'camera' ? { ...s, deviceId: devId } : s)
                         }));
                       }}
-                      className="flex-1 bg-[#0d1320] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none"
+                      className="flex-1 bg-background/60 border border-border rounded-lg px-2 py-1 text-[11px] text-foreground outline-none"
                     >
                       <option value="">Default Camera / Capture Card</option>
                       {videoDevices.map((d, i) => (
@@ -1081,11 +1092,11 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 return (
                   <div key={ch.id} className="space-y-1">
                     <div className="flex items-center gap-1.5">
-                      <Mic className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <Mic className="w-3.5 h-3.5 text-warning shrink-0" />
                       <select
                         value={ch.deviceId}
                         onChange={e => setStudio(p => ({ ...p, audioChannels: p.audioChannels.map(c => c.id === ch.id ? { ...c, deviceId: e.target.value } : c) }))}
-                        className="flex-1 bg-[#0d1320] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none"
+                        className="flex-1 bg-background/60 border border-border rounded-lg px-2 py-1 text-[11px] text-foreground outline-none"
                       >
                         <option value="">Default Audio Input (48kHz Raw)</option>
                         {audioDevices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Mic ${i + 1}`}</option>)}
@@ -1094,7 +1105,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                       </select>
                       <button
                         onClick={() => setStudio(p => ({ ...p, audioChannels: p.audioChannels.map(c => c.id === ch.id ? { ...c, muted: !c.muted } : c) }))}
-                        className={`p-1 rounded-lg ${ch.muted ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}
+                        className={`p-1 rounded-lg ${ch.muted ? 'bg-rose-500/20 text-live' : 'bg-success/20 text-success'}`}
                       >
                         {ch.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                       </button>
@@ -1104,12 +1115,12 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                         max={150}
                         value={Math.round(ch.volume * 100)}
                         onChange={e => setStudio(p => ({ ...p, audioChannels: p.audioChannels.map(c => c.id === ch.id ? { ...c, volume: Number(e.target.value) / 100 } : c) }))}
-                        className="w-20 accent-emerald-500 h-1.5"
+                        className="w-20 accent-foreground h-1.5"
                       />
-                      <span className="text-[9px] font-mono text-slate-400 w-7 text-right">{Math.round(ch.volume * 100)}%</span>
+                      <span className="text-2xs font-mono text-muted-foreground w-7 text-right">{Math.round(ch.volume * 100)}%</span>
                     </div>
-                    <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-75 ${lvl > 85 ? 'bg-rose-500' : lvl > 60 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${ch.muted ? 0 : lvl}%` }} />
+                    <div className="h-1.5 w-full bg-background/60 rounded-full overflow-hidden">
+                      <div className={`h-full transition-all duration-75 ${lvl > 85 ? 'bg-rose-500' : lvl > 60 ? 'bg-amber-400' : 'bg-success'}`} style={{ width: `${ch.muted ? 0 : lvl}%` }} />
                     </div>
                   </div>
                 );
@@ -1121,14 +1132,14 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
         {/* SUB-PANEL: SCENES & LAYERS */}
         {subPanel === 'layers' && (
           <div className="flex-1 min-w-0 grid grid-cols-12 gap-2.5 h-full">
-            <div className="col-span-7 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 flex flex-col h-full overflow-hidden">
+            <div className="col-span-7 bg-background/50 border border-border rounded-md p-2 flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between mb-1 relative">
-                <span className="text-[10px] font-black uppercase text-indigo-300">Layers in "{activeScene?.name}" (Drag on video)</span>
-                <button onClick={() => setShowAddSource(v => !v)} className="px-2 py-0.5 rounded bg-indigo-600 text-white text-[10px] font-bold flex items-center gap-1">
+                <span className="text-2xs font-medium uppercase text-muted-foreground">Layers in "{activeScene?.name}" (Drag on video)</span>
+                <button onClick={() => setShowAddSource(v => !v)} className="px-2 py-0.5 rounded bg-secondary text-foreground text-2xs font-bold flex items-center gap-1">
                   <Plus className="w-3 h-3" /> Add Layer
                 </button>
                 {showAddSource && (
-                  <div className="absolute top-6 right-0 z-50 w-48 bg-[#101726] border border-indigo-500/50 rounded-xl shadow-2xl p-1 grid grid-cols-1 max-h-40 overflow-y-auto">
+                  <div className="absolute top-6 right-0 z-50 w-48 bg-popover border border-border rounded-md shadow-2xl p-1 grid grid-cols-1 max-h-40 overflow-y-auto">
                     {[
                       { type: 'camera', label: 'Camera / Capture Card' },
                       { type: 'lyrics_overlay', label: 'Live Lyrics Overlay' },
@@ -1139,7 +1150,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                       { type: 'image', label: 'Image Overlay' },
                       { type: 'text', label: 'Custom Text' }
                     ].map(i => (
-                      <button key={i.type} onClick={() => addSource(i.type as BroadcastSourceType)} className="text-left px-2 py-1 rounded hover:bg-indigo-600/30 text-[11px] text-slate-200">
+                      <button key={i.type} onClick={() => addSource(i.type as BroadcastSourceType)} className="text-left px-2 py-1 rounded hover:bg-secondary/30 text-[11px] text-foreground">
                         {i.label}
                       </button>
                     ))}
@@ -1152,14 +1163,14 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                     key={src.id}
                     onClick={() => setSelectedSourceId(src.id)}
                     className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer border ${
-                      selectedSourceId === src.id ? 'bg-amber-500/15 border-amber-500/60 text-white' : 'bg-[#0d1320] border-slate-800 text-slate-300'
+                      selectedSourceId === src.id ? 'bg-amber-500/15 border-amber-500/60 text-foreground' : 'bg-background/60 border-border text-foreground'
                     }`}
                   >
                     <span className="truncate flex-1">{src.name}</span>
-                    <button onClick={e => { e.stopPropagation(); updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === src.id ? { ...s, visible: !s.visible } : s) })); }} className={src.visible ? 'text-emerald-400' : 'text-slate-600'}>
+                    <button onClick={e => { e.stopPropagation(); updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === src.id ? { ...s, visible: !s.visible } : s) })); }} className={src.visible ? 'text-success' : 'text-muted-foreground/70'}>
                       {src.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                     </button>
-                    <button onClick={e => { e.stopPropagation(); updateActiveScene(sc => ({ ...sc, sources: sc.sources.filter(s => s.id !== src.id) })); }} className="text-slate-500 hover:text-rose-400">
+                    <button onClick={e => { e.stopPropagation(); updateActiveScene(sc => ({ ...sc, sources: sc.sources.filter(s => s.id !== src.id) })); }} className="text-muted-foreground hover:text-live">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
@@ -1167,15 +1178,15 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
               </div>
             </div>
 
-            <div className="col-span-5 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 flex flex-col h-full overflow-y-auto">
-              <span className="text-[10px] font-black uppercase text-amber-300 mb-1">Layer Properties</span>
+            <div className="col-span-5 bg-background/50 border border-border rounded-md p-2 flex flex-col h-full overflow-y-auto">
+              <span className="text-2xs font-medium uppercase text-warning mb-1">Layer Properties</span>
               {selectedSource ? (
                 <div className="space-y-1.5 text-[11px]">
                   {selectedSource.type === 'camera' && (
                     <select
                       value={selectedSource.deviceId || ''}
                       onChange={e => updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === selectedSource.id ? { ...s, deviceId: e.target.value } : s) }))}
-                      className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white"
+                      className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground"
                     >
                       <option value="">Default Camera</option>
                       {videoDevices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}
@@ -1184,23 +1195,23 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                   <div className="grid grid-cols-4 gap-1">
                     {(['x', 'y', 'width', 'height'] as const).map(k => (
                       <div key={k}>
-                        <span className="text-[9px] uppercase text-slate-500 block">{k}</span>
+                        <span className="text-2xs uppercase text-muted-foreground block">{k}</span>
                         <input
                           type="number"
                           value={Math.round(selectedSource[k])}
                           onChange={e => updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === selectedSource.id ? { ...s, [k]: Number(e.target.value) || 0 } : s) }))}
-                          className="w-full bg-[#0d1320] border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-white"
+                          className="w-full bg-background/60 border border-border rounded px-1.5 py-0.5 text-2xs font-mono text-foreground"
                         />
                       </div>
                     ))}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400">Opacity</span>
-                    <input type="range" min={10} max={100} value={Math.round(selectedSource.opacity * 100)} onChange={e => updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === selectedSource.id ? { ...s, opacity: Number(e.target.value) / 100 } : s) }))} className="flex-1 accent-indigo-500 h-1.5" />
+                    <span className="text-2xs text-muted-foreground">Opacity</span>
+                    <input type="range" min={10} max={100} value={Math.round(selectedSource.opacity * 100)} onChange={e => updateActiveScene(sc => ({ ...sc, sources: sc.sources.map(s => s.id === selectedSource.id ? { ...s, opacity: Number(e.target.value) / 100 } : s) }))} className="flex-1 accent-foreground h-1.5" />
                   </div>
                 </div>
               ) : (
-                <span className="text-[11px] text-slate-500 my-auto text-center">Select a layer to adjust position, camera, or opacity.</span>
+                <span className="text-[11px] text-muted-foreground my-auto text-center">Select a layer to adjust position, camera, or opacity.</span>
               )}
             </div>
           </div>
@@ -1208,13 +1219,13 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
 
         {/* SUB-PANEL: STREAM & AUDIO SETUP */}
         {subPanel === 'setup' && (
-          <div className="flex-1 min-w-0 bg-[#070b14] border border-[#1c273b] rounded-xl p-2 grid grid-cols-3 gap-2.5 text-[11px] h-full overflow-y-auto">
+          <div className="flex-1 min-w-0 bg-background/50 border border-border rounded-md p-2 grid grid-cols-3 gap-2.5 text-[11px] h-full overflow-y-auto">
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase text-rose-300 block">Destination</span>
+              <span className="text-2xs font-medium uppercase text-live block">Destination</span>
               <select
                 value={studio.activeDestinationId}
                 onChange={e => { setConnTest(null); setStudio(p => ({ ...p, activeDestinationId: e.target.value })); }}
-                className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold"
+                className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-bold"
               >
                 {studio.destinations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
@@ -1227,7 +1238,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                       value={dest.serverUrl}
                       onChange={e => setStudio(p => ({ ...p, destinations: p.destinations.map(d => d.id === dest.id ? { ...d, serverUrl: e.target.value } : d) }))}
                       placeholder="RTMP Server URL"
-                      className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-mono text-[10px]"
+                      className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-mono text-2xs"
                     />
                     <div className="flex gap-1">
                       <input
@@ -1235,7 +1246,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                         value={dest.streamKey}
                         onChange={e => setStudio(p => ({ ...p, destinations: p.destinations.map(d => d.id === dest.id ? { ...d, streamKey: e.target.value } : d) }))}
                         placeholder="Stream Key (masked)"
-                        className="flex-1 min-w-0 bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-mono text-[10px]"
+                        className="flex-1 min-w-0 bg-background/60 border border-border rounded px-2 py-1 text-foreground font-mono text-2xs"
                       />
                       <button
                         onClick={async () => {
@@ -1244,43 +1255,43 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                           const res = await ipc.invoke('test-rtmp-connection', { rtmpUrl: url });
                           setConnTest({ ok: !!res.success, msg: res.message || res.error });
                         }}
-                        className="px-2 py-1 rounded bg-indigo-600 text-white font-bold text-[10px] shrink-0"
+                        className="px-2 py-1 rounded bg-secondary text-foreground font-bold text-2xs shrink-0"
                       >
                         Test
                       </button>
                     </div>
-                    {connTest && <div className={`text-[10px] ${connTest.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{connTest.msg}</div>}
+                    {connTest && <div className={`text-2xs ${connTest.ok ? 'text-success' : 'text-live'}`}>{connTest.msg}</div>}
                   </>
                 );
               })()}
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase text-indigo-300 block">Video Quality &amp; Encoder</span>
+              <span className="text-2xs font-medium uppercase text-muted-foreground block">Video Quality &amp; Encoder</span>
               <select
                 value={studio.outputConfig.resolution}
                 onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, resolution: e.target.value as any } }))}
-                className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold"
+                className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-bold"
               >
                 <option value="1920x1080">1920×1080 (Full HD)</option>
                 <option value="1280x720">1280×720 (HD)</option>
                 <option value="3840x2160">3840×2160 (4K)</option>
               </select>
               <div className="grid grid-cols-2 gap-1">
-                <select value={studio.outputConfig.fps} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, fps: Number(e.target.value) as 30 | 60 } }))} className="bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold">
+                <select value={studio.outputConfig.fps} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, fps: Number(e.target.value) as 30 | 60 } }))} className="bg-background/60 border border-border rounded px-2 py-1 text-foreground font-bold">
                   <option value={30}>30 FPS</option>
                   <option value={60}>60 FPS</option>
                 </select>
-                <input type="number" min={500} max={20000} step={250} value={studio.outputConfig.videoBitrateKbps} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, videoBitrateKbps: Number(e.target.value) || 4500 } }))} className="bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-mono" />
+                <input type="number" min={500} max={20000} step={250} value={studio.outputConfig.videoBitrateKbps} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, videoBitrateKbps: Number(e.target.value) || 4500 } }))} className="bg-background/60 border border-border rounded px-2 py-1 text-foreground font-mono" />
               </div>
-              <select value={studio.outputConfig.encoder} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, encoder: e.target.value as any } }))} className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold">
+              <select value={studio.outputConfig.encoder} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, encoder: e.target.value as any } }))} className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-bold">
                 {availableEncoders.map(enc => <option key={enc} value={enc}>{enc === 'libx264' ? 'x264 Software' : `${enc} Hardware`}</option>)}
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase text-amber-300 block">Local Recording</span>
-              <select value={studio.outputConfig.recordingFormat} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, recordingFormat: e.target.value as any } }))} className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-bold">
+              <span className="text-2xs font-medium uppercase text-warning block">Local Recording</span>
+              <select value={studio.outputConfig.recordingFormat} onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, recordingFormat: e.target.value as any } }))} className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-bold">
                 <option value="mp4">MP4</option>
                 <option value="mkv">MKV</option>
                 <option value="flv">FLV</option>
@@ -1290,9 +1301,9 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 value={studio.outputConfig.recordingDir}
                 onChange={e => setStudio(p => ({ ...p, outputConfig: { ...p.outputConfig, recordingDir: e.target.value } }))}
                 placeholder="~/Videos/LivePsalms-Recordings"
-                className="w-full bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-white font-mono text-[10px]"
+                className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-mono text-2xs"
               />
-              {lastRecPath && <div className="text-[9px] text-emerald-300 truncate">Saved: {lastRecPath}</div>}
+              {lastRecPath && <div className="text-2xs text-success truncate">Saved: {lastRecPath}</div>}
             </div>
           </div>
         )}
