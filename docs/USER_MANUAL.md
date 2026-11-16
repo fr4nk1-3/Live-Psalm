@@ -79,7 +79,10 @@ You can configure the Stage Monitor for your room layout in **Settings → Displ
 
 ## 5. Timers, Alerts, OBS & Live Streaming
 
-- **Countdown Timer:** Set minutes/seconds in the Bottom Control Bar and choose whether it displays on **Stage**, **Audience**, or **Both** (including Full-Slide Countdown before service starts).
+- **Countdown Timer & Clock-Linked Events:** Open the **Timer & Clock Options** (gear icon next to the timer in the Bottom Control Bar) to:
+  - Toggle **Full-Slide** countdown projection on Audience, Stage, or Both.
+  - Pick an event heading (**Service**, **New Year**, **Worship**, **Sermon**, **Conference**, **Break**, **Prayer**) or type your own **Active Heading** and **When 00:00 Reached** text and click **+ Save** to reuse it anytime.
+  - Switch to **System Clock Target** using **Midnight**, **New Year (Jan 1, 00:00)**, **Next Hour**, or a custom date/time picker so the timer counts down accurately against your computer's system clock.
 - **Stage Messages:** Send instant text cues (with optional Flash) directly to the Stage Monitor without appearing on the Audience screen.
 - **Parent / Nursery Pager Alerts:** Enter a pager code in the Bottom Control Bar to display a non-intrusive corner alert on the Audience screen.
 - **Announcement Ticker:** Trigger a scrolling lower-third announcement bar across the bottom of the Audience screen.

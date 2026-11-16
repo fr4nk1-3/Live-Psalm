@@ -79,7 +79,7 @@ flowchart LR
   - `LibraryTabs.tsx` — Songs, 45+ Offline Bibles, Media/Backgrounds, and Themes library browser.
   - `CenterWorkspace.tsx` — Dual Preview / Program (`ON AIR`) 16:9 monitors, slide grid, section jump tags, and per-verse live/pin/translation controls.
   - `InspectorPanel.tsx` — Slide styling, theme overrides, speaker notes, and item properties.
-  - `BottomControlBar.tsx` — Emergency overrides (`Black`, `Clear`, `Logo`, `Freeze`, `Stop Media`), countdown timer controls, stage messages, and audience alerts.
+  - `BottomControlBar.tsx` — Emergency overrides (`Black`, `Clear`, `Logo`, `Freeze`, `Stop Media`), duration & system-clock-linked countdown timer options (custom event headings, saved presets, target date/time), stage messages, and audience alerts.
   - `MediaPlayerBar.tsx` — Master transport bar (play/pause, seek, speed, volume, loop) synchronized to output windows.
 - **Output Window Components (`src/components/`):**
   - `AudienceOutputWindow.tsx` — Fullscreen congregation projection with motion/image backgrounds, scrim/blur, transitions (`cut`, `fade`, `dissolve`, `slide`, `zoom`), lower-third mode, nursery/parent alert pager, announcement crawl, and full-slide countdown.
@@ -114,13 +114,17 @@ Configured in **Settings → Displays & Outputs → Stage Display Mode**:
 - `getOutputFontSize` and `getFlexibleFontSize` (`src/utils/fontSize.ts`) scale text based on character length and line breaks.
 - `useAutoFitFontSize` (`src/utils/useAutoFitFontSize.ts`) measures rendered `scrollWidth` / `scrollHeight` against container bounds via `ResizeObserver` and binary-searches for the largest non-overflowing pixel size.
 
-### 4.4 Offline Bible Engine (45 Translations)
+### 4.4 Countdown Timer & System-Clock Target Mode
+- **Preset & Custom Full-Slide Headings:** Supports built-in presets (`Service`, `New Year`, `Worship`, `Sermon`, `Conference`, `Break`, `Prayer`), editable active/completion headings, and user-saved custom presets persisted in `localStorage` (`live_psalms_countdown_presets_v1`).
+- **System-Clock-Linked Target Time:** Operators can link the countdown to a specific OS clock target (`datetime-local` or 1-click **Midnight**, **New Year Jan 1 00:00**, **Next Hour**). Remaining time is computed directly from `Date.now()` to prevent drift, with multi-day formatting (`Xd HH:MM:SS`) across the operator bar, Audience Output, and Stage Display.
+
+### 4.5 Offline Bible Engine (45 Translations)
 Bundled in `src/data/bibles/` and indexed by [src/data/bibles/manifest.json](file:///home/frank/Documents/Projects/Live%20Psalms/src/data/bibles/manifest.json):
 - **English:** BSB, KJV, NKJV, NIV, ESV, NLT, NASB, CSB, HCSB, NRSV, RSV, AMP, AMPC, LSB, NET, MEV, GNT, GW, TLB, TPT, NIrV, ERV, EASY, ASV, Darby, YLT, Tyndale, NASU.
 - **East African / Kenyan Languages:** Swahili (`SUV`, `RSUV`), Kalenjin (`KLJ19`, `KLJ`, `KLJR`), Kamba (`KMB`, `MBV`), Kikuyu (`GKY13`, `GKY14`, `GKY19`), Luo (`LUO85`, `LUO15`, `LUO20`), Maasai (`MAS70`, `MAS20`, `MAS`, `MAS-MBS`).
 - Supports **single-verse Live / Pin / Translation** actions as well as **parallel translations**.
 
-### 4.5 OBS Studio & Live Streaming Integration
+### 4.6 OBS Studio & Live Streaming Integration
 - **Direct OBS Files:** Writes `live_title.txt`, `live_slide.txt`, `live_subtitle.txt`, `live_combined.txt`, `lower_third.txt`, and `obs_state.json` to `~/Documents/LivePsalms-OBS`.
 - **Browser Source:** `http://<LAN-IP>:8080/?output=obs` (supports transparent/alpha background mode).
 - **RTMP Streaming:** Checks `ffmpeg` availability (`check-ffmpeg`) and streams via `start-stream` / `stop-stream` IPC handlers.
