@@ -4,6 +4,7 @@ import {
   ItemType,
   Slide
 } from '../types/presentation';
+import { StorageService } from '../services/storage';
 import {
   Plus,
   Trash2,
@@ -61,7 +62,7 @@ const shortSectionTag = (label?: string, fallbackIdx?: number): string => {
 
 const shortBibleId = (id?: string | null): string => {
   if (!id) return '';
-  return id.replace(/^(eng-|bible-)/i, '').toUpperCase();
+  return StorageService.getTranslationAbbreviation(id);
 };
 
 export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
@@ -469,8 +470,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 {/* Item Row (Single-click = Go Live immediately) */}
                 <div
                   onClick={() => onSelectItem(item)}
-                  className="group relative p-2 flex items-center justify-between gap-1.5 cursor-pointer"
-                  title="Click to Go Live immediately"
+                  className="group relative px-2 py-1.5 flex items-center justify-between gap-1.5 cursor-pointer"
                 >
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     {/* Expand/Collapse Slide Preview Chevron */}
@@ -560,13 +560,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                       </div>
 
                       {/* Quick Cues & Indicators Row */}
-                      <div className="flex items-center flex-wrap gap-1 mt-0.5">
-                        <span className="text-[10px] text-slate-400">
+                      <div className="flex items-center gap-1 mt-0.5 whitespace-nowrap overflow-hidden">
+                        <span className="text-[10px] text-slate-400 shrink-0">
                           {item.slides.length} {item.slides.length === 1 ? 'slide' : 'slides'}
                         </span>
 
                         {primaryBibleAbbr && (
-                          <span className="px-1 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold text-amber-300">
+                          <span className="px-1 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold text-amber-300 shrink-0">
                             {parallelBibleAbbr ? `${primaryBibleAbbr}+${parallelBibleAbbr}` : primaryBibleAbbr}
                           </span>
                         )}
@@ -613,8 +613,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Quick Item Actions */}
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                  {/* Quick Item Actions (floating pill on hover so title never squeezes) */}
+                  <div className="hidden group-hover:flex items-center gap-0.5 absolute right-1.5 top-1.5 bg-[#121929]/95 border border-slate-700/80 rounded-md px-1 py-0.5 shadow-lg z-10">
                     {onRenameItem && (
                       <button
                         type="button"

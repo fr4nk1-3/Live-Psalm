@@ -256,6 +256,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
   const [verseJumpQuery, setVerseJumpQuery] = useState('');
   const [chapterPassage, setChapterPassage] = useState<any | null>(null);
   const [chapterSlides, setChapterSlides] = useState<Slide[]>([]);
+  const [perVerseOverrides, setPerVerseOverrides] = useState<Record<string, Slide>>({});
   const [isPassageLoading, setIsPassageLoading] = useState(false);
   const [showBibleImportModal, setShowBibleImportModal] = useState(false);
   const [importBibleName, setImportBibleName] = useState('');
@@ -337,44 +338,47 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
   const handleTranslateToParallelNow = (specificVerseSlide?: Slide, goLive?: boolean) => {
     if (!parallelTranslation) return;
 
-    // If currently displaying Primary, translate to Parallel; if already on Parallel, translate back to Primary
-    const targetId =
-      selectedTranslation === parallelTranslation ? primaryTranslation : parallelTranslation;
-
-    setSelectedTranslation(targetId);
-
     if (specificVerseSlide) {
-      const sVerse = entireChapter ? 1 : startVerse;
-      const eVerse = entireChapter ? 999 : endVerse;
-      StorageService.buildBiblePassageSlidesAsync(
-        bibleBook,
-        bibleChapter,
-        sVerse,
-        eVerse,
-        targetId,
-        null
-      ).then(built => {
-        if (built && built.passage && built.slides.length > 0) {
-          setChapterPassage(built.passage);
-          setChapterSlides(built.slides);
-          const vNum = specificVerseSlide.bibleMeta?.verse;
-          const translatedVerseSlide =
-            built.slides.find(s => s.bibleMeta?.verse === vNum) || built.slides[0];
-          const meta: PlaylistItem['bibleMeta'] = {
-            book: built.passage.book,
-            chapter: built.passage.chapter,
-            startVerse: sVerse,
-            endVerse: eVerse,
+      const resolvedPrimary = StorageService.resolveTranslationId(primaryTranslation);
+      const resolvedParallel = StorageService.resolveTranslationId(parallelTranslation);
+      const currentVerseTrans = StorageService.resolveTranslationId(
+        specificVerseSlide.bibleMeta?.translationId || selectedTranslation
+      );
+      const targetId = currentVerseTrans === resolvedParallel ? resolvedPrimary : resolvedParallel;
+      const vBook = specificVerseSlide.bibleMeta?.book || bibleBook;
+      const vChap = specificVerseSlide.bibleMeta?.chapter || bibleChapter;
+      const vNum = specificVerseSlide.bibleMeta?.verse || 1;
+      const verseKey = `${vBook}:${vChap}:${vNum}`;
+      const verseRef = `${vBook} ${vChap}:${vNum}`;
+
+      StorageService.translateSingleBibleSlideAsync(specificVerseSlide, targetId, null).then(
+        translatedSlide => {
+          if (!translatedSlide) return;
+          setPerVerseOverrides(prev => ({ ...prev, [verseKey]: translatedSlide }));
+          const singleMeta: PlaylistItem['bibleMeta'] = {
+            book: vBook,
+            chapter: vChap,
+            startVerse: vNum,
+            endVerse: vNum,
             translationId: targetId
           };
           if (goLive && onAddBiblePassageAndGoLive) {
-            onAddBiblePassageAndGoLive(built.passage.formattedRef, built.slides, translatedVerseSlide, meta);
+            onAddBiblePassageAndGoLive(verseRef, [translatedSlide], translatedSlide, singleMeta);
           } else if (onSelectBibleVerseInChapter) {
-            onSelectBibleVerseInChapter(built.passage.formattedRef, built.slides, translatedVerseSlide, meta);
+            onSelectBibleVerseInChapter(verseRef, [translatedSlide], translatedSlide, singleMeta);
           }
         }
-      });
-    } else if (onTranslateActiveBible) {
+      );
+      return;
+    }
+
+    // Chapter-wide translation toggle (when clicking main Translate button)
+    const targetId =
+      selectedTranslation === parallelTranslation ? primaryTranslation : parallelTranslation;
+    setSelectedTranslation(targetId);
+    setPerVerseOverrides({});
+
+    if (onTranslateActiveBible) {
       onTranslateActiveBible(targetId);
     } else if (onChangeBibleTranslations) {
       onChangeBibleTranslations(targetId, null);
@@ -590,6 +594,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
   };
 
   useEffect(() => {
+    setPerVerseOverrides({});
     handleFetchChapterPreview();
   }, [bibleBook, bibleChapter, selectedTranslation, parallelTranslation, entireChapter, startVerse, endVerse, settings.apiBibleEnabled]);
 
@@ -1240,8 +1245,21 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                       ) : (
                         filteredChapterSlides.map((verseSlide, vIdx) => {
                           const verseNum = verseSlide.bibleMeta?.verse ?? (vIdx + 1);
+                          const verseKey = `${chapterPassage.book}:${chapterPassage.chapter}:${verseNum}`;
+                          const activeVerseSlide = perVerseOverrides[verseKey] || verseSlide;
                           const verseRef = `${chapterPassage.book} ${chapterPassage.chapter}:${verseNum}`;
                           const isVersePinned = quickPinnedItems.some(p => p.title === verseRef);
+                          const activeVerseTrans = StorageService.resolveTranslationId(
+                            activeVerseSlide.bibleMeta?.translationId || selectedTranslation
+                          );
+                          const singleVerseMeta: PlaylistItem['bibleMeta'] = {
+                            book: chapterPassage.book,
+                            chapter: chapterPassage.chapter,
+                            startVerse: verseNum,
+                            endVerse: verseNum,
+                            translationId: activeVerseTrans,
+                            parallelTranslationId: parallelTranslation || undefined
+                          };
 
                           return (
                             <div
@@ -1249,34 +1267,34 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                               onClick={() => {
                                 if (onSelectBibleVerseInChapter) {
                                   onSelectBibleVerseInChapter(
-                                    chapterPassage.formattedRef,
-                                    chapterSlides,
-                                    verseSlide,
-                                    currentBibleMeta
+                                    verseRef,
+                                    [activeVerseSlide],
+                                    activeVerseSlide,
+                                    singleVerseMeta
                                   );
                                 } else if (onPinToQuickSection) {
                                   onPinToQuickSection(
-                                    chapterPassage.formattedRef,
-                                    chapterSlides,
+                                    verseRef,
+                                    [activeVerseSlide],
                                     'bible',
-                                    chapterPassage.formattedRef,
-                                    verseSlide,
-                                    currentBibleMeta
+                                    verseRef,
+                                    activeVerseSlide,
+                                    singleVerseMeta
                                   );
                                 }
                               }}
                               onDoubleClick={() => {
                                 if (onAddBiblePassageAndGoLive) {
                                   onAddBiblePassageAndGoLive(
-                                    chapterPassage.formattedRef,
-                                    chapterSlides,
-                                    verseSlide,
-                                    currentBibleMeta
+                                    verseRef,
+                                    [activeVerseSlide],
+                                    activeVerseSlide,
+                                    singleVerseMeta
                                   );
                                 }
                               }}
                               className="p-2.5 bg-[#0b101b] hover:bg-[#152033] border border-slate-800/90 hover:border-amber-500/40 rounded-xl text-left transition group cursor-pointer space-y-1.5"
-                              title="Click to select verse • Double-click or click Live to project and step through chapter"
+                              title="Click to preview this verse • Double-click or click Live to project only this verse"
                             >
                               <div className="flex items-center justify-between gap-1.5">
                                 <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[10px] font-black shrink-0 whitespace-nowrap">
@@ -1292,7 +1310,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                         if (onUnpinFromQuickSection) onUnpinFromQuickSection(verseRef);
                                       }}
                                       className="bg-amber-600/30 hover:bg-rose-600 text-amber-200 hover:text-white border border-amber-500/40 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase flex items-center gap-0.5 transition whitespace-nowrap"
-                                      title="Unpin verse from Quick Section"
+                                      title="Unpin this verse from Quick Section"
                                     >
                                       <PinOff className="w-2.5 h-2.5" /> Pinned
                                     </button>
@@ -1303,19 +1321,19 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                         e.stopPropagation();
                                         if (onPinToQuickSection) {
                                           onPinToQuickSection(
-                                            chapterPassage.formattedRef,
-                                            chapterSlides,
+                                            verseRef,
+                                            [activeVerseSlide],
                                             'bible',
-                                            chapterPassage.formattedRef,
-                                            verseSlide,
-                                            currentBibleMeta
+                                            verseRef,
+                                            activeVerseSlide,
+                                            singleVerseMeta
                                           );
                                         } else if (onAppendSlidesToActiveItem) {
-                                          onAppendSlidesToActiveItem(chapterSlides, chapterPassage.formattedRef);
+                                          onAppendSlidesToActiveItem([activeVerseSlide], verseRef);
                                         }
                                       }}
                                       className="bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase flex items-center gap-0.5 transition whitespace-nowrap"
-                                      title="Pin chapter at this verse to Quick Section"
+                                      title="Pin only this verse to Quick Section"
                                     >
                                       <Pin className="w-2.5 h-2.5" /> Pin
                                     </button>
@@ -1326,18 +1344,18 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTranslateToParallelNow(verseSlide, true);
+                                        handleTranslateToParallelNow(activeVerseSlide, true);
                                       }}
                                       className="bg-purple-600/25 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-500/40 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase flex items-center gap-0.5 transition whitespace-nowrap"
-                                      title={`Translate this verse to ${
-                                        selectedTranslation === parallelVersionInfo.id
+                                      title={`Translate only this verse to ${
+                                        activeVerseTrans === parallelVersionInfo.id
                                           ? primaryVersionInfo.abbreviation
                                           : parallelVersionInfo.abbreviation
                                       } and Go Live`}
                                     >
                                       <Globe className="w-2.5 h-2.5" />
                                       <span>
-                                        {selectedTranslation === parallelVersionInfo.id
+                                        {activeVerseTrans === parallelVersionInfo.id
                                           ? primaryVersionInfo.abbreviation
                                           : parallelVersionInfo.abbreviation}
                                       </span>
@@ -1350,15 +1368,15 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                       e.stopPropagation();
                                       if (onAddBiblePassageAndGoLive) {
                                         onAddBiblePassageAndGoLive(
-                                          chapterPassage.formattedRef,
-                                          chapterSlides,
-                                          verseSlide,
-                                          currentBibleMeta
+                                          verseRef,
+                                          [activeVerseSlide],
+                                          activeVerseSlide,
+                                          singleVerseMeta
                                         );
                                       }
                                     }}
                                     className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase flex items-center gap-0.5 shadow transition whitespace-nowrap"
-                                    title="Go Live immediately with this verse (full chapter loaded for Next/Prev stepping)"
+                                    title="Go Live with only this verse"
                                   >
                                     <Play className="w-2.5 h-2.5 fill-current" /> Live
                                   </button>
@@ -1366,7 +1384,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                               </div>
 
                               <div className="text-[11px] text-slate-200 leading-relaxed whitespace-pre-line">
-                                {verseSlide.content}
+                                {activeVerseSlide.content}
                               </div>
                             </div>
                           );
