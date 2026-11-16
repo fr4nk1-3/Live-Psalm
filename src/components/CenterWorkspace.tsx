@@ -53,6 +53,7 @@ interface CenterWorkspaceProps {
   previewSlide: Slide | null;
   liveSlide: Slide | null;
   activeTheme: Theme;
+  audienceViewMode?: 'near' | 'far';
   quickPinnedItems?: QuickPinnedItem[];
   lastViewedSlideMap?: Record<string, string>;
   activeTranslationId?: string;
@@ -143,10 +144,12 @@ const SlideCanvas: React.FC<{
   theme: Theme;
   label: string;
   isLive: boolean;
+  audienceViewMode?: 'near' | 'far';
   dimmed?: boolean;
   itemVideoBgUrl?: string | null;
   globalVideoBgUrl?: string | null;
-}> = ({ slide, theme, isLive, itemVideoBgUrl, globalVideoBgUrl }) => {
+}> = ({ slide, theme, isLive, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl }) => {
+  const isFarPreview = isLive && audienceViewMode === 'far';
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [liveTimecode, setLiveTimecode] = useState<{ current: number; duration: number } | null>(null);
 
@@ -238,7 +241,11 @@ const SlideCanvas: React.FC<{
       {!isPureMediaSlide && (
         <div
           className="absolute inset-0"
-          style={{ backgroundColor: `rgba(0,0,0,${theme.scrimOpacity ?? 0.45})` }}
+          style={{
+            backgroundColor: isFarPreview
+              ? `rgba(2,6,23,${Math.max(theme.scrimOpacity ?? 0.45, 0.88)})`
+              : `rgba(0,0,0,${theme.scrimOpacity ?? 0.45})`
+          }}
         />
       )}
 
@@ -258,24 +265,37 @@ const SlideCanvas: React.FC<{
           isPureMediaSlide ? null : (
             <>
               {slide.title && (
-                <div className="text-[9px] font-black uppercase tracking-[0.25em] text-indigo-300/80 mb-1.5 bg-indigo-950/50 px-3 py-0.5 rounded-full border border-indigo-500/20">
+                <div
+                  className={`font-black uppercase tracking-[0.25em] mb-1.5 px-3 py-0.5 rounded-full border ${
+                    isFarPreview
+                      ? 'text-[10px] text-amber-200 bg-black/90 border-amber-400/70'
+                      : 'text-[9px] text-indigo-300/80 bg-indigo-950/50 border-indigo-500/20'
+                  }`}
+                >
                   {slide.title}
                 </div>
               )}
               <div
-                className="font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] whitespace-pre-line leading-tight"
+                className={`${isFarPreview ? 'font-black' : 'font-extrabold'} text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] whitespace-pre-line leading-tight`}
                 style={{
                   fontFamily: theme.fontFamily,
-                  ...getFlexibleFontSize(slide.content, isLive ? 22 : 18),
+                  ...getFlexibleFontSize(slide.content, isFarPreview ? 30 : isLive ? 22 : 18),
                   textAlign: theme.align,
-                  letterSpacing: theme.letterSpacing || 'normal',
-                  textTransform: theme.textTransform || 'none'
+                  letterSpacing: isFarPreview ? '0.02em' : (theme.letterSpacing || 'normal'),
+                  textTransform: theme.textTransform || 'none',
+                  textShadow: isFarPreview ? '0 3px 12px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,1)' : undefined
                 }}
               >
                 {slide.content}
               </div>
               {slide.subtitle && (
-                <div className="text-[9px] text-indigo-200/70 font-semibold mt-1.5 tracking-wider">
+                <div
+                  className={`mt-1.5 tracking-wider ${
+                    isFarPreview
+                      ? 'text-[11px] text-amber-300 font-black uppercase'
+                      : 'text-[9px] text-indigo-200/70 font-semibold'
+                  }`}
+                >
                   {slide.subtitle}
                 </div>
               )}
@@ -300,6 +320,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   previewSlide,
   liveSlide,
   activeTheme,
+  audienceViewMode = 'near',
   quickPinnedItems = [],
   lastViewedSlideMap = {},
   activeTranslationId = 'bible-eng-nkjv',
@@ -732,6 +753,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                 theme={activeTheme}
                 label="Program"
                 isLive={true}
+                audienceViewMode={audienceViewMode}
                 dimmed={false}
                 itemVideoBgUrl={activeItem?.videoBackgroundUrl}
                 globalVideoBgUrl={globalVideoBgUrl}

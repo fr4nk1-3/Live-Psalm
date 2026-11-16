@@ -404,8 +404,8 @@ export const AudienceOutputWindow: React.FC = () => {
   const { fontSize: dynFontSize, lineHeight: dynLineHeight, maxWidth: dynMaxWidth } =
     getOutputFontSize(slideText, baseFontVw, screenInfo.width, audienceViewMode);
 
-  const contentPadding = isFarMode ? 'py-[3vh] px-[3vw]' : 'py-[4vh] px-[5vw]';
-  const effectiveScrimOpacity = isFarMode ? Math.max(theme.scrimOpacity, 0.72) : theme.scrimOpacity;
+  const contentPadding = isFarMode ? 'py-[2.5vh] px-[2.5vw]' : 'py-[4vh] px-[5vw]';
+  const effectiveScrimOpacity = isFarMode ? Math.max(theme.scrimOpacity, 0.88) : theme.scrimOpacity;
 
   // Compute transition animation style
   const getTransitionClass = () => {
@@ -603,16 +603,16 @@ export const AudienceOutputWindow: React.FC = () => {
               {/* ── LOWER-THIRD BADGE MODE ── */}
               {theme.lowerThirdStyle ? (
                 <div
-                  className={`mt-auto w-full border-emerald-500 pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
+                  className={`mt-auto w-full pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
                     isFarMode
-                      ? 'bg-black/95 border-l-[0.8vw] pl-[3.5vw] py-[3vh]'
-                      : 'bg-slate-950/90 border-l-[0.6vw] pl-[3vw] py-[2.5vh] backdrop-blur-md'
+                      ? 'bg-black/95 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[3.5vh]'
+                      : 'bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.5vh] backdrop-blur-md'
                   }`}
                 >
                   {liveSlide.sectionLabel && (
                     <span
-                      className="font-black uppercase text-emerald-400 tracking-widest block mb-[0.8vh]"
-                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.55vw, 1.65rem)' : 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
+                      className={`font-black uppercase tracking-widest block mb-[0.8vh] ${isFarMode ? 'text-amber-300' : 'text-emerald-400'}`}
+                      style={{ fontSize: isFarMode ? 'clamp(1rem, 1.9vw, 2rem)' : 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
                     >
                       {liveSlide.sectionLabel}
                     </span>
@@ -621,19 +621,20 @@ export const AudienceOutputWindow: React.FC = () => {
                     className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white leading-snug`}
                     style={{
                       fontFamily: theme.fontFamily,
-                      fontSize: isFarMode ? 'clamp(1.25rem, 3.6vw, 4.2rem)' : 'clamp(1rem, 3vw, 3.5rem)',
-                      color: theme.textColor,
+                      fontSize: isFarMode ? 'clamp(1.5rem, 4.2vw, 4.8rem)' : 'clamp(1rem, 3vw, 3.5rem)',
+                      color: isFarMode ? '#ffffff' : theme.textColor,
                       textShadow: isFarMode
-                        ? '0 4px 18px rgba(0,0,0,0.98), 0 2px 3px rgba(0,0,0,1)'
-                        : undefined
+                        ? '0 6px 22px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,1)'
+                        : undefined,
+                      WebkitTextStroke: isFarMode ? '0.016em rgba(0,0,0,0.75)' : undefined
                     }}
                   >
                     {liveSlide.content}
                   </div>
                   {liveSlide.subtitle && (
                     <div
-                      className={`${isFarMode ? 'text-amber-200 font-bold' : 'text-slate-400 font-semibold'} mt-[1vh]`}
-                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.5vw, 1.5rem)' : 'clamp(0.6rem, 1.2vw, 1.1rem)' }}
+                      className={`${isFarMode ? 'text-amber-300 font-black' : 'text-slate-400 font-semibold'} mt-[1vh]`}
+                      style={{ fontSize: isFarMode ? 'clamp(1rem, 1.8vw, 1.9rem)' : 'clamp(0.6rem, 1.2vw, 1.1rem)' }}
                     >
                       {liveSlide.subtitle}
                     </div>
@@ -648,12 +649,12 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Section / title badge — only for text slides */}
                   {(liveSlide.title || liveSlide.sectionLabel) && (
                     <div
-                      className={`font-black uppercase tracking-[0.25em] mb-[2vh] rounded-full inline-block ${
+                      className={`font-black uppercase tracking-[0.25em] mb-[2.2vh] rounded-full inline-block ${
                         isFarMode
-                          ? 'text-white bg-black/85 px-[2.4vw] py-[0.8vh] border-2 border-indigo-400/75 shadow-[0_6px_24px_rgba(0,0,0,0.9)]'
+                          ? 'text-amber-200 bg-black/90 px-[2.6vw] py-[0.9vh] border-2 border-amber-400/80 shadow-[0_8px_28px_rgba(0,0,0,0.95)]'
                           : 'text-indigo-300 bg-indigo-950/60 px-[2vw] py-[0.6vh] border border-indigo-500/40'
                       }`}
-                      style={{ fontSize: isFarMode ? 'clamp(0.85rem, 1.75vw, 1.9rem)' : 'clamp(0.55rem, 1.1vw, 1.1rem)' }}
+                      style={{ fontSize: isFarMode ? 'clamp(1rem, 2.1vw, 2.2rem)' : 'clamp(0.55rem, 1.1vw, 1.1rem)' }}
                     >
                       {liveSlide.title || liveSlide.sectionLabel}
                     </div>
@@ -667,15 +668,15 @@ export const AudienceOutputWindow: React.FC = () => {
                       fontSize: dynFontSize,
                       lineHeight: dynLineHeight,
                       textAlign: theme.align as any,
-                      color: theme.textColor,
+                      color: isFarMode ? '#ffffff' : theme.textColor,
                       letterSpacing: isFarMode
-                        ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.015em')
+                        ? (theme.letterSpacing && theme.letterSpacing !== 'normal' ? theme.letterSpacing : '0.02em')
                         : (theme.letterSpacing || 'normal'),
                       textTransform: (theme.textTransform as any) || 'none',
                       textShadow: isFarMode
-                        ? '0 4px 20px rgba(0,0,0,0.98), 0 0 10px rgba(0,0,0,0.95), 0 2px 3px rgba(0,0,0,1)'
+                        ? '0 6px 24px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.98), 0 2px 4px rgba(0,0,0,1)'
                         : undefined,
-                      WebkitTextStroke: isFarMode ? '0.014em rgba(0,0,0,0.6)' : undefined,
+                      WebkitTextStroke: isFarMode ? '0.018em rgba(0,0,0,0.75)' : undefined,
                       width: '100%'
                     }}
                   >
@@ -687,10 +688,10 @@ export const AudienceOutputWindow: React.FC = () => {
                     <div
                       className={`mt-[3vh] tracking-wider uppercase ${
                         isFarMode
-                          ? 'font-black text-amber-200 drop-shadow-[0_3px_12px_rgba(0,0,0,0.98)]'
+                          ? 'font-black text-amber-300 drop-shadow-[0_4px_14px_rgba(0,0,0,1)]'
                           : 'font-bold text-indigo-200 opacity-90'
                       }`}
-                      style={{ fontSize: isFarMode ? 'clamp(0.95rem, 2vw, 2.2rem)' : 'clamp(0.7rem, 1.4vw, 1.4rem)' }}
+                      style={{ fontSize: isFarMode ? 'clamp(1.1rem, 2.4vw, 2.6rem)' : 'clamp(0.7rem, 1.4vw, 1.4rem)' }}
                     >
                       {liveSlide.subtitle}
                     </div>

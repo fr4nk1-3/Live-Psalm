@@ -57,13 +57,13 @@ export function getOutputFontSize(
   else if (len > 90)  scaledVw = baseVw * 0.86;
 
   if (viewMode === 'far') {
-    // Boost size for long-distance sanctuary / back-row visibility
-    scaledVw = scaledVw * 1.28;
-    const clampedFarVw = Math.min(11.5, Math.max(2.3, scaledVw));
-    const maxWidthFar = len > 200 ? '96vw' : len > 100 ? '92vw' : '86vw';
+    // Boost size substantially for long-distance sanctuary / back-row visibility
+    scaledVw = scaledVw * 1.55;
+    const clampedFarVw = Math.min(13.0, Math.max(3.2, scaledVw));
+    const maxWidthFar = len > 200 ? '96vw' : '92vw';
     return {
       fontSize: `${clampedFarVw.toFixed(2)}vw`,
-      lineHeight: len > 250 ? '1.18' : '1.28',
+      lineHeight: len > 250 ? '1.16' : '1.24',
       maxWidth: maxWidthFar
     };
   }

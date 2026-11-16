@@ -2083,15 +2083,6 @@ export const App: React.FC = () => {
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
-        audienceViewMode={audienceViewMode}
-        onToggleAudienceViewMode={() => {
-          const nextMode: 'near' | 'far' = audienceViewMode === 'far' ? 'near' : 'far';
-          setAudienceViewMode(nextMode);
-          const current = StorageService.getSettings();
-          const nextSettings = { ...current, audienceViewMode: nextMode };
-          StorageService.saveSettings(nextSettings);
-          BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: nextSettings });
-        }}
         isStageActive={isStageActive}
         isLedActive={isLedActive}
         isSaved={isSaved}
@@ -2171,6 +2162,7 @@ export const App: React.FC = () => {
           previewSlide={previewSlide}
           liveSlide={liveSlide}
           activeTheme={activeTheme}
+          audienceViewMode={audienceViewMode}
           quickPinnedItems={quickPinnedItems}
           lastViewedSlideMap={lastViewedSlideMap}
           activeTranslationId={primaryBibleTranslation}

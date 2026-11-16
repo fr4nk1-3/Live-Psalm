@@ -618,7 +618,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           )}
                         </div>
                         <p className="text-[11px] text-slate-400 leading-relaxed">
-                          Enhanced visibility (+28% larger text, dark high-contrast scrim, crisp text outline &amp; larger badges) for back-of-hall viewing.
+                          Enhanced visibility (+55% larger bold white text, dark high-contrast scrim, crisp outline &amp; amber badges) for back-of-hall viewing.
                         </p>
                       </button>
                     </div>
