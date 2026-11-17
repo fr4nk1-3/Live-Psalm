@@ -332,6 +332,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
     <div className={className}>
       <canvas
         ref={canvasRef}
+        data-scene-role={sceneRole}
         width={canvasWidth}
         height={canvasHeight}
         className="block h-full w-full rounded border border-border bg-black"

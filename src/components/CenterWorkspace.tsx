@@ -503,6 +503,14 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   const sceneState = useSceneLibrary();
   const previewScene = getPreviewScene(sceneState) || sceneState.scenes[0] || null;
   const liveScene = getActiveScene(sceneState) || sceneState.scenes[0] || null;
+  const [previewKind, setPreviewKind] = useState<'slide' | 'scene'>('slide');
+  const selectSlidePreview = React.useCallback(
+    (slide: Slide) => {
+      setPreviewKind('slide');
+      onSelectSlidePreview(slide);
+    },
+    [onSelectSlidePreview]
+  );
   const [activeDockTab, setActiveDockTab] = useState<'none' | 'scenes' | 'bgs' | 'stage-msg' | 'pager' | 'pads'>('none');
   const [quickBgScope, setQuickBgScope] = useState<'global' | 'item' | 'slide'>('global');
 
@@ -545,7 +553,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       const idx = slides.findIndex(s => s.id === currentRef?.id);
       const nextIdx = idx >= 0 && idx < slides.length - 1 ? idx + 1 : 0;
       const nextSlide = slides[nextIdx];
-      onSelectSlidePreview(nextSlide);
+      selectSlidePreview(nextSlide);
       onSendSlideLive(nextSlide);
     }, autoAdvanceSec * 1000);
     return () => clearInterval(timer);
@@ -790,9 +798,35 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="state-label text-preview">Preview</span>
-            <span className="min-w-0 truncate text-2xs text-muted-foreground">
-              {previewScene ? previewScene.name : 'No scene'}
-            </span>
+            <div className="flex items-center gap-1">
+              <div className="flex rounded-sm border border-border bg-background/60 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewKind('slide')}
+                  className={cn(
+                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
+                    previewKind === 'slide' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Slides
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewKind('scene')}
+                  className={cn(
+                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
+                    previewKind === 'scene' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Scenes
+                </button>
+              </div>
+              <span className="min-w-0 truncate text-2xs text-muted-foreground">
+                {previewKind === 'scene'
+                  ? previewScene?.name || 'No scene'
+                  : previewSlide?.sectionLabel || previewSlide?.title || 'Nothing selected'}
+              </span>
+            </div>
           </header>
 
           <div
@@ -802,33 +836,65 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             style={{ aspectRatio: '16/9', containerType: 'size' }}
             title="Drop a background here to apply it to this item"
           >
-            {previewScene ? (
-              <SceneCanvas
-                scene={previewScene}
+            {previewKind === 'scene' ? (
+              previewScene ? (
+                <SceneCanvas
+                  scene={previewScene}
+                  slide={previewSlide}
+                  theme={activeTheme}
+                  enableCamera={false}
+                  sceneRole="preview-scene"
+                  className="absolute inset-0"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xs text-white/30">No scene in preview</span>
+                </div>
+              )
+            ) : previewSlide ? (
+              <SlideCanvas
                 slide={previewSlide}
                 theme={activeTheme}
-                enableCamera={false}
-                className="absolute inset-0"
+                label="Preview"
+                isLive={false}
+                dimmed={true}
+                itemVideoBgUrl={activeItem?.videoBackgroundUrl}
+                globalVideoBgUrl={globalVideoBgUrl}
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xs text-white/30">No scene in preview</span>
+                <span className="text-2xs text-white/30">No slide in preview</span>
               </div>
             )}
           </div>
 
           <footer className="mt-2 flex items-center justify-between gap-2">
             <span className="min-w-0 truncate text-2xs text-muted-foreground">
-              {previewScene ? `${previewScene.elements.length} elements` : 'Choose a scene in the library'}
+              {previewKind === 'scene'
+                ? previewScene
+                  ? `${previewScene.elements.length} elements`
+                  : 'Choose a scene in the library'
+                : previewSlide?.content?.slice(0, 64) || 'Choose an item in the service'}
             </span>
-            <Button
-              size="xs"
-              variant="secondary"
-              disabled={!previewScene}
-              onClick={() => previewScene && sceneLibrary.setActiveScene(previewScene.id)}
-            >
-              Take to programme
-            </Button>
+            {previewKind === 'scene' ? (
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={!previewScene}
+                onClick={() => previewScene && sceneLibrary.setActiveScene(previewScene.id)}
+              >
+                Send to broadcast
+              </Button>
+            ) : (
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={!previewSlide}
+                onClick={() => previewSlide && onSendSlideLive(previewSlide)}
+              >
+                Take live
+              </Button>
+            )}
           </footer>
         </section>
 
@@ -849,12 +915,16 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             style={{ aspectRatio: '16/9', containerType: 'size' }}
             title="Drop a background here to set the live layer background for every slide"
           >
-            {liveScene ? (
-              <SceneCanvas
-                scene={liveScene}
+            {liveSlide ? (
+              <SlideCanvas
                 slide={liveSlide}
                 theme={activeTheme}
-                className="absolute inset-0"
+                label="Program"
+                isLive={true}
+                audienceViewMode={audienceViewMode}
+                dimmed={false}
+                itemVideoBgUrl={activeItem?.videoBackgroundUrl}
+                globalVideoBgUrl={globalVideoBgUrl}
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
@@ -1009,7 +1079,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       {/* Operator drawers */}
       {activeDockTab === 'scenes' && (
         <div className="max-h-[300px] shrink-0 overflow-hidden border-b border-border bg-card/60 px-3 py-2">
-          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} mediaList={mediaList} />
+          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} mediaList={mediaList} onPreviewScene={() => setPreviewKind('scene')} />
         </div>
       )}
 
@@ -1255,7 +1325,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   type="button"
                   onClick={() => {
                     if (onLoadQuickPinnedSlides) onLoadQuickPinnedSlides(item.slides, item.title, item.id);
-                    else if (item.slides.length > 0) onSelectSlidePreview(rememberedSlide || item.slides[0]);
+                    else if (item.slides.length > 0) selectSlidePreview(rememberedSlide || item.slides[0]);
                   }}
                   className="flex items-center gap-1.5"
                   title={
@@ -1337,7 +1407,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                     <div
                       key={slide.id}
                       data-slide-id={slide.id}
-                      onClick={() => onSelectSlidePreview(slide)}
+                      onClick={() => selectSlidePreview(slide)}
                       onDoubleClick={() => onSendSlideLive(slide)}
                       onDragOver={e => e.preventDefault()}
                       onDrop={e => handleMediaDrop(e, 'slide', slide)}
@@ -1460,7 +1530,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                     <div
                       key={slide.id}
                       data-slide-id={slide.id}
-                      onClick={() => onSelectSlidePreview(slide)}
+                      onClick={() => selectSlidePreview(slide)}
                       onDoubleClick={() => onSendSlideLive(slide)}
                       className={cn(
                         'group flex cursor-pointer items-center gap-3 border-b border-border/70 px-3 py-2 transition-colors last:border-b-0',

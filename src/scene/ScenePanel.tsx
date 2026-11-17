@@ -22,13 +22,15 @@ interface ScenePanelProps {
   slide: Slide | null;
   theme: Theme;
   mediaList?: MediaAsset[];
+  /** Switches the preview monitor to scene mode. */
+  onPreviewScene?: () => void;
 }
 
 /**
  * Scene library as a grid. Click a card to prepare it on the preview monitor;
  * send it to programme with the Take button, a double click, or the row menu.
  */
-export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme, mediaList = [] }) => {
+export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme, mediaList = [], onPreviewScene }) => {
   const library = useSceneLibrary();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const [draftName, setDraftName] = React.useState('');
@@ -107,7 +109,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme,
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-4 gap-1.5">
           {library.scenes.map(scene => {
             const isLive = scene.id === library.activeSceneId;
             const isPreview = scene.id === library.previewSceneId;
@@ -128,7 +130,10 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme,
                   }
                   setDragId(null);
                 }}
-                onClick={() => sceneLibrary.setPreviewScene(scene.id)}
+                onClick={() => {
+                  sceneLibrary.setPreviewScene(scene.id);
+                  onPreviewScene?.();
+                }}
                 onDoubleClick={() => {
                   sceneLibrary.setPreviewScene(scene.id);
                   sceneLibrary.setActiveScene(scene.id);
