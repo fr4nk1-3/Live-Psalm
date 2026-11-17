@@ -34,6 +34,7 @@ npm-debug.log*
 
 # Local tooling artifacts
 .npm-cache/
+.cache/
 build/shots/
 build/shot.ps1
 # Editor atomic-write scratch directories
