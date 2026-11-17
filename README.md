@@ -49,6 +49,16 @@ Slide settings open as a panel from the workspace toolbar. Dialogs (settings,
 Bible version picker, song editor, search, streaming) follow the same visual
 system; `docs/design-system.md` records the rules.
 
+## Streaming
+
+Live output to YouTube, Facebook or Twitch is driven by ffmpeg, which has to be
+installed on the machine running the app. Live Psalms looks for it on `PATH` and
+in the usual install folders (`winget`, Chocolatey, Scoop, `/usr/local/bin`).
+
+If the encoder shows as missing right after installing it, the app is probably
+holding the `PATH` it started with. Use **Locate ffmpeg…** in Stream setup to
+pick `ffmpeg.exe` once; the path is remembered. The browser dev preview cannot
+start the encoder at all — use the desktop build for streaming.
 ## Keyboard
 
 | Key | Action |

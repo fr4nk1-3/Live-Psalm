@@ -102,7 +102,8 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   const [streamingPlatform, setStreamingPlatform] = useState<PlatformId | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<Date | null>(null);
   const [elapsed, setElapsed] = useState('00:00:00');
-  const [ffmpegStatus, setFfmpegStatus] = useState<'checking' | 'available' | 'missing'>('checking');
+  const [ffmpegStatus, setFfmpegStatus] = useState<'checking' | 'available' | 'missing' | 'desktop'>('checking');
+  const [ffmpegInfo, setFfmpegInfo] = useState<{ path?: string | null; version?: string | null; error?: string | null } | null>(null);
   const [streamLog, setStreamLog] = useState<string[]>([]);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [showInstructions, setShowInstructions] = useState(false);
@@ -141,19 +142,42 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
     };
   }, [isOpen]);
 
-  // Check ffmpeg availability on open
+  // Probe the encoder whenever the dialog opens. The main process reports the
+  // resolved binary so a stale PATH is visible instead of just "not found".
   useEffect(() => {
     if (!isOpen) return;
-    setFfmpegStatus('checking');
-    if (ipc) {
-      ipc.invoke('check-ffmpeg').then((ok: boolean) => {
-        setFfmpegStatus(ok ? 'available' : 'missing');
-      }).catch(() => setFfmpegStatus('missing'));
-    } else {
-      // Browser preview — treat as unavailable
-      setFfmpegStatus('missing');
+    if (!ipc) {
+      // Browser preview: there is no main process to spawn ffmpeg from.
+      setFfmpegStatus('desktop');
+      return;
     }
-  }, [isOpen]);
+    setFfmpegStatus('checking');
+    ipc
+      .invoke('check-ffmpeg')
+      .then((info: any) => {
+        if (typeof info === 'boolean') {
+          setFfmpegStatus(info ? 'available' : 'missing');
+          return;
+        }
+        setFfmpegInfo(info || null);
+        setFfmpegStatus(info?.available ? 'available' : 'missing');
+      })
+      .catch(() => setFfmpegStatus('missing'));
+  }, [isOpen, ipc]);
+
+  const locateFfmpeg = async () => {
+    if (!ipc) return;
+    const result = await ipc.invoke('browse-ffmpeg').catch(() => null);
+    if (!result || result.canceled) return;
+    setFfmpegInfo(result);
+    if (result.available) {
+      setFfmpegStatus('available');
+      setStreamLog(prev => [...prev, `✅ ffmpeg ready: ${result.path}`]);
+    } else {
+      setFfmpegStatus('missing');
+      setStreamLog(prev => [...prev, `❌ ${result.error || 'That file cannot be used as ffmpeg.'}`]);
+    }
+  };
 
   // Elapsed timer
   useEffect(() => {
@@ -332,15 +356,89 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
             <span className="text-2xs text-muted-foreground">ffmpeg</span>
             <Badge
               variant={
-                ffmpegStatus === 'available' ? 'success' : ffmpegStatus === 'missing' ? 'warning' : 'muted'
+                ffmpegStatus === 'available'
+                  ? 'success'
+                  : ffmpegStatus === 'missing'
+                  ? 'warning'
+                  : 'muted'
               }
             >
-              {ffmpegStatus === 'checking' ? 'Checking' : ffmpegStatus === 'available' ? 'Ready' : 'Not found'}
+              {ffmpegStatus === 'checking'
+                ? 'Checking'
+                : ffmpegStatus === 'available'
+                ? 'Ready'
+                : ffmpegStatus === 'desktop'
+                ? 'Desktop app'
+                : 'Not found'}
             </Badge>
           </span>
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          {/* Encoder status */}
+          {ffmpegStatus === 'desktop' && (
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <h3 className="text-xs font-medium text-foreground">Streaming runs from the desktop app</h3>
+              <p className="text-2xs leading-relaxed text-muted-foreground">
+                This browser preview can render the interface but cannot start the encoder. Open Live Psalms
+                from the desktop app to go live, or copy the RTMP endpoint into OBS.
+              </p>
+            </section>
+          )}
+
+          {ffmpegStatus === 'missing' && (
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-xs font-medium text-foreground">ffmpeg was not found</h3>
+                <Button variant="secondary" size="xs" onClick={locateFfmpeg}>
+                  Locate ffmpeg…
+                </Button>
+              </div>
+              <p className="text-2xs leading-relaxed text-muted-foreground">
+                {ffmpegInfo?.error
+                  ? ffmpegInfo.error
+                  : 'Live Psalms looks on PATH and in the usual install folders. If you just installed it, a packaged app can still hold the PATH it started with — point it at the executable once, or restart the app.'}
+              </p>
+              {ffmpegInfo?.path && (
+                <p className="break-all font-mono text-2xs text-muted-foreground/80">Tried: {ffmpegInfo.path}</p>
+              )}
+              <div className="space-y-1">
+                {[
+                  { os: 'Windows', cmd: 'winget install Gyan.FFmpeg' },
+                  { os: 'macOS', cmd: 'brew install ffmpeg' },
+                  { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
+                ].map(({ os, cmd }) => (
+                  <div key={os} className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 text-2xs text-muted-foreground">{os}</span>
+                    <code className="min-w-0 flex-1 truncate rounded-sm border border-border bg-background px-2 py-1 font-mono text-2xs text-foreground">
+                      {cmd}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => copyToClipboard(cmd, `cmd-${os}`)}
+                      className="shrink-0"
+                    >
+                      {copied === `cmd-${os}` ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {ffmpegStatus === 'available' && ffmpegInfo?.path && (
+            <section className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
+              <span className="text-2xs text-muted-foreground">Encoder</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-2xs text-foreground/80" title={ffmpegInfo.path}>
+                {ffmpegInfo.path}
+              </span>
+              <Button variant="ghost" size="xs" onClick={locateFfmpeg} className="shrink-0">
+                Change
+              </Button>
+            </section>
+          )}
+
           <div className="grid gap-5 md:grid-cols-2">
             {/* Destination */}
             <FieldGroup title="Destination" description={platform.keyHelp}>
@@ -548,39 +646,6 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
             </div>
           </div>
 
-          {/* ffmpeg missing instructions */}
-          {ffmpegStatus === 'missing' && (
-            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-              <h3 className="text-xs font-medium text-foreground">ffmpeg is not installed</h3>
-              <p className="text-2xs leading-relaxed text-muted-foreground">
-                Install ffmpeg to stream from the app, then restart Live Psalms. Until then, copy the
-                RTMP endpoint into OBS.
-              </p>
-              <div className="space-y-1">
-                {[
-                  { os: 'Windows', cmd: 'winget install ffmpeg' },
-                  { os: 'macOS', cmd: 'brew install ffmpeg' },
-                  { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
-                ].map(({ os, cmd }) => (
-                  <div key={os} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0 text-2xs text-muted-foreground">{os}</span>
-                    <code className="min-w-0 flex-1 truncate rounded-sm border border-border bg-background px-2 py-1 font-mono text-2xs text-foreground">
-                      {cmd}
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => copyToClipboard(cmd, `cmd-${os}`)}
-                      className="shrink-0"
-                    >
-                      {copied === `cmd-${os}` ? 'Copied' : 'Copy'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* Stream log */}
           {streamLog.length > 0 && (
             <section className="space-y-2">
@@ -600,7 +665,9 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
           <p className="max-w-sm text-2xs leading-relaxed text-muted-foreground">
             {ffmpegStatus === 'available'
               ? 'Captures the audience output window. Open it before you go live.'
-              : 'Install ffmpeg to stream from the app, or copy the RTMP endpoint for OBS.'}
+              : ffmpegStatus === 'desktop'
+              ? 'This preview cannot start the encoder. Use the desktop app, or copy the RTMP endpoint for OBS.'
+              : 'Install ffmpeg or locate the executable, then try again.'}
           </p>
           <div className="flex shrink-0 items-center gap-2">
             {isStreaming && streamingPlatform === activePlatform ? (
@@ -614,7 +681,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
                 onClick={startStream}
                 disabled={
                   !keyConfig.key.trim() ||
-                  ffmpegStatus === 'missing' ||
+                  ffmpegStatus !== 'available' ||
                   (isStreaming && streamingPlatform !== activePlatform)
                 }
               >

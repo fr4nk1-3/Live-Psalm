@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu, dialog } = require('electron');
 const path = require('path');
 
 // Prevent Chromium zygote/sandbox crash on Linux (e.g., Ubuntu 24.04 AppArmor & space-in-path /opt/Live Psalms)
@@ -8,7 +8,7 @@ if (process.platform === 'linux') {
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 
 function getIconPath() {
   const prodPath = path.join(__dirname, '../dist/icon.png');
@@ -432,13 +432,175 @@ ipcMain.on('write-obs-files', (_event, data) => {
   writeObsDirectFiles(data);
 });
 
-// Live Streaming ffmpeg IPC handlers
-ipcMain.handle('check-ffmpeg', () => {
-  return new Promise((resolve) => {
-    execFile('ffmpeg', ['-version'], (err) => {
-      resolve(!err);
+// ---------------------------------------------------------------- ffmpeg
+// Resolution is deliberately defensive: a packaged app inherits the PATH that
+// Explorer had when it launched, so an ffmpeg installed afterwards is often
+// invisible to a bare `execFile('ffmpeg')`. Probe PATH, then the usual install
+// folders, then a path the operator picked once.
+
+const ffmpegStorePath = () => path.join(app.getPath('userData'), 'ffmpeg-path.json');
+
+function readStoredFfmpegPath() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(ffmpegStorePath(), 'utf8'));
+    return typeof parsed?.path === 'string' && parsed.path ? parsed.path : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeFfmpegPath(binaryPath) {
+  try {
+    fs.writeFileSync(ffmpegStorePath(), JSON.stringify({ path: binaryPath }, null, 2), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findFfmpegInTree(root, depth) {
+  if (!root || depth < 0) return null;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (entry.isFile() && /^ffmpeg(\.exe)?$/i.test(entry.name)) {
+      return path.join(root, entry.name);
+    }
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const found = findFfmpegInTree(path.join(root, entry.name), depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findFfmpegOnPath() {
+  try {
+    const finder = process.platform === 'win32' ? 'where.exe' : 'which';
+    const output = execFileSync(finder, ['ffmpeg'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
+    const first = output
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .find(Boolean);
+    return first && fs.existsSync(first) ? first : null;
+  } catch {
+    return null;
+  }
+}
+
+function ffmpegCandidates() {
+  const candidates = [];
+  const add = value => {
+    if (value && !candidates.includes(value)) candidates.push(value);
+  };
+
+  if (process.env.FFMPEG_PATH) add(process.env.FFMPEG_PATH);
+  add(readStoredFfmpegPath());
+  add(findFfmpegOnPath());
+
+  if (process.platform === 'win32') {
+    const local = process.env.LOCALAPPDATA;
+    const programFiles = process.env.ProgramFiles;
+    const programFilesX86 = process.env['ProgramFiles(x86)'];
+
+    if (local) {
+      add(path.join(local, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe'));
+      const packages = path.join(local, 'Microsoft', 'WinGet', 'Packages');
+      try {
+        for (const dir of fs.readdirSync(packages)) {
+          if (/ffmpeg/i.test(dir)) add(findFfmpegInTree(path.join(packages, dir), 4));
+        }
+      } catch {
+        /* no winget packages */
+      }
+      add(path.join(local, 'Microsoft', 'WindowsApps', 'ffmpeg.exe'));
+    }
+
+    add('C:\\ffmpeg\\bin\\ffmpeg.exe');
+    if (programFiles) add(path.join(programFiles, 'ffmpeg', 'bin', 'ffmpeg.exe'));
+    if (programFilesX86) add(path.join(programFilesX86, 'ffmpeg', 'bin', 'ffmpeg.exe'));
+    add('C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe');
+    if (process.env.USERPROFILE) add(path.join(process.env.USERPROFILE, 'scoop', 'shims', 'ffmpeg.exe'));
+  } else {
+    add('/opt/homebrew/bin/ffmpeg');
+    add('/usr/local/bin/ffmpeg');
+    add('/usr/bin/ffmpeg');
+  }
+
+  return candidates;
+}
+
+let ffmpegBinary = null;
+
+function resolveFfmpegBinary(force = false) {
+  if (!force && ffmpegBinary && fs.existsSync(ffmpegBinary)) return ffmpegBinary;
+  for (const candidate of ffmpegCandidates()) {
+    if (candidate && fs.existsSync(candidate)) {
+      ffmpegBinary = candidate;
+      return candidate;
+    }
+  }
+  ffmpegBinary = null;
+  return null;
+}
+
+function probeFfmpeg() {
+  const binary = resolveFfmpegBinary(true);
+  if (!binary) {
+    return Promise.resolve({
+      available: false,
+      path: null,
+      version: null,
+      error: 'ffmpeg was not found on PATH or in the usual install folders.'
+    });
+  }
+  return new Promise(resolve => {
+    execFile(binary, ['-version'], { timeout: 8000, windowsHide: true }, (error, stdout) => {
+      if (error) {
+        resolve({ available: false, path: binary, version: null, error: error.message });
+        return;
+      }
+      const firstLine = String(stdout || '').split(/\r?\n/).find(Boolean) || '';
+      resolve({ available: true, path: binary, version: firstLine.trim(), error: null });
     });
   });
+}
+
+ipcMain.handle('check-ffmpeg', () => probeFfmpeg());
+
+// Lets the operator point at ffmpeg.exe once, which also fixes a stale PATH.
+ipcMain.handle('browse-ffmpeg', async () => {
+  const options = {
+    title: 'Locate ffmpeg',
+    properties: ['openFile'],
+    filters:
+      process.platform === 'win32'
+        ? [{ name: 'Executable', extensions: ['exe'] }]
+        : [{ name: 'All files', extensions: ['*'] }]
+  };
+  const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  const result = target ? await dialog.showOpenDialog(target, options) : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths?.length) return { canceled: true };
+
+  const chosen = result.filePaths[0];
+  if (!/^ffmpeg(\.exe)?$/i.test(path.basename(chosen))) {
+    return {
+      canceled: false,
+      available: false,
+      path: chosen,
+      version: null,
+      error: 'Choose the ffmpeg executable itself, not another file.'
+    };
+  }
+
+  storeFfmpegPath(chosen);
+  ffmpegBinary = chosen;
+  return { canceled: false, ...(await probeFfmpeg()) };
 });
 
 ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {} }) => {
@@ -484,7 +646,11 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       '-f', 'flv',
       rtmpUrl
     ];
-    activeStreamProcess = spawn('ffmpeg', args);
+    const ffmpegPath = resolveFfmpegBinary();
+    if (!ffmpegPath) {
+      return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
+    }
+    activeStreamProcess = spawn(ffmpegPath, args, { windowsHide: true });
     streamStopRequested = false;
 
     const sendToRenderer = (channel, payload) => {
