@@ -4,6 +4,7 @@ import { drawScene } from './render';
 import { SceneDocument } from './types';
 import type { MediaAsset } from '../types/presentation';
 import { captureDesktop } from './sources';
+import { acquireStream, releaseStream } from './sourceStreams';
 import { useSceneLibrary } from './store';
 import { setSceneAudioTracks } from './sceneAudio';
 import { loadAssetUrls, resolveSource } from './assetUrls';
@@ -145,35 +146,41 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
         if (cancelled) return;
         try {
           if (element.type === 'camera') {
-            const key = element.deviceId || 'default';
+            const key = `camera:${element.deviceId || 'default'}`;
             if (streamsRef.current[key]) continue;
-            const stream = await navigator.mediaDevices.getUserMedia({
-              video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
-              audio: false
-            });
+            const stream = await acquireStream(key, () =>
+              navigator.mediaDevices.getUserMedia({
+                video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
+                audio: false
+              })
+            );
             if (cancelled) {
-              stream.getTracks().forEach(track => track.stop());
+              releaseStream(key);
               continue;
             }
             streamsRef.current[key] = stream;
             videosRef.current[key] = videoFor(stream);
           } else if (element.type === 'videoDevice') {
+            const key = `video:${element.deviceId || 'default'}`;
             if (streamsRef.current[element.id]) continue;
-            const stream = await navigator.mediaDevices.getUserMedia({
-              video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
-              audio: false
-            });
+            const stream = await acquireStream(key, () =>
+              navigator.mediaDevices.getUserMedia({
+                video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
+                audio: false
+              })
+            );
             if (cancelled) {
-              stream.getTracks().forEach(track => track.stop());
+              releaseStream(key);
               continue;
             }
             streamsRef.current[element.id] = stream;
             mediaRef.current[element.id] = videoFor(stream);
           } else if (element.type === 'display' || element.type === 'window') {
             if (!element.sourceId || streamsRef.current[element.id]) continue;
-            const stream = await captureDesktop(element.sourceId);
+            const key = `desktop:${element.sourceId}`;
+            const stream = await acquireStream(key, () => captureDesktop(element.sourceId));
             if (cancelled) {
-              stream.getTracks().forEach(track => track.stop());
+              releaseStream(key);
               continue;
             }
             streamsRef.current[element.id] = stream;
@@ -201,7 +208,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
 
     return () => {
       cancelled = true;
-      Object.values(streamsRef.current).forEach(stream => stream.getTracks().forEach(track => track.stop()));
+      Object.keys(streamsRef.current).forEach(key => releaseStream(key));
       Object.values(mediaRef.current).forEach(video => {
         video.pause();
         video.srcObject = null;

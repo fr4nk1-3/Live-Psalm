@@ -744,7 +744,27 @@ function getStreamCaptureRegion() {
   };
 }
 
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '' }) => {
+// Encoder-specific arguments. NVENC/QSV/AMF are hardware H.264 encoders.
+function videoCodecArgs(encoder, bitrate, fps) {
+  const rate = `${bitrate}k`;
+  switch (String(encoder || '').toLowerCase()) {
+    case 'h264_nvenc':
+      return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-tune', 'll', '-rc', 'cbr', '-b:v', rate,
+        '-maxrate', rate, '-bufsize', rate, '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
+    case 'h264_qsv':
+      return ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-b:v', rate, '-maxrate', rate,
+        '-bufsize', rate, '-pix_fmt', 'nv12', '-g', String(fps * 2), '-r', String(fps)];
+    case 'h264_amf':
+      return ['-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr', '-b:v', rate, '-maxrate', rate,
+        '-bufsize', rate, '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
+    case 'libx264':
+    default:
+      return ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-profile:v', 'high',
+        '-b:v', rate, '-minrate', rate, '-maxrate', rate, '-bufsize', rate,
+        '-x264-params', 'nal-hrd=cbr:force-cfr=1', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
+  }
+}
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264' }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
@@ -779,32 +799,56 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         lutArgs.push('-vf', `lut3d=file='${normalizedLut}'`);
       }
 
-      const sceneArgs = [
+      const delayMs = audio && typeof audio.delayMs === 'number' ? Math.max(0, Math.min(5000, Math.round(audio.delayMs))) : 0;
+      const audioArgs = delayMs > 0 ? ['-af', `adelay=${delayMs}|${delayMs}`] : [];
+      // Validate the requested encoder; hardware encoders are often absent.
+      let effectiveEncoder = String(encoder || 'libx264');
+      try {
+        const available = execFileSync(ffmpegPath, ['-hide_banner', '-encoders'], {
+          encoding: 'utf8',
+          timeout: 8000,
+          windowsHide: true
+        });
+        if (effectiveEncoder !== 'libx264' && !available.includes(effectiveEncoder)) {
+          sendStreamEvent('stream-log', `⚠ ${effectiveEncoder} is not in this ffmpeg build; using x264.`);
+          effectiveEncoder = 'libx264';
+        }
+      } catch {
+        effectiveEncoder = 'libx264';
+      }
+
+      const buildSceneArgs = (encoderName) => [
         '-f', 'webm',
         '-i', 'pipe:0',
         ...lutArgs,
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'zerolatency',
-        '-profile:v', 'high',
-        '-b:v', `${bitrate}k`,
-        '-minrate', `${bitrate}k`,
-        '-maxrate', `${bitrate}k`,
-        '-bufsize', `${bitrate}k`,
-        '-x264-params', 'nal-hrd=cbr:force-cfr=1',
-        '-pix_fmt', 'yuv420p',
-        '-g', String(fps * 2),
-        '-r', String(fps),
+        ...videoCodecArgs(encoderName, bitrate, fps),
+        ...audioArgs,
         '-c:a', 'aac',
         '-b:a', '128k',
         '-ar', '48000',
         '-ac', '2',
+        '-y',
         '-f', 'flv',
         rtmpUrl
       ];
-      activeStreamProcess = spawn(ffmpegPath, sceneArgs, { windowsHide: true });
-      streamStopRequested = false;
-      attachStreamLogging();
+
+      let sceneRetried = false;
+      const launchScene = (encoderName) => {
+        activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(encoderName), { windowsHide: true });
+        streamStopRequested = false;
+        attachStreamLogging();
+        activeStreamProcess.once('exit', (code) => {
+          if (code === 0 || streamStopRequested) return;
+          if (encoderName !== 'libx264' && !sceneRetried) {
+            sceneRetried = true;
+            sendStreamEvent('stream-log', `⚠ ${encoderName} failed (exit ${code}); retrying with x264.`);
+            launchScene('libx264');
+          } else {
+            sendStreamEvent('stream-log', `❌ Encoder stopped (exit ${code}).`);
+          }
+        });
+      };
+      launchScene(effectiveEncoder);
       return { success: true };
     }
 

@@ -820,7 +820,6 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   scene={previewScene}
                   slide={previewSlide}
                   theme={activeTheme}
-                  enableCamera={false}
                   sceneRole="preview-scene"
                   mediaList={mediaList}
                   className="absolute inset-0"

@@ -22,6 +22,7 @@ import { streamStatus } from '../services/streamStatus';
 import { audioMonitor, type AudioSource } from '../services/audioMonitor';
 import { getActiveScene, useSceneLibrary } from '../scene/store';
 import { getSceneAudioTracks } from '../scene/sceneAudio';
+import { audioOutputMonitor, loadMonitorSettings, saveMonitorSettings, MonitorSettings } from '../services/audioMonitorOut';
 import { getSceneCanvas } from '../services/sceneCanvas';
 import type { Slide, Theme } from '../types/presentation';
 
@@ -122,10 +123,20 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const [showInstructions, setShowInstructions] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [audio, updateAudio] = useAudioSettings();
+
   const audioLevels = useAudioLevels();
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [lutPath, setLutPath] = useState<string>(() => localStorage.getItem('live_psalms_stream_lut') || '');
+  const [encoder, setEncoder] = useState<string>(() => localStorage.getItem('live_psalms_stream_encoder') || 'libx264');
+  const [audioDelayMs, setAudioDelayMs] = useState<number>(() => Number(localStorage.getItem('live_psalms_audio_delay_ms') || 0));
+  const [monitor, setMonitor] = useState<MonitorSettings>(() => loadMonitorSettings());
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
+  React.useEffect(() => {
+    if (!isOpen) return;
+    void audioOutputMonitor.apply(monitor, audio.deviceId);
+  }, [isOpen, monitor, audio.deviceId]);
+  React.useEffect(() => () => audioOutputMonitor.stop(), []);
   const sceneLibrary = useSceneLibrary();
   const activeScene = getActiveScene(sceneLibrary);
 
@@ -338,11 +349,13 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         platform: activePlatform,
         mode: 'scene',
         lut: lutPath,
+        encoder,
         audio: {
           source: audio.source,
           device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
           gain: audio.gain,
-          muted: audio.muted
+          muted: audio.muted,
+          delayMs: audioDelayMs
         }
       });
 
@@ -352,6 +365,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         return;
       }
 
+      void audioOutputMonitor.apply(monitor, audio.deviceId);
       const sceneStream = canvas.captureStream(quality.fps);
       sceneStreamRef.current = sceneStream;
       const tracks: MediaStreamTrack[] = [...sceneStream.getVideoTracks()];
@@ -381,8 +395,13 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         }
       }
 
-      const combined = new MediaStream(tracks);
-      const hasAudio = tracks.some(track => track.kind === 'audio');
+      const liveTracks = tracks.filter(track => track.readyState === 'live');
+      setStreamLog(prev => [
+        ...prev,
+        `▶ Capture: ${liveTracks.filter(track => track.kind === 'video').length} video, ${liveTracks.filter(track => track.kind === 'audio').length} audio`
+      ]);
+      const combined = new MediaStream(liveTracks);
+      const hasAudio = liveTracks.some(track => track.kind === 'audio');
       const candidates = hasAudio
         ? ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm']
         : ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
@@ -715,6 +734,26 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
                   {qualityObj.res} · {qualityObj.fps} fps · {qualityObj.bitrate} kbps
                 </div>
               </Field>
+
+              <Field label="Video encoder" hint="Hardware encoders offload the CPU; use the fallback if one fails.">
+                <Select
+                  value={encoder}
+                  onValueChange={value => {
+                    setEncoder(value);
+                    localStorage.setItem('live_psalms_stream_encoder', value);
+                  }}
+                >
+                  <SelectTrigger aria-label="Video encoder">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="libx264">x264 (CPU, safest)</SelectItem>
+                    <SelectItem value="h264_nvenc">NVIDIA NVENC</SelectItem>
+                    <SelectItem value="h264_qsv">Intel Quick Sync</SelectItem>
+                    <SelectItem value="h264_amf">AMD AMF</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
             </FieldGroup>
           <FieldGroup
             title="Audio"
@@ -806,7 +845,87 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
                 <Field label="Output level" hint={audioLevels.error}>
                   <AudioMeterRow levels={audioLevels} />
                 </Field>
+
+                <Field label="Sync offset" hint="Delays the streamed audio against the video, in milliseconds.">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={5000}
+                    step={10}
+                    value={audioDelayMs}
+                    onChange={event => {
+                      const value = Math.max(0, Math.min(5000, Number(event.target.value) || 0));
+                      setAudioDelayMs(value);
+                      localStorage.setItem('live_psalms_audio_delay_ms', String(value));
+                    }}
+                    className="h-7 w-28 text-2xs"
+                  />
+                </Field>
               </div>
+            </div>
+
+            <div className="mt-4 space-y-3 rounded-md border border-border bg-muted/20 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>Monitor audio</Label>
+                  <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                    Plays the selected input on an output device for confidence.
+                  </p>
+                </div>
+                <Switch
+                  checked={monitor.enabled}
+                  onCheckedChange={enabled => {
+                    const next = { ...monitor, enabled };
+                    setMonitor(next);
+                    saveMonitorSettings(next);
+                  }}
+                  aria-label="Monitor audio"
+                />
+              </div>
+
+              {monitor.enabled && (
+                <>
+                  <Field label="Output device" hint="Where monitoring is played.">
+                    <Select
+                      value={monitor.outputDeviceId || 'default'}
+                      onValueChange={value => {
+                        const next = { ...monitor, outputDeviceId: value === 'default' ? '' : value };
+                        setMonitor(next);
+                        saveMonitorSettings(next);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-2xs" aria-label="Monitor output device">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">System default</SelectItem>
+                        {outputDevices.map(device => (
+                          <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || 'Output'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Monitor volume"
+                    action={<span className="tabular text-2xs text-muted-foreground">{Math.round(monitor.volume * 100)}%</span>}
+                  >
+                    <Slider
+                      value={[monitor.volume * 100]}
+                      min={0}
+                      max={100}
+                      step={5}
+                      onValueChange={([value]) => {
+                        const next = { ...monitor, volume: value / 100 };
+                        setMonitor(next);
+                        saveMonitorSettings(next);
+                      }}
+                      aria-label="Monitor volume"
+                    />
+                  </Field>
+                </>
+              )}
             </div>
           </FieldGroup>
             </div>
