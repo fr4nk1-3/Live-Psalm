@@ -20,6 +20,11 @@ import { AudioMeterRow } from './AudioMeter';
 import { useAudioLevels, useAudioSettings } from '../hooks/useAudio';
 import { streamStatus } from '../services/streamStatus';
 import { audioMonitor, type AudioSource } from '../services/audioMonitor';
+import { BroadcastScene } from './BroadcastScene';
+import { SCENE_LAYOUTS, updateSceneSettings, type SceneLayout } from '../services/broadcastScene';
+import { useSceneSettings } from '../hooks/useScene';
+import { getSceneCanvas } from '../services/sceneCanvas';
+import type { Slide, Theme } from '../types/presentation';
 
 // Platform configurations
 const PLATFORMS = {
@@ -71,6 +76,9 @@ interface StreamKey {
 interface StreamingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  liveSlide?: Slide | null;
+  theme?: Theme;
+  countdownSeconds?: number;
 }
 
 function getIpc() {
@@ -91,7 +99,13 @@ function logLineClass(line: string): string {
   return 'text-muted-foreground';
 }
 
-export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose }) => {
+export const StreamingModal: React.FC<StreamingModalProps> = ({
+  isOpen,
+  onClose,
+  liveSlide = null,
+  theme,
+  countdownSeconds = 0
+}) => {
   const [activePlatform, setActivePlatform] = useState<PlatformId>('youtube');
   const [streamKeys, setStreamKeys] = useState<Record<PlatformId, StreamKey>>(() => {
     try {
@@ -111,6 +125,27 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   const [audio, updateAudio] = useAudioSettings();
   const audioLevels = useAudioLevels();
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const scene = useSceneSettings();
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const sceneStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+
+
+  const stopCapture = () => {
+    if (recorderRef.current) {
+      try {
+        recorderRef.current.stop();
+      } catch {
+        /* already stopped */
+      }
+      recorderRef.current = null;
+    }
+    sceneStreamRef.current?.getTracks().forEach(track => track.stop());
+    sceneStreamRef.current = null;
+    micStreamRef.current?.getTracks().forEach(track => track.stop());
+    micStreamRef.current = null;
+  };
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ipc = getIpc();
 
@@ -130,7 +165,9 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
       navigator.mediaDevices
         .enumerateDevices()
         .then(devices => {
-          if (!cancelled) setAudioDevices(devices.filter(device => device.kind === 'audioinput'));
+          if (cancelled) return;
+          setAudioDevices(devices.filter(device => device.kind === 'audioinput'));
+          setVideoDevices(devices.filter(device => device.kind === 'videoinput'));
         })
         .catch(() => {});
     };
@@ -270,44 +307,111 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
       setStreamLog(['❌ Please enter a stream key first.']);
       return;
     }
-    const q = QUALITY_OPTIONS.find(q => q.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
+    const quality = QUALITY_OPTIONS.find(option => option.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
     const rtmpUrl = getRtmpUrl(activePlatform);
 
-    setStreamLog([`▶ Starting stream to ${PLATFORMS[activePlatform].name}...`]);
-
-    if (ipc) {
-      try {
-        const result = await ipc.invoke('start-stream', {
-          rtmpUrl,
-          resolution: q.res,
-          fps: q.fps,
-          bitrate: q.bitrate,
-          platform: activePlatform,
-          audio: {
-            source: audio.source,
-            device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
-            gain: audio.gain,
-            muted: audio.muted
-          }
-        });
-        if (result.success) {
-          setIsStreaming(true);
-          setStreamingPlatform(activePlatform);
-          setStreamStartTime(new Date());
-          setStreamLog(prev => [...prev, '✅ Stream started successfully']);
-        } else {
-          setStreamLog(prev => [...prev, `❌ Failed: ${result.error}`]);
-        }
-      } catch (e: any) {
-        setStreamLog(prev => [...prev, `❌ Error: ${e.message}`]);
-      }
-    } else {
+    if (!ipc) {
       streamStatus.finish('Streaming needs the desktop app.');
       setStreamLog(['⚠ Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
+      return;
+    }
+
+    const canvas = getSceneCanvas();
+    if (!canvas) {
+      setStreamLog(['❌ The scene preview is not ready yet.']);
+      return;
+    }
+
+    streamStatus.begin(PLATFORMS[activePlatform].name);
+    setStreamLog([`▶ Starting stream to ${PLATFORMS[activePlatform].name}...`]);
+
+    try {
+      const result = await ipc.invoke('start-stream', {
+        rtmpUrl,
+        resolution: quality.res,
+        fps: quality.fps,
+        bitrate: quality.bitrate,
+        platform: activePlatform,
+        mode: 'scene',
+        audio: {
+          source: audio.source,
+          device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
+          gain: audio.gain,
+          muted: audio.muted
+        }
+      });
+
+      if (!result.success) {
+        streamStatus.finish(result.error || 'Could not start the encoder.');
+        setStreamLog(prev => [...prev, `❌ Failed: ${result.error}`]);
+        return;
+      }
+
+      const sceneStream = canvas.captureStream(quality.fps);
+      sceneStreamRef.current = sceneStream;
+      const tracks: MediaStreamTrack[] = [...sceneStream.getVideoTracks()];
+
+      if (audio.source === 'device') {
+        // Never let a permission prompt hold the stream hostage: ask, but start
+        // with video even if the microphone has not been granted yet.
+        const micRequest = navigator.mediaDevices
+          .getUserMedia({ audio: audio.deviceId ? { deviceId: { exact: audio.deviceId } } : true })
+          .catch(() => null);
+        const mic = await Promise.race([
+          micRequest,
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 2500))
+        ]);
+        if (mic) {
+          micStreamRef.current = mic;
+          if (!audio.muted) tracks.push(...mic.getAudioTracks());
+        } else {
+          micRequest.then(late => late?.getTracks().forEach(track => track.stop())).catch(() => {});
+          setStreamLog(prev => [...prev, '⚠ Starting without microphone audio.']);
+        }
+      }
+
+      const combined = new MediaStream(tracks);
+      const hasAudio = tracks.some(track => track.kind === 'audio');
+      const candidates = hasAudio
+        ? ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm']
+        : ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
+      const mimeType =
+        candidates.find(candidate => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(candidate)) ||
+        '';
+      const recorder = new MediaRecorder(combined, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: quality.bitrate * 1000,
+        ...(hasAudio ? { audioBitsPerSecond: 128000 } : {})
+      });
+      let sentFirstChunk = false;
+      recorder.ondataavailable = async event => {
+        if (!event.data || event.data.size === 0) return;
+        const bytes = new Uint8Array(await event.data.arrayBuffer());
+        ipc.send('stream-data', bytes);
+        if (!sentFirstChunk) {
+          sentFirstChunk = true;
+          setStreamLog(prev => [...prev, `▶ Capturing scene (${mimeType || 'default webm'})`]);
+        }
+      };
+      recorder.onerror = event => {
+        const message = (event as unknown as { error?: Error }).error?.message || 'recorder error';
+        setStreamLog(prev => [...prev, `❌ ${message}`]);
+      };
+      recorder.start(250);
+      recorderRef.current = recorder;
+
+      setIsStreaming(true);
+      setStreamingPlatform(activePlatform);
+      setStreamStartTime(new Date());
+      setStreamLog(prev => [...prev, '✅ Stream started successfully']);
+    } catch (error) {
+      stopCapture();
+      streamStatus.finish(error instanceof Error ? error.message : 'Could not start streaming.');
+      setStreamLog(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'unknown'}`]);
     }
   };
-
   const stopStream = async () => {
+    stopCapture();
     if (ipc) {
       await ipc.invoke('stop-stream').catch(() => {});
     }
@@ -375,6 +479,117 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <FieldGroup
+            title="Scene"
+            description="What the stream shows. The Broadcast monitor beside the programme preview renders this exact frame."
+          >
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-3">
+                <Field label="Layout">
+                  <div className="grid grid-cols-2 gap-1">
+                    {SCENE_LAYOUTS.map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => updateSceneSettings({ layout: option.id as SceneLayout })}
+                        title={option.hint}
+                        aria-pressed={scene.layout === option.id}
+                        className={`h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors ${
+                          scene.layout === option.id
+                            ? 'border-border bg-accent text-accent-foreground'
+                            : 'border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {(scene.layout === 'camera' || scene.layout === 'split' || scene.layout === 'pip') && (
+                  <Field
+                    label="Camera"
+                    hint={
+                      videoDevices.length === 0
+                        ? 'Grant camera access to list devices.'
+                        : 'Any webcam, capture card or virtual camera.'
+                    }
+                  >
+                    <Select
+                      value={scene.cameraDeviceId || 'default'}
+                      onValueChange={value =>
+                        updateSceneSettings({ cameraDeviceId: value === 'default' ? '' : value })
+                      }
+                    >
+                      <SelectTrigger aria-label="Scene camera">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">System default camera</SelectItem>
+                        {videoDevices.map(device => (
+                          <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || 'Camera'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label>Lower third</Label>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                      Name and detail strap along the bottom.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={scene.showLowerThird}
+                    onCheckedChange={showLowerThird => updateSceneSettings({ showLowerThird })}
+                    aria-label="Show lower third"
+                  />
+                </div>
+
+                {scene.showLowerThird && (
+                  <>
+                    <Field label="Title" htmlFor="scene-lower-title">
+                      <Input
+                        id="scene-lower-title"
+                        value={scene.lowerThirdTitle}
+                        placeholder="Pastor name"
+                        onChange={event => updateSceneSettings({ lowerThirdTitle: event.target.value })}
+                      />
+                    </Field>
+                    <Field label="Subtitle" htmlFor="scene-lower-subtitle">
+                      <Input
+                        id="scene-lower-subtitle"
+                        value={scene.lowerThirdSubtitle}
+                        placeholder="Role or church"
+                        onChange={event => updateSceneSettings({ lowerThirdSubtitle: event.target.value })}
+                      />
+                    </Field>
+                  </>
+                )}
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label>Countdown</Label>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                      Shows the service countdown in the corner.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={scene.showCountdown}
+                    onCheckedChange={showCountdown => updateSceneSettings({ showCountdown })}
+                    aria-label="Show countdown"
+                  />
+                </div>
+              </div>
+            </div>
+          </FieldGroup>
+
           {/* Encoder status */}
           {ffmpegStatus === 'desktop' && (
             <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">

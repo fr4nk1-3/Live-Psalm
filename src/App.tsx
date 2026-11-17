@@ -2262,6 +2262,7 @@ export const App: React.FC = () => {
           onClearBackground={handleClearAllBackgrounds}
           onOpenInspector={() => setIsInspectorOpen(true)}
           onOpenStreamSettings={() => setIsStreamingOpen(true)}
+          countdownSeconds={countdownSeconds}
         />
 
         {/* Right rail: service order */}

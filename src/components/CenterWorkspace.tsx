@@ -40,6 +40,9 @@ import { EmptyState } from './ui/primitives';
 import { AudioMeter } from './AudioMeter';
 import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useAudio';
 import { audioMonitor } from '../services/audioMonitor';
+import { BroadcastScene } from './BroadcastScene';
+import { useSceneSettings } from '../hooks/useScene';
+import { setSceneCanvas } from '../services/sceneCanvas';
 
 const WORKSPACE_QUICK_BIBLE_VERSIONS = [
   { id: 'bible-eng-nkjv', abbr: 'NKJV' },
@@ -89,6 +92,8 @@ interface CenterWorkspaceProps {
   onOpenInspector?: () => void;
   /** Opens the stream setup dialog from the broadcast monitor. */
   onOpenStreamSettings?: () => void;
+  /** Countdown seconds, mirrored into the broadcast scene. */
+  countdownSeconds?: number;
 }
 
 function LayerChip({ label, onClick }: { label: string; onClick: () => void }) {
@@ -345,11 +350,16 @@ const BroadcastMonitor: React.FC<{
   globalVideoBgUrl?: string | null;
   activeAlert?: AudienceAlert | null;
   lowerThird?: { title?: string; content?: string; speed?: string } | null;
+  countdownSeconds?: number;
   onOpenStreamSettings?: () => void;
-}> = ({ liveSlide, theme, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl, activeAlert, lowerThird, onOpenStreamSettings }) => {
+}> = ({ liveSlide, theme, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl, activeAlert, lowerThird, countdownSeconds = 0, onOpenStreamSettings }) => {
   const levels = useAudioLevels();
   const [audio] = useAudioSettings();
   const status = useStreamStatus();
+  const scene = useSceneSettings();
+  const handleCanvasReady = React.useCallback((canvas: HTMLCanvasElement | null) => {
+    setSceneCanvas(canvas);
+  }, []);
 
   // Keep the meter running while a stream is actually live.
   React.useEffect(() => {
@@ -378,25 +388,14 @@ const BroadcastMonitor: React.FC<{
         style={{ aspectRatio: '16/9', containerType: 'size' }}
         title="What the live stream is sending"
       >
-        {liveSlide ? (
-          <SlideCanvas
-            slide={liveSlide}
-            theme={theme}
-            label="Broadcast"
-            isLive={true}
-            audienceViewMode={audienceViewMode}
-            dimmed={false}
-            itemVideoBgUrl={itemVideoBgUrl}
-            globalVideoBgUrl={globalVideoBgUrl}
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center">
-            <span className="state-label text-white/25">{status.live ? 'Black' : 'Idle'}</span>
-            <span className="max-w-[86%] text-2xs leading-snug text-white/25">
-              {status.live ? 'Program is clear, so the stream is black' : 'No signal is being streamed'}
-            </span>
-          </div>
-        )}
+        <BroadcastScene
+          slide={liveSlide}
+          theme={theme}
+          scene={scene}
+          countdownSeconds={countdownSeconds}
+          onCanvasReady={handleCanvasReady}
+          className="absolute inset-0"
+        />
 
         {activeAlert && (
           <div className="absolute left-2 top-2 z-30">
@@ -426,27 +425,6 @@ const BroadcastMonitor: React.FC<{
       </div>
 
       <footer className="mt-2 space-y-1">
-        <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-          <span
-            className={cn('h-1.5 w-1.5 shrink-0 rounded-full', status.live ? 'bg-live' : 'bg-muted-foreground/40')}
-            aria-hidden
-          />
-          <span className={cn('shrink-0', status.live ? 'text-live' : '')}>
-            {status.live ? 'Live' : status.state === 'connecting' ? 'Connecting' : status.state === 'error' ? 'Error' : status.state === 'ended' ? 'Ended' : 'Offline'}
-          </span>
-          {status.live && (
-            <span className="tabular min-w-0 truncate font-mono" title="Encoder bitrate and frame count">
-              {typeof status.stats.bitrateKbps === 'number'
-                ? status.stats.bitrateKbps >= 1000
-                  ? `${(status.stats.bitrateKbps / 1000).toFixed(1)} Mbps`
-                  : `${Math.round(status.stats.bitrateKbps)} kbps`
-                : '—'}
-              {' · '}
-              {typeof status.stats.frames === 'number' ? `${status.stats.frames.toLocaleString()} frames` : '—'}
-            </span>
-          )}
-        </div>
-
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
             <span className={cn('tabular font-mono', levels.peak >= 0.985 && 'text-live')}>
@@ -496,7 +474,8 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   onApplyBackground,
   onClearBackground,
   onOpenInspector,
-  onOpenStreamSettings
+  onOpenStreamSettings,
+  countdownSeconds = 0
 }) => {
   const slideGridContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -945,6 +924,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
           globalVideoBgUrl={globalVideoBgUrl}
           activeAlert={activeAlert}
           lowerThird={activeLowerThirdText}
+          countdownSeconds={countdownSeconds}
           onOpenStreamSettings={onOpenStreamSettings}
         />
       </div>
