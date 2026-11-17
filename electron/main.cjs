@@ -306,6 +306,9 @@ function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, ex
     if (!win.isDestroyed()) {
       win.setMenu(null);
       win.setFullScreen(true);
+      // Windows keeps the taskbar above a plain fullscreen window, which shows
+      // up in the stream capture. screen-saver level sits above it.
+      win.setAlwaysOnTop(true, 'screen-saver');
       win.show();
     }
   });
@@ -603,6 +606,25 @@ ipcMain.handle('browse-ffmpeg', async () => {
   return { canceled: false, ...(await probeFfmpeg()) };
 });
 
+// Screen region that the live stream should show: the display the audience
+// window occupies, in physical pixels (gdigrab/x11grab ignore DPI scaling).
+function getStreamCaptureRegion() {
+  if (!audienceWindow || audienceWindow.isDestroyed()) return null;
+  const display = screen.getDisplayMatching(audienceWindow.getBounds());
+  if (!display) return null;
+  const scale = display.scaleFactor || 1;
+  const even = (value) => (value % 2 === 0 ? value : value - 1);
+  const width = even(Math.round(display.bounds.width * scale));
+  const height = even(Math.round(display.bounds.height * scale));
+  if (width < 16 || height < 16) return null;
+  return {
+    x: Math.round(display.bounds.x * scale),
+    y: Math.round(display.bounds.y * scale),
+    width,
+    height
+  };
+}
+
 ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {} }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
@@ -626,19 +648,63 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       audioInputArgs.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
 
+    const capture = getStreamCaptureRegion();
+    if (!capture) {
+      return {
+        success: false,
+        error: 'Open the audience output window first; the stream captures that display.'
+      };
+    }
+
+    const [targetWidth, targetHeight] = String(resolution)
+      .split('x')
+      .map((value) => Number(value) || 0);
+    const scaleFilter =
+      targetWidth && targetHeight
+        ? `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,` +
+          `pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black`
+        : null;
+
+    const screenInputArgs = [];
+    if (process.platform === 'win32') {
+      screenInputArgs.push(
+        '-f', 'gdigrab',
+        '-framerate', String(fps),
+        '-draw_mouse', '0',
+        '-offset_x', String(capture.x),
+        '-offset_y', String(capture.y),
+        '-video_size', `${capture.width}x${capture.height}`,
+        '-i', 'desktop'
+      );
+    } else if (process.platform === 'linux') {
+      screenInputArgs.push(
+        '-f', 'x11grab',
+        '-framerate', String(fps),
+        '-draw_mouse', '0',
+        '-video_size', `${capture.width}x${capture.height}`,
+        '-i', `:0.0+${capture.x},${capture.y}`
+      );
+    } else {
+      return { success: false, error: 'Screen capture for streaming is only implemented on Windows and Linux.' };
+    }
+
     const args = [
-      '-re',
-      '-f', 'lavfi',
-      '-i', `color=c=black:s=${resolution}:r=${fps}`,
+      ...screenInputArgs,
       ...audioInputArgs,
       ...(audioFilter ? ['-af', audioFilter] : []),
+      ...(scaleFilter ? ['-vf', scaleFilter] : []),
       '-c:v', 'libx264',
       '-preset', 'veryfast',
+      '-tune', 'zerolatency',
+      '-profile:v', 'high',
       '-b:v', `${bitrate}k`,
+      '-minrate', `${bitrate}k`,
       '-maxrate', `${bitrate}k`,
-      '-bufsize', `${bitrate * 2}k`,
+      '-bufsize', `${bitrate}k`,
+      '-x264-params', 'nal-hrd=cbr:force-cfr=1',
       '-pix_fmt', 'yuv420p',
       '-g', String(fps * 2),
+      '-r', String(fps),
       '-c:a', 'aac',
       '-b:a', '128k',
       '-ar', '48000',
