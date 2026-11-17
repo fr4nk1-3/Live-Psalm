@@ -2261,6 +2261,7 @@ export const App: React.FC = () => {
           onApplyBackground={handleApplyBackgroundWithScope}
           onClearBackground={handleClearAllBackgrounds}
           onOpenInspector={() => setIsInspectorOpen(true)}
+          onOpenStreamSettings={() => setIsStreamingOpen(true)}
         />
 
         {/* Right rail: service order */}
@@ -2396,6 +2397,7 @@ export const App: React.FC = () => {
         countdownEndVideoId={countdownEndVideoId}
         onChangeCountdownEndVideoId={setCountdownEndVideoId}
         mediaList={media}
+        onOpenStreamSettings={() => setIsStreamingOpen(true)}
       />
 
       {/* Modals & Dialogs */}

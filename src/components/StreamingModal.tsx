@@ -13,6 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { ListHeader } from './ui/primitives';
+import { Switch } from './ui/switch';
+import { Slider } from './ui/slider';
+import { Label } from './ui/label';
+import { AudioMeterRow } from './AudioMeter';
+import { useAudioLevels, useAudioSettings } from '../hooks/useAudio';
+import { streamStatus } from '../services/streamStatus';
+import { audioMonitor, type AudioSource } from '../services/audioMonitor';
 
 // Platform configurations
 const PLATFORMS = {
@@ -100,8 +107,39 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [showInstructions, setShowInstructions] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [audio, updateAudio] = useAudioSettings();
+  const audioLevels = useAudioLevels();
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ipc = getIpc();
+
+  // Listen to the input only while this dialog is open, so nothing is captured
+  // in the background.
+  useEffect(() => {
+    if (!isOpen) return;
+    audioMonitor.retain();
+    return () => audioMonitor.release();
+  }, [isOpen]);
+
+  // Enumerate audio inputs on open, and follow device hot-plug
+  useEffect(() => {
+    if (!isOpen || !navigator.mediaDevices?.enumerateDevices) return;
+    let cancelled = false;
+    const loadDevices = () => {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then(devices => {
+          if (!cancelled) setAudioDevices(devices.filter(device => device.kind === 'audioinput'));
+        })
+        .catch(() => {});
+    };
+    loadDevices();
+    navigator.mediaDevices.addEventListener?.('devicechange', loadDevices);
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices.removeEventListener?.('devicechange', loadDevices);
+    };
+  }, [isOpen]);
 
   // Check ffmpeg availability on open
   useEffect(() => {
@@ -140,17 +178,42 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
     const onStreamLog = (_event: any, msg: string) => {
       setStreamLog(prev => [...prev.slice(-50), msg]);
     };
-    const onStreamEnded = () => {
+    const stopLocal = () => {
       setIsStreaming(false);
       setStreamingPlatform(null);
       setStreamStartTime(null);
+    };
+    const onStreamEnded = () => {
+      streamStatus.finish();
+      stopLocal();
       setStreamLog(prev => [...prev, '— Stream ended —']);
+    };
+    const onStreamState = (_event: any, payload: { state?: string; error?: string }) => {
+      if (!payload?.state) return;
+      if (payload.state === 'live') {
+        streamStatus.markLive();
+        setIsStreaming(true);
+      } else if (payload.state === 'ended') {
+        streamStatus.finish();
+        stopLocal();
+      } else if (payload.state === 'error') {
+        streamStatus.finish(payload.error || 'The stream stopped unexpectedly.');
+        stopLocal();
+        setStreamLog(prev => [...prev, `❌ ${payload.error || 'Stream stopped unexpectedly.'}`]);
+      }
+    };
+    const onStreamStats = (_event: any, stats: Record<string, number>) => {
+      if (stats) streamStatus.applyStats(stats);
     };
     ipc.on('stream-log', onStreamLog);
     ipc.on('stream-ended', onStreamEnded);
+    ipc.on('stream-state', onStreamState);
+    ipc.on('stream-stats', onStreamStats);
     return () => {
       ipc.removeListener('stream-log', onStreamLog);
       ipc.removeListener('stream-ended', onStreamEnded);
+      ipc.removeListener('stream-state', onStreamState);
+      ipc.removeListener('stream-stats', onStreamStats);
     };
   }, [ipc]);
 
@@ -195,7 +258,13 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
           resolution: q.res,
           fps: q.fps,
           bitrate: q.bitrate,
-          platform: activePlatform
+          platform: activePlatform,
+          audio: {
+            source: audio.source,
+            device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
+            gain: audio.gain,
+            muted: audio.muted
+          }
         });
         if (result.success) {
           setIsStreaming(true);
@@ -209,6 +278,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
         setStreamLog(prev => [...prev, `❌ Error: ${e.message}`]);
       }
     } else {
+      streamStatus.finish('Streaming needs the desktop app.');
       setStreamLog(['⚠ Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
     }
   };
@@ -220,6 +290,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
     setIsStreaming(false);
     setStreamingPlatform(null);
     setStreamStartTime(null);
+    streamStatus.finish();
     setStreamLog(prev => [...prev, '⏹ Stream stopped by operator.']);
   };
 
@@ -354,6 +425,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
               </Button>
             </FieldGroup>
 
+            <div className="space-y-5">
             {/* Encoding */}
             <FieldGroup title="Encoding">
               <Field label="Quality" hint="Higher presets need more upload bandwidth.">
@@ -380,6 +452,100 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose 
                 </div>
               </Field>
             </FieldGroup>
+          <FieldGroup
+            title="Audio"
+            description="What the stream sends. The meter shows the level after gain."
+          >
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-3">
+                <Field label="Source">
+                  <Select value={audio.source} onValueChange={value => updateAudio({ source: value as AudioSource })}>
+                    <SelectTrigger aria-label="Broadcast audio source">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="device">Microphone / line</SelectItem>
+                      <SelectItem value="program">Programme audio</SelectItem>
+                      <SelectItem value="silent">Silent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {audio.source === 'device' && (
+                  <Field
+                    label="Input device"
+                    hint={
+                      audioDevices.length === 0
+                        ? 'Grant microphone access to list inputs.'
+                        : 'Device names come from the operating system.'
+                    }
+                  >
+                    <Select
+                      value={audio.deviceId || 'default'}
+                      onValueChange={value => updateAudio({ deviceId: value === 'default' ? '' : value })}
+                    >
+                      <SelectTrigger aria-label="Audio input device">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">System default</SelectItem>
+                        {audioDevices.map(device => (
+                          <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || 'Audio input'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+
+                <p className="text-2xs leading-relaxed text-muted-foreground">
+                  {audio.source === 'program'
+                    ? 'Meters the media player audio. Use a loopback device to send desktop audio to the stream.'
+                    : audio.source === 'silent'
+                    ? 'The stream carries no audio.'
+                    : 'Meters the selected input and sends it to the stream.'}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Field
+                  label="Input gain"
+                  action={
+                    <span className="tabular text-2xs text-muted-foreground">{Math.round(audio.gain * 100)}%</span>
+                  }
+                >
+                  <Slider
+                    value={[audio.gain * 100]}
+                    min={0}
+                    max={200}
+                    step={5}
+                    onValueChange={([value]) => updateAudio({ gain: value / 100 })}
+                    aria-label="Broadcast audio gain"
+                  />
+                </Field>
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label>Mute</Label>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                      Sends silence while the meter keeps running.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={audio.muted}
+                    onCheckedChange={muted => updateAudio({ muted })}
+                    aria-label="Mute the broadcast audio"
+                  />
+                </div>
+
+                <Field label="Output level" hint={audioLevels.error}>
+                  <AudioMeterRow levels={audioLevels} />
+                </Field>
+              </div>
+            </div>
+          </FieldGroup>
+            </div>
           </div>
 
           {/* ffmpeg missing instructions */}

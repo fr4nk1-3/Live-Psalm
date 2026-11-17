@@ -20,6 +20,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { BroadcastService } from '../services/broadcast';
+import { audioMonitor } from '../services/audioMonitor';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -44,6 +45,13 @@ export const MediaPlayerBar: React.FC<MediaPlayerBarProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+
+  // Hand the master audio element to the meter so the broadcast monitor can show
+  // the level of programme audio without capturing it twice.
+  useEffect(() => {
+    audioMonitor.registerProgramElement(masterVideoRef.current);
+    return () => audioMonitor.registerProgramElement(null);
+  }, [activeMedia?.id]);
   const [loop, setLoop] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [endBehavior, setEndBehavior] = useState<'clear' | 'hold' | 'loop' | 'logo'>('clear');

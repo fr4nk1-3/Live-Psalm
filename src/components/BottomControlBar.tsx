@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { EmergencyState, TransitionSettings, TransitionType, MediaAsset } from '../types/presentation';
 import { cn } from '../lib/utils';
+import { useStreamStatus } from '../hooks/useAudio';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -39,6 +40,8 @@ interface BottomControlBarProps {
   countdownEndVideoId?: string;
   onChangeCountdownEndVideoId?: (videoId: string) => void;
   mediaList?: MediaAsset[];
+  /** Opens the stream setup dialog from the status cluster. */
+  onOpenStreamSettings?: () => void;
 }
 
 const TRANSITIONS: TransitionType[] = ['fade', 'cut', 'dissolve', 'slide', 'zoom'];
@@ -101,7 +104,8 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   onChangeCountdownEndAction,
   countdownEndVideoId = '',
   onChangeCountdownEndVideoId,
-  mediaList = []
+  mediaList = [],
+  onOpenStreamSettings
 }) => {
   const [localCountUp, setLocalCountUp] = useState(false);
   const countUp = countUpProp !== undefined ? countUpProp : localCountUp;
@@ -156,6 +160,47 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   const [editSecs, setEditSecs] = useState('00');
   const [isEditing, setIsEditing] = useState(false);
   const hoursRef = useRef<HTMLInputElement>(null);
+
+  const stream = useStreamStatus();
+  const streamLive = stream.state === 'live';
+  const streamLabel =
+    stream.state === 'live'
+      ? stream.platform
+        ? `Live · ${stream.platform}`
+        : 'Live'
+      : stream.state === 'connecting'
+      ? 'Connecting'
+      : stream.state === 'error'
+      ? 'Stream error'
+      : stream.state === 'ended'
+      ? 'Stream ended'
+      : 'Stream offline';
+
+  const streamUptime = (() => {
+    const seconds =
+      typeof stream.stats.timeSeconds === 'number'
+        ? stream.stats.timeSeconds
+        : stream.startedAt
+        ? Math.max(0, (Date.now() - stream.startedAt) / 1000)
+        : 0;
+    const total = Math.floor(seconds);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  })();
+
+  const streamBitrate =
+    typeof stream.stats.bitrateKbps === 'number'
+      ? stream.stats.bitrateKbps >= 1000
+        ? `${(stream.stats.bitrateKbps / 1000).toFixed(1)} Mbps`
+        : `${Math.round(stream.stats.bitrateKbps)} kbps`
+      : null;
+
+  const streamFrames =
+    typeof stream.stats.frames === 'number' ? stream.stats.frames.toLocaleString() : null;
 
   React.useEffect(() => {
     if (isCountdownRunning) setIsEditing(false);
@@ -222,6 +267,48 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Stream telemetry */}
+      <button
+        type="button"
+        onClick={onOpenStreamSettings}
+        disabled={!onOpenStreamSettings}
+        title="Broadcast status. Click to open stream setup."
+        className="hidden shrink-0 items-center gap-2 rounded-md border border-border bg-background/50 px-2 py-1 text-2xs transition-colors hover:bg-accent/60 disabled:pointer-events-none lg:flex"
+      >
+        <span
+          className={cn(
+            'h-1.5 w-1.5 rounded-full',
+            streamLive ? 'bg-live' : stream.state === 'error' ? 'bg-warning' : 'bg-muted-foreground/40'
+          )}
+          aria-hidden
+        />
+        <span className={cn('whitespace-nowrap', streamLive ? 'text-live' : 'text-muted-foreground')}>{streamLabel}</span>
+
+        {streamLive && (
+          <>
+            <span className="text-muted-foreground/40" aria-hidden>·</span>
+            <span className="tabular hidden font-mono text-muted-foreground 2xl:inline">{streamUptime}</span>
+            <span className="text-muted-foreground/40" aria-hidden>·</span>
+            <span className="tabular font-mono text-foreground/80">{streamBitrate ?? '—'}</span>
+            <span className="hidden text-muted-foreground/40 2xl:inline" aria-hidden>·</span>
+            <span className="tabular hidden font-mono text-muted-foreground 2xl:inline">
+              {stream.stats.fps ? `${Math.round(stream.stats.fps)} fps` : '—'}
+            </span>
+            <span className="text-muted-foreground/40" aria-hidden>·</span>
+            <span className="tabular font-mono text-muted-foreground">
+              {streamFrames ? `${streamFrames} frames` : '—'}
+            </span>
+          </>
+        )}
+
+        {stream.state === 'connecting' && (
+          <span className="text-muted-foreground">waiting for encoder</span>
+        )}
+        {stream.state === 'error' && stream.error && (
+          <span className="max-w-[200px] truncate text-warning">{stream.error}</span>
+        )}
+      </button>
 
       <div className="flex-1" />
 

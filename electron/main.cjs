@@ -21,6 +21,7 @@ let audienceWindow = null;
 let stageWindow = null;
 let ledWindow = null;
 let activeStreamProcess = null;
+let streamStopRequested = false;
 
 // Default directory for Direct OBS File Output (Text GDI+ Read-from-file integration)
 function getObsOutputDir() {
@@ -440,17 +441,35 @@ ipcMain.handle('check-ffmpeg', () => {
   });
 });
 
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500 }) => {
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {} }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
   try {
+    // Audio input: a real capture device when one is configured, otherwise silence.
+    const audioInputArgs = [];
+    let audioFilter = null;
+    const useDevice = audio && audio.source === 'device' && audio.device;
+    if (useDevice) {
+      if (process.platform === 'win32') {
+        audioInputArgs.push('-f', 'dshow', '-i', `audio=${audio.device}`);
+      } else if (process.platform === 'linux') {
+        audioInputArgs.push('-f', 'pulse', '-i', String(audio.device));
+      } else {
+        audioInputArgs.push('-f', 'avfoundation', '-i', `:${audio.device}`);
+      }
+      const gain = typeof audio.gain === 'number' ? Math.max(0, Math.min(2, audio.gain)) : 1;
+      audioFilter = audio.muted ? 'volume=0' : `volume=${gain}`;
+    } else {
+      audioInputArgs.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
+    }
+
     const args = [
       '-re',
       '-f', 'lavfi',
       '-i', `color=c=black:s=${resolution}:r=${fps}`,
-      '-f', 'lavfi',
-      '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+      ...audioInputArgs,
+      ...(audioFilter ? ['-af', audioFilter] : []),
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-b:v', `${bitrate}k`,
@@ -460,20 +479,75 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       '-g', String(fps * 2),
       '-c:a', 'aac',
       '-b:a', '128k',
+      '-ar', '48000',
+      '-ac', '2',
       '-f', 'flv',
       rtmpUrl
     ];
     activeStreamProcess = spawn('ffmpeg', args);
+    streamStopRequested = false;
+
+    const sendToRenderer = (channel, payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+    };
+
+    sendToRenderer('stream-state', { state: 'connecting' });
+
+    let announcedLive = false;
+    const applyProgress = (line) => {
+      const frame = line.match(/frame=\s*(\d+)/);
+      const fps = line.match(/fps=\s*([\d.]+)/);
+      const bitrate = line.match(/bitrate=\s*([\d.]+)\s*kbits\/s/);
+      const dropped = line.match(/drop=\s*(\d+)/);
+      const speed = line.match(/speed=\s*([\d.]+)x/);
+      const time = line.match(/time=\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      const size = line.match(/size=\s*(\d+)(?:\.(\d+))?\s*([kKmM]?)i?B/);
+
+      const stats = {};
+      if (frame) stats.frames = Number(frame[1]);
+      if (fps) stats.fps = Math.round(Number(fps[1]) * 10) / 10;
+      if (bitrate) stats.bitrateKbps = Math.round(Number(bitrate[1]) * 10) / 10;
+      if (dropped) stats.dropped = Number(dropped[1]);
+      if (speed) stats.speed = Number(speed[1]);
+      if (time) {
+        stats.timeSeconds = Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]);
+      }
+      if (size) {
+        const unit = (size[3] || '').toLowerCase();
+        const value = Number(`${size[1]}.${size[2] || 0}`);
+        stats.sizeKb = Math.round(unit === 'm' ? value * 1024 : value);
+      }
+      if (Object.keys(stats).length === 0) return false;
+
+      if (!announcedLive) {
+        announcedLive = true;
+        sendToRenderer('stream-state', { state: 'live' });
+      }
+      sendToRenderer('stream-stats', stats);
+      return true;
+    };
+
+    let progressBuffer = '';
     activeStreamProcess.stderr.on('data', (chunk) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('stream-log', chunk.toString().trim());
+      progressBuffer += chunk.toString();
+      const lines = progressBuffer.split(/\r?\n|\r/);
+      progressBuffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        // ffmpeg repeats a progress frame twice a second; keep it out of the log.
+        if (!applyProgress(trimmed)) sendToRenderer('stream-log', trimmed);
       }
     });
-    activeStreamProcess.on('close', () => {
+
+    activeStreamProcess.on('close', (code) => {
       activeStreamProcess = null;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('stream-ended');
-      }
+      const failed = typeof code === 'number' && code !== 0 && !streamStopRequested;
+      sendToRenderer('stream-state', {
+        state: failed ? 'error' : 'ended',
+        error: failed ? `ffmpeg exited with code ${code}` : undefined
+      });
+      sendToRenderer('stream-ended');
     });
     return { success: true };
   } catch (err) {
@@ -483,6 +557,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 });
 
 ipcMain.handle('stop-stream', async () => {
+  streamStopRequested = true;
   if (activeStreamProcess) {
     try {
       activeStreamProcess.kill('SIGINT');

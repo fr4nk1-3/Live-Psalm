@@ -37,6 +37,9 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { EmptyState } from './ui/primitives';
+import { AudioMeter } from './AudioMeter';
+import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useAudio';
+import { audioMonitor } from '../services/audioMonitor';
 
 const WORKSPACE_QUICK_BIBLE_VERSIONS = [
   { id: 'bible-eng-nkjv', abbr: 'NKJV' },
@@ -84,6 +87,8 @@ interface CenterWorkspaceProps {
   onClearBackground?: () => void;
   /** Opens the slide settings sheet. */
   onOpenInspector?: () => void;
+  /** Opens the stream setup dialog from the broadcast monitor. */
+  onOpenStreamSettings?: () => void;
 }
 
 function LayerChip({ label, onClick }: { label: string; onClick: () => void }) {
@@ -327,6 +332,142 @@ const SlideCanvas: React.FC<{
   );
 };
 
+/**
+ * Broadcast monitor: what is leaving the machine, with a stereo level meter for
+ * the audio that is being sent. Sits next to the programme monitor so the
+ * operator can compare stage output and stream output at a glance.
+ */
+const BroadcastMonitor: React.FC<{
+  liveSlide: Slide | null;
+  theme: Theme;
+  audienceViewMode?: 'near' | 'far';
+  itemVideoBgUrl?: string | null;
+  globalVideoBgUrl?: string | null;
+  activeAlert?: AudienceAlert | null;
+  lowerThird?: { title?: string; content?: string; speed?: string } | null;
+  onOpenStreamSettings?: () => void;
+}> = ({ liveSlide, theme, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl, activeAlert, lowerThird, onOpenStreamSettings }) => {
+  const levels = useAudioLevels();
+  const [audio] = useAudioSettings();
+  const status = useStreamStatus();
+
+  // Keep the meter running while a stream is actually live.
+  React.useEffect(() => {
+    if (!status.live) return;
+    audioMonitor.retain();
+    return () => audioMonitor.release();
+  }, [status.live]);
+
+  const sourceLabel =
+    audio.source === 'program' ? 'Programme audio' : audio.source === 'silent' ? 'Silent' : 'Microphone';
+
+  return (
+    <section className="hidden min-w-0 flex-[0.92] flex-col lg:flex">
+      <header className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className={cn('state-label', status.live ? 'text-live' : 'text-muted-foreground')}>Broadcast</span>
+        <span className={cn('min-w-0 truncate text-2xs', status.live ? 'text-live' : 'text-muted-foreground')}>
+          {status.live ? `Live${status.platform ? ` · ${status.platform}` : ''}` : 'Idle'}
+        </span>
+      </header>
+
+      <div
+        className={cn(
+          'relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border bg-black',
+          status.live ? 'border-live/60' : 'border-border'
+        )}
+        style={{ aspectRatio: '16/9', containerType: 'size' }}
+        title="What the live stream is sending"
+      >
+        {liveSlide ? (
+          <SlideCanvas
+            slide={liveSlide}
+            theme={theme}
+            label="Broadcast"
+            isLive={true}
+            audienceViewMode={audienceViewMode}
+            dimmed={false}
+            itemVideoBgUrl={itemVideoBgUrl}
+            globalVideoBgUrl={globalVideoBgUrl}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center">
+            <span className="state-label text-white/25">{status.live ? 'Black' : 'Idle'}</span>
+            <span className="max-w-[86%] text-2xs leading-snug text-white/25">
+              {status.live ? 'Program is clear, so the stream is black' : 'No signal is being streamed'}
+            </span>
+          </div>
+        )}
+
+        {activeAlert && (
+          <div className="absolute left-2 top-2 z-30">
+            <Badge variant="warning">{activeAlert.code}</Badge>
+          </div>
+        )}
+
+        {lowerThird?.content && (
+          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t border-white/10 bg-black/85 px-2 py-1">
+            <div
+              className="animate-crawl-line whitespace-nowrap text-2xs font-medium text-white"
+              style={{
+                animationDuration:
+                  lowerThird.speed === 'slow' ? '32s' : lowerThird.speed === 'fast' ? '13s' : '22s'
+              }}
+            >
+              {lowerThird.content}
+              {lowerThird.title ? ` - (${lowerThird.title})` : ''}
+            </div>
+          </div>
+        )}
+
+        {/* Stereo meter, right edge, away from the slide text */}
+        <div className="absolute bottom-1.5 right-1.5 top-1.5 z-30 flex items-end rounded-sm bg-black/45 p-1">
+          <AudioMeter levels={levels} className="h-full" />
+        </div>
+      </div>
+
+      <footer className="mt-2 space-y-1">
+        <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+          <span
+            className={cn('h-1.5 w-1.5 shrink-0 rounded-full', status.live ? 'bg-live' : 'bg-muted-foreground/40')}
+            aria-hidden
+          />
+          <span className={cn('shrink-0', status.live ? 'text-live' : '')}>
+            {status.live ? 'Live' : status.state === 'connecting' ? 'Connecting' : status.state === 'error' ? 'Error' : status.state === 'ended' ? 'Ended' : 'Offline'}
+          </span>
+          {status.live && (
+            <span className="tabular min-w-0 truncate font-mono" title="Encoder bitrate and frame count">
+              {typeof status.stats.bitrateKbps === 'number'
+                ? status.stats.bitrateKbps >= 1000
+                  ? `${(status.stats.bitrateKbps / 1000).toFixed(1)} Mbps`
+                  : `${Math.round(status.stats.bitrateKbps)} kbps`
+                : '—'}
+              {' · '}
+              {typeof status.stats.frames === 'number' ? `${status.stats.frames.toLocaleString()} frames` : '—'}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+            <span className={cn('tabular font-mono', levels.peak >= 0.985 && 'text-live')}>
+              {levels.connected ? `${levels.peakDb.toFixed(1)} dB` : 'no input'}
+            </span>
+            <span aria-hidden>·</span>
+            <span className={cn('truncate', audio.muted && 'text-warning')}>
+              {sourceLabel}
+              {audio.muted ? ' (muted)' : ''}
+            </span>
+          </span>
+          {onOpenStreamSettings && (
+            <Button size="xs" variant="ghost" onClick={onOpenStreamSettings}>
+              Setup
+            </Button>
+          )}
+        </div>
+      </footer>
+    </section>
+  );
+};
 export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   activeItem,
   previewSlide,
@@ -354,7 +495,8 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   onClearLiveSlide,
   onApplyBackground,
   onClearBackground,
-  onOpenInspector
+  onOpenInspector,
+  onOpenStreamSettings
 }) => {
   const slideGridContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -794,6 +936,17 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             <span className="shrink-0 truncate text-2xs text-muted-foreground">{activeTheme.name}</span>
           </footer>
         </section>
+
+        <BroadcastMonitor
+          liveSlide={liveSlide}
+          theme={activeTheme}
+          audienceViewMode={audienceViewMode}
+          itemVideoBgUrl={activeItem?.videoBackgroundUrl}
+          globalVideoBgUrl={globalVideoBgUrl}
+          activeAlert={activeAlert}
+          lowerThird={activeLowerThirdText}
+          onOpenStreamSettings={onOpenStreamSettings}
+        />
       </div>
 
       {/* Operator toolbar */}
