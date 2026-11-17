@@ -40,8 +40,9 @@ import { EmptyState } from './ui/primitives';
 import { AudioMeter } from './AudioMeter';
 import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useAudio';
 import { audioMonitor } from '../services/audioMonitor';
-import { BroadcastScene } from './BroadcastScene';
-import { useSceneSettings } from '../hooks/useScene';
+import { SceneCanvas } from '../scene/SceneCanvas';
+import { ScenePanel } from '../scene/ScenePanel';
+import { getActiveScene, useSceneLibrary } from '../scene/store';
 import { setSceneCanvas } from '../services/sceneCanvas';
 
 const WORKSPACE_QUICK_BIBLE_VERSIONS = [
@@ -356,7 +357,8 @@ const BroadcastMonitor: React.FC<{
   const levels = useAudioLevels();
   const [audio] = useAudioSettings();
   const status = useStreamStatus();
-  const scene = useSceneSettings();
+  const library = useSceneLibrary();
+  const activeScene = getActiveScene(library) || library.scenes[0];
   const handleCanvasReady = React.useCallback((canvas: HTMLCanvasElement | null) => {
     setSceneCanvas(canvas);
   }, []);
@@ -388,14 +390,15 @@ const BroadcastMonitor: React.FC<{
         style={{ aspectRatio: '16/9', containerType: 'size' }}
         title="What the live stream is sending"
       >
-        <BroadcastScene
-          slide={liveSlide}
-          theme={theme}
-          scene={scene}
-          countdownSeconds={countdownSeconds}
-          onCanvasReady={handleCanvasReady}
-          className="absolute inset-0"
-        />
+        {activeScene && (
+          <SceneCanvas
+            scene={activeScene}
+            slide={liveSlide}
+            theme={theme}
+            onCanvasReady={handleCanvasReady}
+            className="absolute inset-0"
+          />
+        )}
 
         {activeAlert && (
           <div className="absolute left-2 top-2 z-30">
@@ -495,7 +498,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   const [autoAdvanceSec, setAutoAdvanceSec] = useState<number>(0);
 
   // ProPresenter Live Operator Dock Tab ('none' | 'bgs' | 'stage-msg' | 'pager' | 'pads')
-  const [activeDockTab, setActiveDockTab] = useState<'none' | 'bgs' | 'stage-msg' | 'pager' | 'pads'>('none');
+  const [activeDockTab, setActiveDockTab] = useState<'none' | 'scenes' | 'bgs' | 'stage-msg' | 'pager' | 'pads'>('none');
   const [quickBgScope, setQuickBgScope] = useState<'global' | 'item' | 'slide'>('global');
 
   const handleMediaDrop = (e: React.DragEvent, scope: 'global' | 'item' | 'slide', targetSlide?: Slide) => {
@@ -933,6 +936,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-1.5">
         <div className="flex items-center gap-0.5">
           {[
+            { id: 'scenes', label: 'Scenes', active: false },
             { id: 'bgs', label: 'Backgrounds', active: Boolean(globalVideoBgUrl || activeItem?.videoBackgroundUrl) },
             { id: 'stage-msg', label: 'Stage message', active: Boolean(activeStageMsg) },
             { id: 'pager', label: 'Pager', active: Boolean(activeAlert) },
@@ -1004,6 +1008,12 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       </div>
 
       {/* Operator drawers */}
+      {activeDockTab === 'scenes' && (
+        <div className="max-h-[300px] shrink-0 overflow-hidden border-b border-border bg-card/60 px-3 py-2">
+          <ScenePanel className="h-[268px]" />
+        </div>
+      )}
+
       {activeDockTab === 'bgs' && (
         <div className="shrink-0 space-y-2 border-b border-border bg-card/60 px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">

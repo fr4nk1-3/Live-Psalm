@@ -20,9 +20,7 @@ import { AudioMeterRow } from './AudioMeter';
 import { useAudioLevels, useAudioSettings } from '../hooks/useAudio';
 import { streamStatus } from '../services/streamStatus';
 import { audioMonitor, type AudioSource } from '../services/audioMonitor';
-import { BroadcastScene } from './BroadcastScene';
-import { SCENE_LAYOUTS, updateSceneSettings, type SceneLayout } from '../services/broadcastScene';
-import { useSceneSettings } from '../hooks/useScene';
+import { getActiveScene, useSceneLibrary } from '../scene/store';
 import { getSceneCanvas } from '../services/sceneCanvas';
 import type { Slide, Theme } from '../types/presentation';
 
@@ -126,7 +124,9 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const audioLevels = useAudioLevels();
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const scene = useSceneSettings();
+  const sceneLibrary = useSceneLibrary();
+  const activeScene = getActiveScene(sceneLibrary);
+
   const recorderRef = useRef<MediaRecorder | null>(null);
   const sceneStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -481,115 +481,20 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <FieldGroup
             title="Scene"
-            description="What the stream shows. The Broadcast monitor beside the programme preview renders this exact frame."
+            description="Scenes are prepared in the Scenes panel. The stream sends whatever is live."
           >
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-3">
-                <Field label="Layout">
-                  <div className="grid grid-cols-2 gap-1">
-                    {SCENE_LAYOUTS.map(option => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => updateSceneSettings({ layout: option.id as SceneLayout })}
-                        title={option.hint}
-                        aria-pressed={scene.layout === option.id}
-                        className={`h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors ${
-                          scene.layout === option.id
-                            ? 'border-border bg-accent text-accent-foreground'
-                            : 'border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                {(scene.layout === 'camera' || scene.layout === 'split' || scene.layout === 'pip') && (
-                  <Field
-                    label="Camera"
-                    hint={
-                      videoDevices.length === 0
-                        ? 'Grant camera access to list devices.'
-                        : 'Any webcam, capture card or virtual camera.'
-                    }
-                  >
-                    <Select
-                      value={scene.cameraDeviceId || 'default'}
-                      onValueChange={value =>
-                        updateSceneSettings({ cameraDeviceId: value === 'default' ? '' : value })
-                      }
-                    >
-                      <SelectTrigger aria-label="Scene camera">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">System default camera</SelectItem>
-                        {videoDevices.map(device => (
-                          <SelectItem key={device.deviceId} value={device.deviceId}>
-                            {device.label || 'Camera'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <Label>Lower third</Label>
-                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
-                      Name and detail strap along the bottom.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={scene.showLowerThird}
-                    onCheckedChange={showLowerThird => updateSceneSettings({ showLowerThird })}
-                    aria-label="Show lower third"
-                  />
-                </div>
-
-                {scene.showLowerThird && (
-                  <>
-                    <Field label="Title" htmlFor="scene-lower-title">
-                      <Input
-                        id="scene-lower-title"
-                        value={scene.lowerThirdTitle}
-                        placeholder="Pastor name"
-                        onChange={event => updateSceneSettings({ lowerThirdTitle: event.target.value })}
-                      />
-                    </Field>
-                    <Field label="Subtitle" htmlFor="scene-lower-subtitle">
-                      <Input
-                        id="scene-lower-subtitle"
-                        value={scene.lowerThirdSubtitle}
-                        placeholder="Role or church"
-                        onChange={event => updateSceneSettings({ lowerThirdSubtitle: event.target.value })}
-                      />
-                    </Field>
-                  </>
-                )}
-
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <Label>Countdown</Label>
-                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
-                      Shows the service countdown in the corner.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={scene.showCountdown}
-                    onCheckedChange={showCountdown => updateSceneSettings({ showCountdown })}
-                    aria-label="Show countdown"
-                  />
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-xs text-foreground">{activeScene?.name || 'No scene'}</div>
+                <div className="text-2xs text-muted-foreground">
+                  {activeScene
+                    ? `${activeScene.elements.length} element${activeScene.elements.length === 1 ? '' : 's'}`
+                    : 'Add a scene first'}
                 </div>
               </div>
+              <Badge variant={isStreaming ? 'live' : 'outline'}>{isStreaming ? 'On air' : 'Ready'}</Badge>
             </div>
           </FieldGroup>
-
           {/* Encoder status */}
           {ffmpegStatus === 'desktop' && (
             <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
