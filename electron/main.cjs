@@ -220,6 +220,7 @@ function createMainWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       webSecurity: false,
+      webviewTag: true,
       // The scene canvas is composed in a window; pausing it when occluded
       // would freeze the stream.
       backgroundThrottling: false
@@ -240,6 +241,7 @@ function createMainWindow() {
         nodeIntegration: true,
         contextIsolation: false,
         webSecurity: false,
+      webviewTag: true,
         backgroundThrottling: false
       }
     }
@@ -296,6 +298,7 @@ function createOutputDisplayWindow({ existingWin, outputType, title, bgColor, ex
       nodeIntegration: true,
       contextIsolation: false,
       webSecurity: false,
+      webviewTag: true,
       // The scene canvas is composed in a window; pausing it when occluded
       // would freeze the stream.
       backgroundThrottling: false
@@ -584,6 +587,26 @@ function probeFfmpeg() {
 ipcMain.handle('check-ffmpeg', () => probeFfmpeg());
 
 // Lets the operator point at ffmpeg.exe once, which also fixes a stale PATH.
+  // Scene sources: enumerate screens and windows for display/window capture.
+  ipcMain.handle('get-desktop-sources', async (_event, kind) => {
+    try {
+      const { desktopCapturer } = require('electron');
+      const types = kind === 'window' ? ['window'] : kind === 'screen' ? ['screen'] : ['screen', 'window'];
+      const sources = await desktopCapturer.getSources({
+        types,
+        thumbnailSize: { width: 240, height: 135 },
+        fetchWindowIcons: true
+      });
+      return sources.map(source => ({
+        id: source.id,
+        name: source.name,
+        type: source.id.startsWith('screen') ? 'screen' : 'window',
+        thumbnail: source.thumbnail && !source.thumbnail.isEmpty() ? source.thumbnail.toDataURL() : ''
+      }));
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  });
 ipcMain.handle('browse-ffmpeg', async () => {
   const options = {
     title: 'Locate ffmpeg',

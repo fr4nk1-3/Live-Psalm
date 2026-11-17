@@ -21,6 +21,7 @@ import { useAudioLevels, useAudioSettings } from '../hooks/useAudio';
 import { streamStatus } from '../services/streamStatus';
 import { audioMonitor, type AudioSource } from '../services/audioMonitor';
 import { getActiveScene, useSceneLibrary } from '../scene/store';
+import { getSceneAudioTracks } from '../scene/sceneAudio';
 import { getSceneCanvas } from '../services/sceneCanvas';
 import type { Slide, Theme } from '../types/presentation';
 
@@ -351,7 +352,13 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       sceneStreamRef.current = sceneStream;
       const tracks: MediaStreamTrack[] = [...sceneStream.getVideoTracks()];
 
-      if (audio.source === 'device') {
+      // Audio-input elements in the live scene take precedence over the mic.
+      const sceneAudio = getSceneAudioTracks();
+      if (sceneAudio.length > 0) {
+        tracks.push(...sceneAudio);
+      }
+
+      if (audio.source === 'device' && sceneAudio.length === 0) {
         // Never let a permission prompt hold the stream hostage: ask, but start
         // with video even if the microphone has not been granted yet.
         const micRequest = navigator.mediaDevices

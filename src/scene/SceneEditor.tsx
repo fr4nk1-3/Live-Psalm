@@ -9,13 +9,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { SceneCanvas } from './SceneCanvas';
-import { sceneLibrary } from './store';
+import { sceneLibrary, useSceneLibrary } from './store';
+import { listAudioDevices, listDesktopSources, listVideoDevices } from './sources';
 import {
+  AudioInputElement,
+  BrowserElement,
   CameraElement,
+  CaptureElement,
+  createAudioInputElement,
+  createBrowserElement,
   createCameraElement,
+  createCaptureElement,
   createImageElement,
+  createMediaElement,
+  createSceneSourceElement,
   createShapeElement,
   createTextElement,
+  createVideoDeviceElement,
+  MediaElement,
+  SceneSourceElement,
+  VideoDeviceElement,
   ImageElement,
   SceneDocument,
   SceneElement,
@@ -392,6 +405,27 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
             <Button size="xs" variant="secondary" onClick={() => addElement(createCameraElement())}>
               Camera
             </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createCaptureElement('display'))}>
+              Display
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createCaptureElement('window'))}>
+              Window
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createVideoDeviceElement())}>
+              Video device
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createAudioInputElement())}>
+              Audio in
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createMediaElement())}>
+              Media
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createSceneSourceElement())}>
+              Scene
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createBrowserElement())}>
+              Browser
+            </Button>
             <span className="mx-1 h-4 w-px bg-border" aria-hidden />
             <Button size="xs" variant="ghost" onClick={undo} disabled={historyIndex <= 0}>
               Undo
@@ -570,6 +604,19 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                   {selected.type === 'camera' && (
                     <CameraProperties element={selected} onChange={patch => patchElement(selected.id, patch, false)} />
                   )}
+                  {(selected.type === 'display' ||
+                    selected.type === 'window' ||
+                    selected.type === 'videoDevice' ||
+                    selected.type === 'audioInput' ||
+                    selected.type === 'media' ||
+                    selected.type === 'scene' ||
+                    selected.type === 'browser') && (
+                    <SourceProperties
+                      element={selected}
+                      currentSceneId={scene.id}
+                      onChange={patch => patchElement(selected.id, patch as Partial<SceneElement>, false)}
+                    />
+                  )}
 
                   <div className="mt-auto flex flex-wrap gap-1 pt-2">
                     <Button size="xs" variant="ghost" onClick={() => reorderElement(selected.id, 'up')}>
@@ -609,6 +656,171 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
   );
 };
 
+
+type SourceElement =
+  | CaptureElement
+  | VideoDeviceElement
+  | AudioInputElement
+  | MediaElement
+  | SceneSourceElement
+  | BrowserElement;
+
+const SourceProperties: React.FC<{
+  element: SourceElement;
+  currentSceneId: string;
+  onChange: (patch: Partial<SourceElement>) => void;
+}> = ({ element, currentSceneId, onChange }) => {
+  const library = useSceneLibrary();
+  const [desktopSources, setDesktopSources] = React.useState<{ id: string; name: string; type: string }[]>([]);
+  const [devices, setDevices] = React.useState<MediaDeviceInfo[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (element.type === 'display' || element.type === 'window') {
+      void listDesktopSources(element.type === 'window' ? 'window' : 'screen').then(sources => {
+        if (!cancelled) setDesktopSources(sources);
+      });
+    } else if (element.type === 'videoDevice' || element.type === 'audioInput') {
+      const loader = element.type === 'videoDevice' ? listVideoDevices : listAudioDevices;
+      void loader().then(list => {
+        if (!cancelled) setDevices(list);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [element.type]);
+
+  if (element.type === 'display' || element.type === 'window') {
+    return (
+      <>
+        <Field
+          label={element.type === 'display' ? 'Display' : 'Window'}
+          hint={desktopSources.length === 0 ? 'No sources found yet — open the editor on the operator machine.' : undefined}
+        >
+          <Select
+            value={element.sourceId || 'none'}
+            onValueChange={value =>
+              onChange({
+                sourceId: value === 'none' ? '' : value,
+                sourceName: desktopSources.find(source => source.id === value)?.name || ''
+              } as Partial<SourceElement>)
+            }
+          >
+            <SelectTrigger className="h-7 text-2xs" aria-label="Capture source">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Choose a source…</SelectItem>
+              {desktopSources.map(source => (
+                <SelectItem key={source.id} value={source.id}>
+                  {source.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Fit">
+          <Select value={element.fit} onValueChange={value => onChange({ fit: value as 'cover' | 'contain' } as Partial<SourceElement>)}>
+            <SelectTrigger className="h-7 text-2xs" aria-label="Capture fit">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cover">Cover</SelectItem>
+              <SelectItem value="contain">Contain</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </>
+    );
+  }
+
+  if (element.type === 'videoDevice' || element.type === 'audioInput') {
+    return (
+      <Field
+        label="Device"
+        hint={element.type === 'audioInput' ? 'Audio sources are mixed into the stream.' : undefined}
+      >
+        <Select
+          value={element.deviceId || 'default'}
+          onValueChange={value => onChange({ deviceId: value === 'default' ? '' : value } as Partial<SourceElement>)}
+        >
+          <SelectTrigger className="h-7 text-2xs" aria-label="Capture device">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">System default</SelectItem>
+            {devices.map(device => (
+              <SelectItem key={device.deviceId} value={device.deviceId}>
+                {device.label || 'Device'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    );
+  }
+
+  if (element.type === 'media') {
+    return (
+      <>
+        <Field label="Media URL" hint="A video file URL, data URL or media library URL.">
+          <Input value={element.src} onChange={event => onChange({ src: event.target.value })} className="h-7 text-2xs" />
+        </Field>
+        <Field label="Fit">
+          <Select value={element.fit} onValueChange={value => onChange({ fit: value as 'cover' | 'contain' } as Partial<SourceElement>)}>
+            <SelectTrigger className="h-7 text-2xs" aria-label="Media fit">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cover">Cover</SelectItem>
+              <SelectItem value="contain">Contain</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <div className="flex items-center justify-between">
+          <Label className="text-2xs">Loop</Label>
+          <Switch checked={element.loop} onCheckedChange={loop => onChange({ loop } as Partial<SourceElement>)} aria-label="Loop media" />
+        </div>
+      </>
+    );
+  }
+
+  if (element.type === 'scene') {
+    return (
+      <Field label="Scene" hint="Draws another scene inside this frame.">
+        <Select
+          value={element.sceneId || 'none'}
+          onValueChange={value => onChange({ sceneId: value === 'none' ? '' : value } as Partial<SourceElement>)}
+        >
+          <SelectTrigger className="h-7 text-2xs" aria-label="Nested scene">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Choose a scene…</SelectItem>
+            {library.scenes
+              .filter(scene => scene.id !== currentSceneId)
+              .map(scene => (
+                <SelectItem key={scene.id} value={scene.id}>
+                  {scene.name}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    );
+  }
+
+  if (element.type === 'browser') {
+    return (
+      <Field label="URL" hint="Rendered by an embedded browser and copied into the canvas.">
+        <Input value={element.url} onChange={event => onChange({ url: event.target.value })} className="h-7 text-2xs" />
+      </Field>
+    );
+  }
+
+  return null;
+};
 const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial<TextElement>) => void }> = ({
   element,
   onChange

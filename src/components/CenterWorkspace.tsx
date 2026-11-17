@@ -395,6 +395,7 @@ const BroadcastMonitor: React.FC<{
             scene={activeScene}
             slide={liveSlide}
             theme={theme}
+            enableAudio
             onCanvasReady={handleCanvasReady}
             className="absolute inset-0"
           />

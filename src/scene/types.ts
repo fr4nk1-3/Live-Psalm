@@ -82,7 +82,64 @@ export interface CameraElement extends BaseElement {
   mirror: boolean;
 }
 
-export type SceneElement = TextElement | ImageElement | ShapeElement | CameraElement;
+export interface CaptureElement extends BaseElement {
+  type: 'display' | 'window';
+  /** Desktop source id from the main process (screen:0:0, window:123:0). */
+  sourceId: string;
+  sourceName?: string;
+  fit: 'cover' | 'contain';
+  radius: number;
+}
+
+export type VideoDeviceElement = BaseElement & {
+  type: 'videoDevice';
+  deviceId: string;
+  fit: 'cover' | 'contain';
+  radius: number;
+  mirror: boolean;
+};
+
+export type AudioInputElement = BaseElement & {
+  type: 'audioInput';
+  deviceId: string;
+  muted: boolean;
+};
+
+export type MediaElement = BaseElement & {
+  type: 'media';
+  /** File URL, data URL or media library URL. */
+  src: string;
+  loop: boolean;
+  muted: boolean;
+  fit: 'cover' | 'contain';
+  radius: number;
+};
+
+export type SceneSourceElement = BaseElement & {
+  type: 'scene';
+  /** The nested scene document drawn inside this frame. */
+  sceneId: string;
+  fit: 'cover' | 'contain';
+  radius: number;
+};
+
+export type BrowserElement = BaseElement & {
+  type: 'browser';
+  url: string;
+  radius: number;
+};
+
+export type SceneElement =
+  | TextElement
+  | ImageElement
+  | ShapeElement
+  | CameraElement
+  | CaptureElement
+  | VideoDeviceElement
+  | AudioInputElement
+  | MediaElement
+  | SceneSourceElement
+  | BrowserElement;
 
 export interface TransitionSettings {
   type: 'cut' | 'fade' | 'crossfade' | 'slide-left' | 'zoom';
@@ -186,6 +243,103 @@ export function createImageElement(patch: Partial<ImageElement> = {}): ImageElem
   };
 }
 
+export function createCaptureElement(kind: 'display' | 'window', patch: Partial<CaptureElement> = {}): CaptureElement {
+  return {
+    type: kind,
+    sourceId: '',
+    sourceName: '',
+    fit: 'cover',
+    radius: 0,
+    id: createId('el'),
+    name: kind === 'display' ? 'Display capture' : 'Window capture',
+    zIndex: 1,
+    frame: { x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
+
+export function createVideoDeviceElement(patch: Partial<VideoDeviceElement> = {}): VideoDeviceElement {
+  return {
+    type: 'videoDevice',
+    deviceId: '',
+    fit: 'cover',
+    radius: 0,
+    mirror: true,
+    id: createId('el'),
+    name: 'Video capture device',
+    zIndex: 1,
+    frame: { x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
+
+export function createAudioInputElement(patch: Partial<AudioInputElement> = {}): AudioInputElement {
+  return {
+    type: 'audioInput',
+    deviceId: '',
+    muted: false,
+    id: createId('el'),
+    name: 'Audio input',
+    zIndex: 0,
+    frame: { x: 0, y: 0, width: 0, height: 0 },
+    visible: false,
+    locked: false,
+    ...patch
+  };
+}
+
+export function createMediaElement(patch: Partial<MediaElement> = {}): MediaElement {
+  return {
+    type: 'media',
+    src: '',
+    loop: true,
+    muted: true,
+    fit: 'contain',
+    radius: 12,
+    id: createId('el'),
+    name: 'Media',
+    zIndex: 2,
+    frame: { x: 660, y: 290, width: 600, height: 500 },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
+
+export function createSceneSourceElement(patch: Partial<SceneSourceElement> = {}): SceneSourceElement {
+  return {
+    type: 'scene',
+    sceneId: '',
+    fit: 'contain',
+    radius: 12,
+    id: createId('el'),
+    name: 'Scene',
+    zIndex: 2,
+    frame: { x: 660, y: 290, width: 600, height: 500 },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
+
+export function createBrowserElement(patch: Partial<BrowserElement> = {}): BrowserElement {
+  return {
+    type: 'browser',
+    url: 'https://',
+    radius: 8,
+    id: createId('el'),
+    name: 'Browser',
+    zIndex: 2,
+    frame: { x: 560, y: 240, width: 800, height: 600 },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
 export function createScene(name: string, patch: Partial<SceneDocument> = {}): SceneDocument {
   const now = Date.now();
   return {

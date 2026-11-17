@@ -1,5 +1,14 @@
 import { Slide, Theme } from '../types/presentation';
-import { SceneDocument, SceneElement, TextElement } from './types';
+import {
+  BrowserElement,
+  CaptureElement,
+  MediaElement,
+  SceneDocument,
+  SceneElement,
+  SceneSourceElement,
+  TextElement,
+  VideoDeviceElement
+} from './types';
 
 const imageCache = new Map<string, HTMLImageElement>();
 
@@ -20,6 +29,14 @@ export interface SceneRenderContext {
   slide: Slide | null;
   theme: Theme;
   videos?: Record<string, HTMLVideoElement | null>;
+  /** Media and capture videos, keyed by element id. */
+  media?: Record<string, HTMLVideoElement | null>;
+  /** Browser frames, keyed by element id. */
+  browsers?: Record<string, HTMLImageElement | null>;
+  /** Scene documents available for nested scene sources. */
+  scenes?: Record<string, SceneDocument>;
+  /** Nested scene depth, to stop a scene referencing itself. */
+  depth?: number;
 }
 
 export function resolveText(element: TextElement, context: SceneRenderContext): string {
@@ -182,29 +199,37 @@ function drawShapeElement(ctx: CanvasRenderingContext2D, element: Extract<SceneE
   ctx.fill();
 }
 
-function drawCameraElement(
+function placeholder(
   ctx: CanvasRenderingContext2D,
-  element: Extract<SceneElement, { type: 'camera' }>,
-  context: SceneRenderContext
+  frame: { x: number; y: number; width: number; height: number },
+  label: string
+) {
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = `500 ${Math.max(20, Math.round(frame.height * 0.07))}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, frame.x + frame.width / 2, frame.y + frame.height / 2);
+}
+
+function drawVideoSource(
+  ctx: CanvasRenderingContext2D,
+  element: { frame: { x: number; y: number; width: number; height: number }; fit?: 'cover' | 'contain'; radius?: number; mirror?: boolean },
+  video: HTMLVideoElement | null | undefined,
+  label: string
 ) {
   const frame = element.frame;
-  const video = context.videos?.[element.deviceId || 'default'] || null;
   ctx.save();
-  roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
+  roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius ?? 0);
   ctx.clip();
   if (!video || video.readyState < 2 || video.videoWidth === 0) {
-    ctx.fillStyle = '#16161a';
-    ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = `500 ${Math.max(20, Math.round(frame.height * 0.07))}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Camera', frame.x + frame.width / 2, frame.y + frame.height / 2);
+    placeholder(ctx, frame, label);
     ctx.restore();
     return;
   }
   const scale =
-    element.fit === 'cover'
+    (element.fit ?? 'cover') === 'cover'
       ? Math.max(frame.width / video.videoWidth, frame.height / video.videoHeight)
       : Math.min(frame.width / video.videoWidth, frame.height / video.videoHeight);
   const width = video.videoWidth * scale;
@@ -216,6 +241,75 @@ function drawCameraElement(
   } else {
     ctx.drawImage(video, frame.x + (frame.width - width) / 2, frame.y + (frame.height - height) / 2, width, height);
   }
+  ctx.restore();
+}
+
+function drawCameraElement(
+  ctx: CanvasRenderingContext2D,
+  element: Extract<SceneElement, { type: 'camera' }>,
+  context: SceneRenderContext
+) {
+  drawVideoSource(ctx, element, context.videos?.[element.deviceId || 'default'], 'Camera');
+}
+
+function drawCaptureElement(ctx: CanvasRenderingContext2D, element: CaptureElement, context: SceneRenderContext) {
+  const label = element.type === 'display' ? 'Display capture' : 'Window capture';
+  drawVideoSource(ctx, element, context.media?.[element.id], label);
+}
+
+function drawVideoDeviceElement(ctx: CanvasRenderingContext2D, element: VideoDeviceElement, context: SceneRenderContext) {
+  drawVideoSource(ctx, element, context.media?.[element.id], 'Video capture device');
+}
+
+function drawMediaElement(ctx: CanvasRenderingContext2D, element: MediaElement, context: SceneRenderContext) {
+  drawVideoSource(ctx, element, context.media?.[element.id], element.src ? 'Media loading…' : 'Media — choose a file');
+}
+
+function drawBrowserElement(ctx: CanvasRenderingContext2D, element: BrowserElement, context: SceneRenderContext) {
+  const frame = element.frame;
+  const image = context.browsers?.[element.id] || null;
+  ctx.save();
+  roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
+  ctx.clip();
+  if (!image || !image.naturalWidth) {
+    placeholder(ctx, frame, element.url && element.url !== 'https://' ? 'Browser loading…' : 'Browser — enter a URL');
+    ctx.restore();
+    return;
+  }
+  const scale = Math.min(frame.width / image.naturalWidth, frame.height / image.naturalHeight);
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+  ctx.drawImage(image, frame.x + (frame.width - width) / 2, frame.y + (frame.height - height) / 2, width, height);
+  ctx.restore();
+}
+
+function drawSceneSourceElement(
+  ctx: CanvasRenderingContext2D,
+  element: SceneSourceElement,
+  context: SceneRenderContext
+) {
+  const frame = element.frame;
+  const nested = element.sceneId ? context.scenes?.[element.sceneId] : undefined;
+  const depth = context.depth ?? 0;
+  ctx.save();
+  roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
+  ctx.clip();
+  if (!nested || depth > 2) {
+    placeholder(ctx, frame, nested ? 'Scene nesting too deep' : 'Scene — choose a scene');
+    ctx.restore();
+    return;
+  }
+  const nestedWidth = nested.canvas.width;
+  const nestedHeight = nested.canvas.height;
+  const scale =
+    element.fit === 'contain'
+      ? Math.min(frame.width / nestedWidth, frame.height / nestedHeight)
+      : Math.max(frame.width / nestedWidth, frame.height / nestedHeight);
+  ctx.translate(frame.x + (frame.width - nestedWidth * scale) / 2, frame.y + (frame.height - nestedHeight * scale) / 2);
+  ctx.scale(scale, scale);
+  drawScene(ctx, nested, { ...context, depth: depth + 1 }, nestedWidth, nestedHeight, false);
   ctx.restore();
 }
 
@@ -257,9 +351,10 @@ export function drawScene(
   scene: SceneDocument,
   context: SceneRenderContext,
   width: number,
-  height: number
+  height: number,
+  clear = true
 ) {
-  ctx.clearRect(0, 0, width, height);
+  if (clear) ctx.clearRect(0, 0, width, height);
   ctx.save();
   ctx.scale(width / scene.canvas.width, height / scene.canvas.height);
 
@@ -285,6 +380,11 @@ export function drawScene(
     else if (element.type === 'image') drawImageElement(ctx, element);
     else if (element.type === 'shape') drawShapeElement(ctx, element);
     else if (element.type === 'camera') drawCameraElement(ctx, element, context);
+    else if (element.type === 'display' || element.type === 'window') drawCaptureElement(ctx, element, context);
+    else if (element.type === 'videoDevice') drawVideoDeviceElement(ctx, element, context);
+    else if (element.type === 'media') drawMediaElement(ctx, element, context);
+    else if (element.type === 'scene') drawSceneSourceElement(ctx, element, context);
+    else if (element.type === 'browser') drawBrowserElement(ctx, element, context);
     ctx.restore();
   }
 
