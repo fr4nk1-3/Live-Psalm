@@ -8,17 +8,24 @@ import { sceneThumbnail } from './render';
 import { defaultScenes } from './presets';
 import { useSceneLibrary, sceneLibrary, getActiveScene } from './store';
 import { SceneDocument } from './types';
+import { SceneEditor } from './SceneEditor';
+import type { Slide, Theme } from '../types/presentation';
 
 /**
  * Scene library: prepare a scene, take it live, reorder, duplicate or delete.
  * The editor that changes element geometry arrives in the next phase; this
  * panel owns selection and lifecycle.
  */
-export const ScenePanel: React.FC<{ className?: string }> = ({ className }) => {
+export const ScenePanel: React.FC<{ className?: string; slide: Slide | null; theme: Theme }> = ({
+  className,
+  slide,
+  theme
+}) => {
   const library = useSceneLibrary();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const [draftName, setDraftName] = React.useState('');
   const [dragId, setDragId] = React.useState<string | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const activeScene = getActiveScene(library);
 
   const beginRename = (scene: SceneDocument) => {
@@ -104,6 +111,7 @@ export const ScenePanel: React.FC<{ className?: string }> = ({ className }) => {
                 setDragId(null);
               }}
               onClick={() => sceneLibrary.setPreviewScene(scene.id)}
+              onDoubleClick={() => setEditingId(scene.id)}
               className={cn(
                 'group flex cursor-pointer items-center gap-2 rounded-md border p-1.5 transition-colors',
                 isPreview ? 'border-border bg-accent/60' : 'border-transparent hover:bg-accent/30'
@@ -166,6 +174,7 @@ export const ScenePanel: React.FC<{ className?: string }> = ({ className }) => {
                 <DropdownMenuContent align="end" className="w-48" onClick={event => event.stopPropagation()}>
                   <DropdownMenuItem onSelect={() => sceneLibrary.setActiveScene(scene.id)}>Take live</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => sceneLibrary.setPreviewScene(scene.id)}>Preview</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setEditingId(scene.id)}>Edit in editor</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => beginRename(scene)}>Rename</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => sceneLibrary.duplicateScene(scene.id)}>Duplicate</DropdownMenuItem>
@@ -190,6 +199,14 @@ export const ScenePanel: React.FC<{ className?: string }> = ({ className }) => {
         Drag to reorder. Select a scene to prepare it, then Take to put it on air. The stream and the
         Broadcast monitor follow the live scene.
       </p>
+      {editingId && (
+        <SceneEditor
+          scene={library.scenes.find(scene => scene.id === editingId) || null}
+          slide={slide}
+          theme={theme}
+          onClose={() => setEditingId(null)}
+        />
+      )}
     </div>
   );
 };

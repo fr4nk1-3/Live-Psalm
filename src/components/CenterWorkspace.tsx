@@ -1010,7 +1010,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       {/* Operator drawers */}
       {activeDockTab === 'scenes' && (
         <div className="max-h-[300px] shrink-0 overflow-hidden border-b border-border bg-card/60 px-3 py-2">
-          <ScenePanel className="h-[268px]" />
+          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} />
         </div>
       )}
 
