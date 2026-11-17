@@ -6,6 +6,7 @@ import {
   MediaElement,
   SceneDocument,
   SceneElement,
+  PresentationElement,
   SceneSourceElement,
   TextElement,
   VideoDeviceElement
@@ -289,6 +290,94 @@ function drawBrowserElement(ctx: CanvasRenderingContext2D, element: BrowserEleme
   ctx.restore();
 }
 
+function drawPresentationElement(
+  ctx: CanvasRenderingContext2D,
+  element: PresentationElement,
+  context: SceneRenderContext
+) {
+  const frame = element.frame;
+  const slide = context.slide;
+  ctx.save();
+  roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
+  ctx.clip();
+
+  if (element.showBackground) {
+    const background = slide?.backgroundUrl;
+    const image = background ? getImage(background) : null;
+    if (image) {
+      const scale = Math.max(frame.width / image.naturalWidth, frame.height / image.naturalHeight);
+      const width = image.naturalWidth * scale;
+      const height = image.naturalHeight * scale;
+      ctx.drawImage(image, frame.x + (frame.width - width) / 2, frame.y + (frame.height - height) / 2, width, height);
+    } else {
+      ctx.fillStyle = '#0e0e10';
+      ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+    }
+  }
+
+  if (!slide) {
+    placeholder(ctx, frame, 'Live presentation');
+    ctx.restore();
+    return;
+  }
+
+  // Reuse the text painter with bindings, so the scene shows the live slide.
+  const padding = Math.round(frame.height * 0.06);
+  const referenceHeight = slide.bibleMeta ? Math.round(frame.height * 0.12) : 0;
+  const content: TextElement = {
+    type: 'text',
+    id: `${element.id}-content`,
+    name: 'Live content',
+    visible: true,
+    locked: true,
+    zIndex: 0,
+    frame: {
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height - referenceHeight
+    },
+    content: slide.content || '',
+    binding: 'slide.content',
+    fontFamily: context.theme.fontFamily || 'Inter',
+    fontSize: Math.max(24, Math.round(frame.height * 0.11)),
+    fontWeight: context.theme.fontWeight || '600',
+    color: context.theme.textColor || '#ffffff',
+    align: context.theme.align || 'center',
+    lineHeight: 1.25,
+    letterSpacing: 0,
+    shadow: true,
+    backgroundOpacity: 0,
+    padding,
+    radius: 0
+  };
+  drawTextElement(ctx, content, context);
+
+  if (slide.bibleMeta) {
+    const reference: TextElement = {
+      ...content,
+      id: `${element.id}-reference`,
+      name: 'Reference',
+      zIndex: 0,
+      frame: {
+        x: frame.x,
+        y: frame.y + frame.height - referenceHeight,
+        width: frame.width,
+        height: referenceHeight
+      },
+      content: '',
+      binding: 'slide.reference',
+      fontSize: Math.max(16, Math.round(frame.height * 0.055)),
+      color: 'rgba(255,255,255,0.75)',
+      shadow: true,
+      lineHeight: 1.2
+    };
+    drawTextElement(ctx, reference, context);
+  }
+
+  ctx.restore();
+}
+
 function drawSceneSourceElement(
   ctx: CanvasRenderingContext2D,
   element: SceneSourceElement,
@@ -388,6 +477,7 @@ export function drawScene(
     else if (element.type === 'videoDevice') drawVideoDeviceElement(ctx, element, context);
     else if (element.type === 'media') drawMediaElement(ctx, element, context);
     else if (element.type === 'scene') drawSceneSourceElement(ctx, element, context);
+    else if (element.type === 'presentation') drawPresentationElement(ctx, element, context);
     else if (element.type === 'browser') drawBrowserElement(ctx, element, context);
     ctx.restore();
   }

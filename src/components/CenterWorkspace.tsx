@@ -352,8 +352,9 @@ const BroadcastMonitor: React.FC<{
   activeAlert?: AudienceAlert | null;
   lowerThird?: { title?: string; content?: string; speed?: string } | null;
   countdownSeconds?: number;
+  mediaList?: MediaAsset[];
   onOpenStreamSettings?: () => void;
-}> = ({ liveSlide, theme, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl, activeAlert, lowerThird, countdownSeconds = 0, onOpenStreamSettings }) => {
+}> = ({ liveSlide, theme, audienceViewMode = 'near', itemVideoBgUrl, globalVideoBgUrl, activeAlert, lowerThird, countdownSeconds = 0, mediaList = [], onOpenStreamSettings }) => {
   const levels = useAudioLevels();
   const [audio] = useAudioSettings();
   const status = useStreamStatus();
@@ -397,6 +398,7 @@ const BroadcastMonitor: React.FC<{
             theme={theme}
             enableAudio
             sceneRole="broadcast"
+            mediaList={mediaList}
             onCanvasReady={handleCanvasReady}
             className="absolute inset-0"
           />
@@ -793,40 +795,16 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       {/* Preview and program monitors */}
-      <div className="flex shrink-0 items-start gap-4 border-b border-border px-4 py-3">
+      <div className="flex shrink-0 items-stretch gap-4 border-b border-border px-4 py-3">
         {/* Preview */}
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="state-label text-preview">Preview</span>
-            <div className="flex items-center gap-1">
-              <div className="flex rounded-sm border border-border bg-background/60 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setPreviewKind('slide')}
-                  className={cn(
-                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
-                    previewKind === 'slide' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Slides
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewKind('scene')}
-                  className={cn(
-                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
-                    previewKind === 'scene' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Scenes
-                </button>
-              </div>
-              <span className="min-w-0 truncate text-2xs text-muted-foreground">
-                {previewKind === 'scene'
-                  ? previewScene?.name || 'No scene'
-                  : previewSlide?.sectionLabel || previewSlide?.title || 'Nothing selected'}
-              </span>
-            </div>
+            <span className="min-w-0 truncate text-2xs text-muted-foreground">
+              {previewKind === 'scene'
+                ? previewScene?.name || 'No scene'
+                : previewSlide?.sectionLabel || previewSlide?.title || 'Nothing selected'}
+            </span>
           </header>
 
           <div
@@ -844,6 +822,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   theme={activeTheme}
                   enableCamera={false}
                   sceneRole="preview-scene"
+                  mediaList={mediaList}
                   className="absolute inset-0"
                 />
               ) : (
@@ -876,6 +855,29 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   : 'Choose a scene in the library'
                 : previewSlide?.content?.slice(0, 64) || 'Choose an item in the service'}
             </span>
+            <div className="flex shrink-0 items-center gap-1">
+              <div className="flex rounded-sm border border-border bg-background/60 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewKind('slide')}
+                  className={cn(
+                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
+                    previewKind === 'slide' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Slides
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewKind('scene')}
+                  className={cn(
+                    'h-5 rounded-[2px] px-1.5 text-2xs transition-colors',
+                    previewKind === 'scene' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Scenes
+                </button>
+              </div>
             {previewKind === 'scene' ? (
               <Button
                 size="xs"
@@ -895,6 +897,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                 Take live
               </Button>
             )}
+            </div>
           </footer>
         </section>
 
@@ -997,6 +1000,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
           activeAlert={activeAlert}
           lowerThird={activeLowerThirdText}
           countdownSeconds={countdownSeconds}
+          mediaList={mediaList}
           onOpenStreamSettings={onOpenStreamSettings}
         />
       </div>

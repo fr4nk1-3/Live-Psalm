@@ -1982,8 +1982,21 @@ export const App: React.FC = () => {
       setGlobalVideoBgUrl(mediaAsset.url);
     } else {
       setGlobalVideoBgUrl(null);
+      setItemVideoBgUrl(null);
       setThemes(prev =>
         prev.map(t => (t.id === activeTheme.id ? { ...t, backgroundUrl: mediaAsset.url } : t))
+      );
+      // "Every slide" must beat per-slide and per-item overrides.
+      setPlaylist(prev =>
+        prev.map(item => ({
+          ...item,
+          videoBackgroundUrl: undefined,
+          slides: item.slides.map(slide =>
+            slide.backgroundUrl || slide.backgroundType
+              ? { ...slide, backgroundUrl: undefined, backgroundType: undefined }
+              : slide
+          )
+        }))
       );
     }
     // Clear slide-specific background override on active preview/live slide if user explicitly applies Global BG

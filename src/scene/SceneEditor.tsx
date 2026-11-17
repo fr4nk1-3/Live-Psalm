@@ -22,11 +22,13 @@ import {
   createCaptureElement,
   createImageElement,
   createMediaElement,
+  createPresentationElement,
   createSceneSourceElement,
   createShapeElement,
   createTextElement,
   createVideoDeviceElement,
   MediaElement,
+  PresentationElement,
   SceneSourceElement,
   VideoDeviceElement,
   ImageElement,
@@ -442,6 +444,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
             <Button size="xs" variant="secondary" onClick={() => addElement(createBrowserElement())}>
               Browser
             </Button>
+            <Button size="xs" variant="secondary" onClick={() => addElement(createPresentationElement())}>
+              Presentation
+            </Button>
             <span className="mx-1 h-4 w-px bg-border" aria-hidden />
             <Button size="xs" variant="ghost" onClick={undo} disabled={historyIndex <= 0}>
               Undo
@@ -530,7 +535,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                 style={{ width: draft.canvas.width * zoom, height: draft.canvas.height * zoom }}
                 onPointerDown={onStagePointerDown}
               >
-                <SceneCanvas scene={draft} slide={slide} theme={theme} className="absolute inset-0" />
+                <SceneCanvas scene={draft} slide={slide} theme={theme} mediaList={mediaList} className="absolute inset-0" />
 
                 {selected && (
                   <div
@@ -633,6 +638,12 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                   )}
                   {selected.type === 'camera' && (
                     <CameraProperties element={selected} onChange={patch => patchElement(selected.id, patch, false)} />
+                  )}
+                  {selected.type === 'presentation' && (
+                    <PresentationProperties
+                      element={selected}
+                      onChange={patch => patchElement(selected.id, patch as Partial<SceneElement>, false)}
+                    />
                   )}
                   {(selected.type === 'display' ||
                     selected.type === 'window' ||
@@ -874,6 +885,33 @@ const SourceProperties: React.FC<{
 
   return null;
 };
+
+const PresentationProperties: React.FC<{
+  element: PresentationElement;
+  onChange: (patch: Partial<PresentationElement>) => void;
+}> = ({ element, onChange }) => (
+  <>
+    <Field label="Fit">
+      <Select value={element.fit} onValueChange={value => onChange({ fit: value as PresentationElement['fit'] })}>
+        <SelectTrigger className="h-7 text-2xs" aria-label="Presentation fit">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="contain">Contain</SelectItem>
+          <SelectItem value="cover">Cover</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>
+    <div className="flex items-center justify-between">
+      <Label className="text-2xs">Slide background</Label>
+      <Switch
+        checked={element.showBackground}
+        onCheckedChange={showBackground => onChange({ showBackground })}
+        aria-label="Show slide background"
+      />
+    </div>
+  </>
+);
 const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial<TextElement>) => void }> = ({
   element,
   onChange

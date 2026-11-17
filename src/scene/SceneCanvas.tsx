@@ -2,6 +2,7 @@ import React from 'react';
 import { Slide, Theme } from '../types/presentation';
 import { drawScene } from './render';
 import { SceneDocument } from './types';
+import type { MediaAsset } from '../types/presentation';
 import { captureDesktop } from './sources';
 import { useSceneLibrary } from './store';
 import { setSceneAudioTracks } from './sceneAudio';
@@ -19,6 +20,8 @@ interface SceneCanvasProps {
   enableAudio?: boolean;
   /** Marks the canvas so the encoder can find it in the document. */
   sceneRole?: string;
+  /** Library assets available to image and media elements. */
+  mediaList?: MediaAsset[];
 }
 
 interface WebviewElement extends HTMLElement {
@@ -36,7 +39,8 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   onCanvasReady,
   enableCamera = true,
   enableAudio = false,
-  sceneRole
+  sceneRole,
+  mediaList = []
 }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videosRef = React.useRef<Record<string, HTMLVideoElement>>({});
@@ -46,7 +50,14 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   const webviewsRef = React.useRef<Record<string, WebviewElement>>({});
   const hostRef = React.useRef<HTMLDivElement>(null);
   const [sourceError, setSourceError] = React.useState<string | null>(null);
-  const [assets, setAssets] = React.useState<Record<string, string>>({});
+  const [vaultAssets, setVaultAssets] = React.useState<Record<string, string>>({});
+  const assets = React.useMemo(() => {
+    const map: Record<string, string> = { ...vaultAssets };
+    mediaList.forEach(asset => {
+      if (asset.id && asset.url) map[asset.id] = asset.url;
+    });
+    return map;
+  }, [vaultAssets, mediaList]);
   const audioStreamsRef = React.useRef<Record<string, MediaStream>>({});
   const audioElements = React.useMemo(() => scene.elements.filter(element => element.type === 'audioInput'), [scene]);
   const audioKey = audioElements.map(element => (element.type === 'audioInput' ? element.id + ':' + element.deviceId : '')).join('|');
@@ -102,7 +113,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   React.useEffect(() => {
     let active = true;
     void loadAssetUrls().then(map => {
-      if (active) setAssets(map);
+      if (active) setVaultAssets(map);
     });
     return () => {
       active = false;
@@ -256,7 +267,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       const webview = document.createElement('webview') as WebviewElement;
       webview.src = url;
       webview.style.cssText =
-        'position:fixed;left:-10000px;top:0;width:1280px;height:720px;opacity:0;pointer-events:none;';
+        'position:absolute;left:0;top:0;width:1280px;height:720px;opacity:0.01;pointer-events:none;z-index:-1;';
       webview.setAttribute('allowpopups', 'false');
       host.appendChild(webview);
       webviewsRef.current[element.id] = webview;
@@ -338,7 +349,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
         className="block h-full w-full rounded border border-border bg-black"
         style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
       />
-      <div ref={hostRef} aria-hidden className="pointer-events-none absolute h-0 w-0 overflow-hidden" />
+      <div ref={hostRef} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden" />
       {sourceError && enableCamera && <p className="mt-1 text-2xs text-warning">{sourceError}</p>}
     </div>
   );

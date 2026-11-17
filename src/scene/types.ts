@@ -133,6 +133,14 @@ export type BrowserElement = BaseElement & {
   radius: number;
 };
 
+export type PresentationElement = BaseElement & {
+  type: 'presentation';
+  /** Renders the live slide (text and, optionally, its background). */
+  fit: 'contain' | 'cover';
+  radius: number;
+  showBackground: boolean;
+};
+
 export type SceneElement =
   | TextElement
   | ImageElement
@@ -143,7 +151,8 @@ export type SceneElement =
   | AudioInputElement
   | MediaElement
   | SceneSourceElement
-  | BrowserElement;
+  | BrowserElement
+  | PresentationElement;
 
 export interface TransitionSettings {
   type: 'cut' | 'fade' | 'crossfade' | 'slide-left' | 'zoom';
@@ -344,6 +353,22 @@ export function createBrowserElement(patch: Partial<BrowserElement> = {}): Brows
     ...patch
   };
 }
+export function createPresentationElement(patch: Partial<PresentationElement> = {}): PresentationElement {
+  return {
+    type: 'presentation',
+    fit: 'contain',
+    radius: 10,
+    showBackground: false,
+    id: createId('el'),
+    name: 'Live presentation',
+    zIndex: 2,
+    frame: { x: 560, y: 260, width: 800, height: 560 },
+    visible: true,
+    locked: false,
+    ...patch
+  };
+}
+
 export function createScene(name: string, patch: Partial<SceneDocument> = {}): SceneDocument {
   const now = Date.now();
   return {
