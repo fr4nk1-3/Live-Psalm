@@ -5,6 +5,7 @@ import { SceneDocument } from './types';
 import { captureDesktop } from './sources';
 import { useSceneLibrary } from './store';
 import { setSceneAudioTracks } from './sceneAudio';
+import { loadAssetUrls, resolveSource } from './assetUrls';
 
 interface SceneCanvasProps {
   scene: SceneDocument;
@@ -16,6 +17,8 @@ interface SceneCanvasProps {
   enableCamera?: boolean;
   /** Broadcast surfaces add scene audio inputs to the stream. */
   enableAudio?: boolean;
+  /** Marks the canvas so the encoder can find it in the document. */
+  sceneRole?: string;
 }
 
 interface WebviewElement extends HTMLElement {
@@ -32,7 +35,8 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   className,
   onCanvasReady,
   enableCamera = true,
-  enableAudio = false
+  enableAudio = false,
+  sceneRole
 }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videosRef = React.useRef<Record<string, HTMLVideoElement>>({});
@@ -42,6 +46,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   const webviewsRef = React.useRef<Record<string, WebviewElement>>({});
   const hostRef = React.useRef<HTMLDivElement>(null);
   const [sourceError, setSourceError] = React.useState<string | null>(null);
+  const [assets, setAssets] = React.useState<Record<string, string>>({});
   const audioStreamsRef = React.useRef<Record<string, MediaStream>>({});
   const audioElements = React.useMemo(() => scene.elements.filter(element => element.type === 'audioInput'), [scene]);
   const audioKey = audioElements.map(element => (element.type === 'audioInput' ? element.id + ':' + element.deviceId : '')).join('|');
@@ -93,6 +98,16 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   const browserKey = browserElements
     .map(element => (element.type === 'browser' ? `${element.id}:${element.url}` : ''))
     .join('|');
+
+  React.useEffect(() => {
+    let active = true;
+    void loadAssetUrls().then(map => {
+      if (active) setAssets(map);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     onCanvasReady?.(canvasRef.current);
@@ -153,9 +168,10 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
             streamsRef.current[element.id] = stream;
             mediaRef.current[element.id] = videoFor(stream);
           } else if (element.type === 'media') {
-            if (!element.src || mediaRef.current[element.id]) continue;
+            const resolved = resolveSource(element.src, element.assetId, assets);
+            if (!resolved || mediaRef.current[element.id]) continue;
             const video = document.createElement('video');
-            video.src = element.src;
+            video.src = resolved;
             video.loop = element.loop;
             video.muted = element.muted;
             video.playsInline = true;
@@ -185,7 +201,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       videosRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceKey, enableCamera]);
+  }, [sourceKey, enableCamera, assets]);
 
 
   // Scene audio inputs contribute tracks to the stream.
@@ -295,6 +311,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
             videos: videosRef.current,
             media: mediaRef.current,
             browsers: browsersRef.current,
+            assets,
             scenes: scenesById
           },
           canvas.width,
@@ -309,7 +326,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       running = false;
       cancelAnimationFrame(frame);
     };
-  }, [scene, slide, theme, scenesById]);
+  }, [scene, slide, theme, scenesById, assets]);
 
   return (
     <div className={className}>

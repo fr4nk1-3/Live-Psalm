@@ -36,7 +36,7 @@ import {
   ShapeElement,
   TextElement
 } from './types';
-import { Slide, Theme } from '../types/presentation';
+import { MediaAsset, Slide, Theme } from '../types/presentation';
 
 type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'rotate';
 
@@ -61,9 +61,10 @@ interface SceneEditorProps {
   onClose: () => void;
   slide: Slide | null;
   theme: Theme;
+  mediaList?: MediaAsset[];
 }
 
-export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide, theme }) => {
+export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide, theme, mediaList = [] }) => {
   const [draft, setDraft] = React.useState<SceneDocument | null>(scene);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [zoom, setZoom] = React.useState(0.5);
@@ -71,6 +72,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
   const [guides, setGuides] = React.useState<{ x?: number; y?: number }>({});
   const [history, setHistory] = React.useState<SceneDocument[]>(scene ? [scene] : []);
   const [historyIndex, setHistoryIndex] = React.useState(0);
+  const [layerDragId, setLayerDragId] = React.useState<string | null>(null);
   const stageRef = React.useRef<HTMLDivElement>(null);
   const stageContainerRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<{
@@ -363,6 +365,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
     if (selectedId === elementId) setSelectedId(null);
   };
 
+  const reorderLayers = (sourceId: string, targetId: string) => {
+    if (!draft || sourceId === targetId) return;
+    const topFirst = [...draft.elements].sort((a, b) => b.zIndex - a.zIndex);
+    const from = topFirst.findIndex(element => element.id === sourceId);
+    const to = topFirst.findIndex(element => element.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = topFirst.splice(from, 1);
+    topFirst.splice(to, 0, moved);
+    apply({
+      ...draft,
+      elements: topFirst.map((element, index) => ({ ...element, zIndex: topFirst.length - 1 - index }))
+    });
+  };
+
   const reorderElement = (elementId: string, direction: 'up' | 'down') => {
     if (!draft) return;
     const ordered = [...draft.elements].sort((a, b) => a.zIndex - b.zIndex);
@@ -462,9 +478,19 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
               {ordered.map(element => (
                 <div
                   key={element.id}
+                  draggable
+                  onDragStart={() => setLayerDragId(element.id)}
+                  onDragOver={event => event.preventDefault()}
+                  onDrop={event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (layerDragId && layerDragId !== element.id) reorderLayers(layerDragId, element.id);
+                    setLayerDragId(null);
+                  }}
+                  onDragEnd={() => setLayerDragId(null)}
                   onClick={() => setSelectedId(element.id)}
                   className={cn(
-                    'flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1 text-2xs',
+                    'flex cursor-grab items-center gap-1 rounded-sm px-1.5 py-1 text-2xs',
                     selectedId === element.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/40'
                   )}
                 >
@@ -599,7 +625,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                     <ShapeProperties element={selected} onChange={patch => patchElement(selected.id, patch, false)} />
                   )}
                   {selected.type === 'image' && (
-                    <ImageProperties element={selected} onChange={patch => patchElement(selected.id, patch, false)} />
+                    <ImageProperties
+                      element={selected}
+                      mediaList={mediaList}
+                      onChange={patch => patchElement(selected.id, patch, false)}
+                    />
                   )}
                   {selected.type === 'camera' && (
                     <CameraProperties element={selected} onChange={patch => patchElement(selected.id, patch, false)} />
@@ -613,6 +643,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                     selected.type === 'browser') && (
                     <SourceProperties
                       element={selected}
+                      mediaList={mediaList}
                       currentSceneId={scene.id}
                       onChange={patch => patchElement(selected.id, patch as Partial<SceneElement>, false)}
                     />
@@ -668,8 +699,9 @@ type SourceElement =
 const SourceProperties: React.FC<{
   element: SourceElement;
   currentSceneId: string;
+  mediaList: MediaAsset[];
   onChange: (patch: Partial<SourceElement>) => void;
-}> = ({ element, currentSceneId, onChange }) => {
+}> = ({ element, currentSceneId, mediaList, onChange }) => {
   const library = useSceneLibrary();
   const [desktopSources, setDesktopSources] = React.useState<{ id: string; name: string; type: string }[]>([]);
   const [devices, setDevices] = React.useState<MediaDeviceInfo[]>([]);
@@ -762,9 +794,30 @@ const SourceProperties: React.FC<{
   }
 
   if (element.type === 'media') {
+    const videos = mediaList.filter(asset => asset.type === 'video');
     return (
       <>
-        <Field label="Media URL" hint="A video file URL, data URL or media library URL.">
+        {videos.length > 0 && (
+          <Field label="Media library">
+            <Select
+              value={element.assetId || 'none'}
+              onValueChange={value => onChange({ assetId: value === 'none' ? undefined : value, src: '' } as Partial<SourceElement>)}
+            >
+              <SelectTrigger className="h-7 text-2xs" aria-label="Media asset">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Choose a video…</SelectItem>
+                {videos.map(asset => (
+                  <SelectItem key={asset.id} value={asset.id}>
+                    {asset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        <Field label="Media URL" hint="A file URL or data URL, used when no library asset is chosen.">
           <Input value={element.src} onChange={event => onChange({ src: event.target.value })} className="h-7 text-2xs" />
         </Field>
         <Field label="Fit">
@@ -929,11 +982,34 @@ const ShapeProperties: React.FC<{ element: ShapeElement; onChange: (patch: Parti
   </>
 );
 
-const ImageProperties: React.FC<{ element: ImageElement; onChange: (patch: Partial<ImageElement>) => void }> = ({
-  element,
-  onChange
-}) => (
+const ImageProperties: React.FC<{
+  element: ImageElement;
+  mediaList: MediaAsset[];
+  onChange: (patch: Partial<ImageElement>) => void;
+}> = ({ element, mediaList, onChange }) => {
+  const images = mediaList.filter(asset => asset.type === 'image' || asset.type === 'logo');
+  return (
   <>
+    {images.length > 0 && (
+      <Field label="Media library">
+        <Select
+          value={element.assetId || 'none'}
+          onValueChange={value => onChange({ assetId: value === 'none' ? undefined : value, src: '' })}
+        >
+          <SelectTrigger className="h-7 text-2xs" aria-label="Image asset">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Choose an image…</SelectItem>
+            {images.map(asset => (
+              <SelectItem key={asset.id} value={asset.id}>
+                {asset.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    )}
     <Field label="Image URL" hint="Paste a URL or data URL from the media library.">
       <Input value={element.src} onChange={event => onChange({ src: event.target.value })} className="h-7 text-2xs" />
     </Field>
@@ -949,7 +1025,8 @@ const ImageProperties: React.FC<{ element: ImageElement; onChange: (patch: Parti
       </Select>
     </Field>
   </>
-);
+  );
+};
 
 const CameraProperties: React.FC<{ element: CameraElement; onChange: (patch: Partial<CameraElement>) => void }> = ({
   element,

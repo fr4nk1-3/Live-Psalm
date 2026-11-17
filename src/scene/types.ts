@@ -63,6 +63,8 @@ export interface TextElement extends BaseElement {
 export interface ImageElement extends BaseElement {
   type: 'image';
   src: string;
+  /** Media library asset id; preferred over src. */
+  assetId?: string;
   fit: 'cover' | 'contain';
   radius: number;
 }
@@ -109,6 +111,8 @@ export type MediaElement = BaseElement & {
   type: 'media';
   /** File URL, data URL or media library URL. */
   src: string;
+  /** Media library asset id; preferred over src. */
+  assetId?: string;
   loop: boolean;
   muted: boolean;
   fit: 'cover' | 'contain';

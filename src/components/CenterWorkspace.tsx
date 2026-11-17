@@ -42,7 +42,7 @@ import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useA
 import { audioMonitor } from '../services/audioMonitor';
 import { SceneCanvas } from '../scene/SceneCanvas';
 import { ScenePanel } from '../scene/ScenePanel';
-import { getActiveScene, useSceneLibrary } from '../scene/store';
+import { getActiveScene, getPreviewScene, sceneLibrary, useSceneLibrary } from '../scene/store';
 import { setSceneCanvas } from '../services/sceneCanvas';
 
 const WORKSPACE_QUICK_BIBLE_VERSIONS = [
@@ -374,10 +374,10 @@ const BroadcastMonitor: React.FC<{
     audio.source === 'program' ? 'Programme audio' : audio.source === 'silent' ? 'Silent' : 'Microphone';
 
   return (
-    <section className="hidden min-w-0 flex-[0.92] flex-col lg:flex">
+    <section className="flex min-w-0 flex-1 flex-col">
       <header className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className={cn('state-label', status.live ? 'text-live' : 'text-muted-foreground')}>Broadcast</span>
-        <span className={cn('min-w-0 truncate text-2xs', status.live ? 'text-live' : 'text-muted-foreground')}>
+        <span className={cn('state-label', status.live ? 'text-emerald-400' : 'text-muted-foreground')}>Broadcast</span>
+        <span className={cn('min-w-0 truncate text-2xs', status.live ? 'text-emerald-400' : 'text-muted-foreground')}>
           {status.live ? `Live${status.platform ? ` · ${status.platform}` : ''}` : 'Idle'}
         </span>
       </header>
@@ -385,7 +385,7 @@ const BroadcastMonitor: React.FC<{
       <div
         className={cn(
           'relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border bg-black',
-          status.live ? 'border-live/60' : 'border-border'
+          status.live ? 'border-emerald-500/60' : 'border-border'
         )}
         style={{ aspectRatio: '16/9', containerType: 'size' }}
         title="What the live stream is sending"
@@ -396,6 +396,7 @@ const BroadcastMonitor: React.FC<{
             slide={liveSlide}
             theme={theme}
             enableAudio
+            sceneRole="broadcast"
             onCanvasReady={handleCanvasReady}
             className="absolute inset-0"
           />
@@ -499,6 +500,9 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   const [autoAdvanceSec, setAutoAdvanceSec] = useState<number>(0);
 
   // ProPresenter Live Operator Dock Tab ('none' | 'bgs' | 'stage-msg' | 'pager' | 'pads')
+  const sceneState = useSceneLibrary();
+  const previewScene = getPreviewScene(sceneState) || sceneState.scenes[0] || null;
+  const liveScene = getActiveScene(sceneState) || sceneState.scenes[0] || null;
   const [activeDockTab, setActiveDockTab] = useState<'none' | 'scenes' | 'bgs' | 'stage-msg' | 'pager' | 'pads'>('none');
   const [quickBgScope, setQuickBgScope] = useState<'global' | 'item' | 'slide'>('global');
 
@@ -787,7 +791,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
           <header className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="state-label text-preview">Preview</span>
             <span className="min-w-0 truncate text-2xs text-muted-foreground">
-              {previewSlide ? previewSlide.sectionLabel || previewSlide.title || 'Slide' : 'Nothing selected'}
+              {previewScene ? previewScene.name : 'No scene'}
             </span>
           </header>
 
@@ -798,34 +802,32 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             style={{ aspectRatio: '16/9', containerType: 'size' }}
             title="Drop a background here to apply it to this item"
           >
-            {previewSlide ? (
-              <SlideCanvas
+            {previewScene ? (
+              <SceneCanvas
+                scene={previewScene}
                 slide={previewSlide}
                 theme={activeTheme}
-                label="Preview"
-                isLive={false}
-                dimmed={true}
-                itemVideoBgUrl={activeItem?.videoBackgroundUrl}
-                globalVideoBgUrl={globalVideoBgUrl}
+                enableCamera={false}
+                className="absolute inset-0"
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xs text-white/30">No slide in preview</span>
+                <span className="text-2xs text-white/30">No scene in preview</span>
               </div>
             )}
           </div>
 
           <footer className="mt-2 flex items-center justify-between gap-2">
             <span className="min-w-0 truncate text-2xs text-muted-foreground">
-              {previewSlide?.content?.slice(0, 64) || 'Choose an item in the service'}
+              {previewScene ? `${previewScene.elements.length} elements` : 'Choose a scene in the library'}
             </span>
             <Button
               size="xs"
               variant="secondary"
-              disabled={!previewSlide}
-              onClick={() => previewSlide && onSendSlideLive(previewSlide)}
+              disabled={!previewScene}
+              onClick={() => previewScene && sceneLibrary.setActiveScene(previewScene.id)}
             >
-              Take live
+              Take to programme
             </Button>
           </footer>
         </section>
@@ -847,16 +849,12 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             style={{ aspectRatio: '16/9', containerType: 'size' }}
             title="Drop a background here to set the live layer background for every slide"
           >
-            {liveSlide ? (
-              <SlideCanvas
+            {liveScene ? (
+              <SceneCanvas
+                scene={liveScene}
                 slide={liveSlide}
                 theme={activeTheme}
-                label="Program"
-                isLive={true}
-                audienceViewMode={audienceViewMode}
-                dimmed={false}
-                itemVideoBgUrl={activeItem?.videoBackgroundUrl}
-                globalVideoBgUrl={globalVideoBgUrl}
+                className="absolute inset-0"
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
@@ -1011,7 +1009,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       {/* Operator drawers */}
       {activeDockTab === 'scenes' && (
         <div className="max-h-[300px] shrink-0 overflow-hidden border-b border-border bg-card/60 px-3 py-2">
-          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} />
+          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} mediaList={mediaList} />
         </div>
       )}
 

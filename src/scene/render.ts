@@ -1,4 +1,5 @@
 import { Slide, Theme } from '../types/presentation';
+import { resolveSource } from './assetUrls';
 import {
   BrowserElement,
   CaptureElement,
@@ -37,6 +38,8 @@ export interface SceneRenderContext {
   scenes?: Record<string, SceneDocument>;
   /** Nested scene depth, to stop a scene referencing itself. */
   depth?: number;
+  /** Media library asset id to object URL. */
+  assets?: Record<string, string>;
 }
 
 export function resolveText(element: TextElement, context: SceneRenderContext): string {
@@ -44,9 +47,9 @@ export function resolveText(element: TextElement, context: SceneRenderContext): 
   const { slide, theme } = context;
   switch (element.binding) {
     case 'slide.title':
-      return slide?.title || 'Untitled';
+      return slide?.title || element.content;
     case 'slide.content':
-      return slide?.content || 'Nothing is being projected';
+      return slide?.content || element.content;
     case 'slide.subtitle':
       return slide?.subtitle || '';
     case 'slide.reference':
@@ -156,9 +159,9 @@ function drawTextElement(ctx: CanvasRenderingContext2D, element: TextElement, co
   ctx.shadowOffsetY = 0;
 }
 
-function drawImageElement(ctx: CanvasRenderingContext2D, element: Extract<SceneElement, { type: 'image' }>) {
+function drawImageElement(ctx: CanvasRenderingContext2D, element: Extract<SceneElement, { type: 'image' }>, context: SceneRenderContext) {
   const frame = element.frame;
-  const image = getImage(element.src);
+  const image = getImage(resolveSource(element.src, element.assetId, context.assets));
   ctx.save();
   roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
   ctx.clip();
@@ -262,7 +265,8 @@ function drawVideoDeviceElement(ctx: CanvasRenderingContext2D, element: VideoDev
 }
 
 function drawMediaElement(ctx: CanvasRenderingContext2D, element: MediaElement, context: SceneRenderContext) {
-  drawVideoSource(ctx, element, context.media?.[element.id], element.src ? 'Media loading…' : 'Media — choose a file');
+  const hasSource = Boolean(element.src || element.assetId);
+  drawVideoSource(ctx, element, context.media?.[element.id], hasSource ? 'Media loading…' : 'Media — choose a file');
 }
 
 function drawBrowserElement(ctx: CanvasRenderingContext2D, element: BrowserElement, context: SceneRenderContext) {
@@ -377,7 +381,7 @@ export function drawScene(
       );
     }
     if (element.type === 'text') drawTextElement(ctx, element, context);
-    else if (element.type === 'image') drawImageElement(ctx, element);
+    else if (element.type === 'image') drawImageElement(ctx, element, context);
     else if (element.type === 'shape') drawShapeElement(ctx, element);
     else if (element.type === 'camera') drawCameraElement(ctx, element, context);
     else if (element.type === 'display' || element.type === 'window') drawCaptureElement(ctx, element, context);

@@ -125,6 +125,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const audioLevels = useAudioLevels();
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [lutPath, setLutPath] = useState<string>(() => localStorage.getItem('live_psalms_stream_lut') || '');
   const sceneLibrary = useSceneLibrary();
   const activeScene = getActiveScene(sceneLibrary);
 
@@ -317,7 +318,9 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       return;
     }
 
-    const canvas = getSceneCanvas();
+    // Prefer the mounted broadcast canvas; a registry reference can outlive a remount.
+    const canvas =
+      document.querySelector<HTMLCanvasElement>('canvas[data-scene-role="broadcast"]') || getSceneCanvas();
     if (!canvas) {
       setStreamLog(['❌ The scene preview is not ready yet.']);
       return;
@@ -334,6 +337,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         bitrate: quality.bitrate,
         platform: activePlatform,
         mode: 'scene',
+        lut: lutPath,
         audio: {
           source: audio.source,
           device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
@@ -486,6 +490,41 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <FieldGroup
+            title="Look"
+            description="A 3D LUT (.cube) is applied by the encoder, so it lands in the stream feed."
+          >
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
+                {lutPath ? lutPath : 'No LUT — colours pass through unchanged'}
+              </span>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={async () => {
+                  const selected = await ipc.invoke('browse-lut');
+                  if (selected) {
+                    setLutPath(selected);
+                    localStorage.setItem('live_psalms_stream_lut', selected);
+                  }
+                }}
+              >
+                Choose LUT…
+              </Button>
+              {lutPath && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    setLutPath('');
+                    localStorage.removeItem('live_psalms_stream_lut');
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </FieldGroup>
           <FieldGroup
             title="Scene"
             description="Scenes are prepared in the Scenes panel. The stream sends whatever is live."

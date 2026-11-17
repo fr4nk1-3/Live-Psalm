@@ -607,6 +607,15 @@ ipcMain.handle('check-ffmpeg', () => probeFfmpeg());
       return { error: error instanceof Error ? error.message : String(error) };
     }
   });
+ipcMain.handle('browse-lut', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose a 3D LUT',
+    properties: ['openFile'],
+    filters: [{ name: '3D LUT', extensions: ['cube', '3dl', 'dat'] }]
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
 ipcMain.handle('browse-ffmpeg', async () => {
   const options = {
     title: 'Locate ffmpeg',
@@ -735,7 +744,7 @@ function getStreamCaptureRegion() {
   };
 }
 
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene' }) => {
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '' }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
@@ -763,9 +772,17 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       if (!ffmpegPath) {
         return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
       }
+      // Optional creative LUT, applied on the encode path.
+      const lutArgs = [];
+      if (typeof lut === 'string' && lut.trim()) {
+        const normalizedLut = lut.trim().replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+        lutArgs.push('-vf', `lut3d=file='${normalizedLut}'`);
+      }
+
       const sceneArgs = [
         '-f', 'webm',
         '-i', 'pipe:0',
+        ...lutArgs,
         '-c:v', 'libx264',
         '-preset', 'veryfast',
         '-tune', 'zerolatency',
