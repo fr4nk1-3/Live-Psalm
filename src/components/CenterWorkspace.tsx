@@ -42,6 +42,7 @@ import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useA
 import { audioMonitor } from '../services/audioMonitor';
 import { SceneCanvas } from '../scene/SceneCanvas';
 import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
+import { getOutputFontSize } from '../utils/fontSize';
 import { ScenePanel } from '../scene/ScenePanel';
 import { getActiveScene, getPreviewScene, sceneLibrary, useSceneLibrary } from '../scene/store';
 import { setSceneCanvas } from '../services/sceneCanvas';
@@ -186,35 +187,35 @@ const SlideCanvas: React.FC<{
   const [liveTimecode, setLiveTimecode] = useState<{ current: number; duration: number } | null>(null);
   const textContainerRef = React.useRef<HTMLDivElement>(null);
   const textContentRef = React.useRef<HTMLDivElement>(null);
-  const [frameHeight, setFrameHeight] = useState(0);
+  // The monitor reproduces the audience layout in a fixed 1920x1080 design
+  // space and scales it to the frame, so type, wrapping and spacing match.
+  const [frameSize, setFrameSize] = useState({ width: 0, height: 0 });
   React.useEffect(() => {
     const element = textContainerRef.current?.parentElement;
     if (!element || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(entries => {
-      const height = entries[0]?.contentRect.height || 0;
-      if (height > 0) setFrameHeight(Math.round(height));
+      const rect = entries[0]?.contentRect;
+      if (rect && rect.width > 0 && rect.height > 0) {
+        setFrameSize({ width: rect.width, height: rect.height });
+      }
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  // Mirror the audience typography: the theme size is scaled from the 1080p
-  // design space to this frame, then reduced only if it would not fit.
-  const designSized = React.useMemo(
-    () => getFlexibleFontSize(slide?.content || '', theme.fontSize || 48),
-    [slide?.content, theme.fontSize]
-  );
-  // The monitor is a scaled view of the stage: keep the audience proportion and
-  // let the theme size slider move it, with a floor so small frames stay legible.
-  const themeScale = (theme.fontSize || 74) / 74;
-  const designPx = parseFloat(designSized.fontSize) || theme.fontSize || 48;
-  const targetPx = frameHeight
-    ? Math.max(7, Math.round(frameHeight * 0.15 * themeScale))
-    : Math.round(designPx);
-  const fittedPx = useAutoFitFontSize(
-    textContainerRef,
-    textContentRef,
-    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, targetPx],
-    { minPx: 7, maxPx: targetPx, startVw: 2.4 }
+  const designScale = frameSize.width ? frameSize.width / 1920 : 0;
+  const outputSizing = React.useMemo(() => {
+    const baseVw = ((theme.fontSize || 48) / 1920) * 100;
+    return getOutputFontSize(slide?.content || '', baseVw, 1920, audienceViewMode);
+  }, [slide?.content, theme.fontSize, audienceViewMode]);
+  const designMaxWidthPct = parseFloat(outputSizing.maxWidth) || 88;
+  const designFontPx = (parseFloat(outputSizing.fontSize) / 100) * 1920;
+  const designContainerRef = React.useRef<HTMLDivElement>(null);
+  const designTextRef = React.useRef<HTMLDivElement>(null);
+  const fittedDesignPx = useAutoFitFontSize(
+    designContainerRef,
+    designTextRef,
+    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, audienceViewMode, frameSize.width],
+    { minPx: 16, maxPx: 160, startVw: 6.5 }
   );
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
@@ -325,53 +326,64 @@ const SlideCanvas: React.FC<{
         </div>
       )}
 
-      {/* Slide text */}
-      <div ref={textContainerRef} className="relative z-10 flex h-full w-full flex-col items-center justify-center overflow-hidden px-[6%] text-center">
-        {slide ? (
-          isPureMediaSlide ? null : (
-            <>
-              {(slide.title || slide.sectionLabel) && (
-                <div
-                  className="mb-[0.8em] shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-black/80 px-[1.1em] py-[0.35em] font-black uppercase tracking-[0.25em] text-white/60"
-                  style={{ fontSize: `clamp(7px, ${(fontScale * 2.6).toFixed(2)}cqh, 12px)` }}
-                >
-                  {slide.title || slide.sectionLabel}
-                </div>
-              )}
-              <div
-                ref={textContentRef}
-                className="w-full whitespace-pre-line font-extrabold text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
-                style={{
-                  fontFamily: theme.fontFamily,
-                  fontSize: fittedPx ? `${fittedPx}px` : `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
-                  lineHeight: designSized.lineHeight,
-                  textAlign: theme.align,
-                  color: theme.textColor,
-                  letterSpacing: isFarPreview ? '0.02em' : theme.letterSpacing || 'normal',
-                  textTransform: theme.textTransform || 'none',
-                  maxWidth: '86%'
-                }}
-              >
-                {slide.content}
-              </div>
-              {(slide.subtitle || slide.bibleMeta) && (
-                <div
-                  className="mt-[1em] shrink-0 whitespace-nowrap uppercase tracking-[0.18em] text-white/55"
-                  style={{ fontSize: `clamp(6px, ${(fontScale * 2.4).toFixed(2)}cqh, 11px)` }}
-                >
-                  {slide.subtitle ||
-                    (slide.bibleMeta
-                      ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}`
-                      : '')}
-                </div>
-              )}
-            </>
-          )
-        ) : (
-          <span className="text-[11px] text-white/25">{isLive ? 'Output clear' : 'No slide selected'}</span>
-        )}
-      </div>
-    </div>
+      {/* Slide text — laid out at 1920x1080 and scaled, matching the audience */}
+      <div ref={textContainerRef} className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+        <div
+          className="absolute left-0 top-0 origin-top-left"
+          style={{ width: 1920, height: 1080, transform: `scale(${designScale || 1})` }}
+        >
+          <div className="flex h-full w-full flex-col items-center justify-center text-center">
+            {slide ? (
+              isPureMediaSlide ? null : (
+                <>
+                  {(slide.title || slide.sectionLabel) && (
+                    <div
+                      className="mb-[28px] shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-black/80 px-[38px] py-[7px] font-black uppercase tracking-[0.25em] text-white/60"
+                      style={{ fontSize: '21px' }}
+                    >
+                      {slide.title || slide.sectionLabel}
+                    </div>
+                  )}
+                  <div
+                    ref={designContainerRef}
+                    className="flex w-full items-center justify-center overflow-hidden"
+                    style={{ maxWidth: `${designMaxWidthPct}%`, height: '72%' }}
+                  >
+                    <div
+                      ref={designTextRef}
+                      className="w-full whitespace-pre-line font-extrabold text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
+                      style={{
+                        fontFamily: theme.fontFamily,
+                        fontSize: `${fittedDesignPx ?? designFontPx}px`,
+                        lineHeight: outputSizing.lineHeight,
+                        textAlign: theme.align,
+                        color: theme.textColor,
+                        letterSpacing: theme.letterSpacing || 'normal',
+                        textTransform: theme.textTransform || 'none'
+                      }}
+                    >
+                      {slide.content}
+                    </div>
+                  </div>
+                  {(slide.subtitle || slide.bibleMeta) && (
+                    <div
+                      className="mt-[24px] shrink-0 whitespace-nowrap uppercase tracking-[0.18em] text-white/55"
+                      style={{ fontSize: '26px' }}
+                    >
+                      {slide.subtitle ||
+                        (slide.bibleMeta
+                          ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}`
+                          : '')}
+                    </div>
+                  )}
+                </>
+              )
+            ) : (
+              <span className="text-[40px] text-white/25">{isLive ? 'Output clear' : 'No slide selected'}</span>
+            )}
+          </div>
+        </div>
+      </div>    </div>
   );
 };
 
