@@ -11,6 +11,7 @@ import { Switch } from '../components/ui/switch';
 import { SceneCanvas } from './SceneCanvas';
 import { sceneLibrary, useSceneLibrary } from './store';
 import { listAudioDevices, listDesktopSources, listVideoDevices } from './sources';
+import { SYSTEM_FONTS, useFontLibrary } from '../services/fontLibrary';
 import {
   AudioInputElement,
   BrowserElement,
@@ -915,8 +916,42 @@ const PresentationProperties: React.FC<{
 const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial<TextElement>) => void }> = ({
   element,
   onChange
-}) => (
+}) => {
+  const { fonts, uploadFontFile } = useFontLibrary();
+  const fontInputRef = React.useRef<HTMLInputElement>(null);
+  const families = [...new Set([...fonts.map(font => font.family), ...SYSTEM_FONTS])];
+  return (
   <>
+    <Field label="Font">
+      <Select value={element.fontFamily} onValueChange={value => onChange({ fontFamily: value })}>
+        <SelectTrigger className="h-7 text-2xs" aria-label="Font family">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {families.map(family => (
+            <SelectItem key={family} value={family}>
+              {family}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+    <input
+      ref={fontInputRef}
+      type="file"
+      accept=".ttf,.otf,.woff,.woff2"
+      className="hidden"
+      onChange={async event => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const font = await uploadFontFile(file);
+        if (font) onChange({ fontFamily: font.family });
+        event.target.value = '';
+      }}
+    />
+    <Button size="xs" variant="ghost" onClick={() => fontInputRef.current?.click()}>
+      Upload font…
+    </Button>
     <Field label="Binding" hint="Take the text from the live presentation.">
       <Select
         value={element.binding || 'none'}
@@ -993,7 +1028,8 @@ const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial
       <Switch checked={element.shadow} onCheckedChange={shadow => onChange({ shadow })} aria-label="Text shadow" />
     </div>
   </>
-);
+  );
+};
 
 const ShapeProperties: React.FC<{ element: ShapeElement; onChange: (patch: Partial<ShapeElement>) => void }> = ({
   element,

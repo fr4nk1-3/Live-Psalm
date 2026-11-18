@@ -41,6 +41,7 @@ import { AudioMeter } from './AudioMeter';
 import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useAudio';
 import { audioMonitor } from '../services/audioMonitor';
 import { SceneCanvas } from '../scene/SceneCanvas';
+import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
 import { ScenePanel } from '../scene/ScenePanel';
 import { getActiveScene, getPreviewScene, sceneLibrary, useSceneLibrary } from '../scene/store';
 import { setSceneCanvas } from '../services/sceneCanvas';
@@ -183,6 +184,9 @@ const SlideCanvas: React.FC<{
   const isFarPreview = isLive && audienceViewMode === 'far';
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [liveTimecode, setLiveTimecode] = useState<{ current: number; duration: number } | null>(null);
+  const textContainerRef = React.useRef<HTMLDivElement>(null);
+  const textContentRef = React.useRef<HTMLDivElement>(null);
+  const fittedPx = useAutoFitFontSize(textContainerRef, textContentRef, [slide?.content, slide?.title, theme.fontFamily, theme.fontSize], { minPx: 9, maxPx: 46, startVw: 2.4 });
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
   const isSlideVideoBg =
@@ -293,7 +297,7 @@ const SlideCanvas: React.FC<{
       )}
 
       {/* Slide text */}
-      <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-[6%] text-center">
+      <div ref={textContainerRef} className="relative z-10 flex h-full w-full flex-col items-center justify-center overflow-hidden px-[6%] text-center">
         {slide ? (
           isPureMediaSlide ? null : (
             <>
@@ -306,10 +310,11 @@ const SlideCanvas: React.FC<{
                 </div>
               )}
               <div
+                ref={textContentRef}
                 className="whitespace-pre-line font-semibold text-white"
                 style={{
                   fontFamily: theme.fontFamily,
-                  fontSize: `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
+                  fontSize: fittedPx ? `${fittedPx}px` : `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
                   lineHeight,
                   textAlign: theme.align,
                   letterSpacing: isFarPreview ? '0.02em' : theme.letterSpacing || 'normal',
