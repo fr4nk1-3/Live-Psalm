@@ -197,13 +197,24 @@ const SlideCanvas: React.FC<{
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  // Keep the monitor type proportional to what the audience sees (~10% of height).
-  const monitorMaxPx = frameHeight ? Math.max(9, Math.round(frameHeight * 0.11)) : 24;
+  // Mirror the audience typography: the theme size is scaled from the 1080p
+  // design space to this frame, then reduced only if it would not fit.
+  const designSized = React.useMemo(
+    () => getFlexibleFontSize(slide?.content || '', theme.fontSize || 48),
+    [slide?.content, theme.fontSize]
+  );
+  // The monitor is a scaled view of the stage: keep the audience proportion and
+  // let the theme size slider move it, with a floor so small frames stay legible.
+  const themeScale = (theme.fontSize || 74) / 74;
+  const designPx = parseFloat(designSized.fontSize) || theme.fontSize || 48;
+  const targetPx = frameHeight
+    ? Math.max(7, Math.round(frameHeight * 0.15 * themeScale))
+    : Math.round(designPx);
   const fittedPx = useAutoFitFontSize(
     textContainerRef,
     textContentRef,
-    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, monitorMaxPx],
-    { minPx: 8, maxPx: monitorMaxPx, startVw: 2.4 }
+    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, targetPx],
+    { minPx: 7, maxPx: targetPx, startVw: 2.4 }
   );
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
@@ -333,7 +344,7 @@ const SlideCanvas: React.FC<{
                 style={{
                   fontFamily: theme.fontFamily,
                   fontSize: fittedPx ? `${fittedPx}px` : `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
-                  lineHeight,
+                  lineHeight: designSized.lineHeight,
                   textAlign: theme.align,
                   color: theme.textColor,
                   letterSpacing: isFarPreview ? '0.02em' : theme.letterSpacing || 'normal',
