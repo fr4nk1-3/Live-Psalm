@@ -258,6 +258,8 @@ export interface AppSettings {
   showVerseNumbers?: boolean;
   autoLaunchAudience?: boolean;
   broadcastMultiviewEnabled?: boolean;
+  audienceMinFontSize?: number;
+  uiTheme?: 'system' | 'light' | 'dark';
   outputDisplayMap?: {
     audience?: string;
     stage?: string;

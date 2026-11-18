@@ -7,7 +7,7 @@ import { MediaVaultService } from '../services/mediaVault';
 import { BibleVersionModal, getBibleLanguageGroup, LanguageGroup } from './BibleVersionModal';
 import { BibleBookVerseModal } from './BibleBookVerseModal';
 import { SongEditorModal } from './SongEditorModal';
-import { Check, ChevronDown, MoreHorizontal, Search, X } from 'lucide-react';
+import { Check, ChevronDown, MoreHorizontal, Play, Search, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -1802,7 +1802,7 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                       {isUploadingMedia ? 'Adding…' : 'Upload'}
                       <input
                         type="file"
-                        accept="image/*,video/*,.mp4,.webm,.mov,.mkv"
+                        accept="image/*,video/*,audio/*,.mp4,.webm,.mov,.mkv,.mp3,.wav,.ogg,.m4a"
                         multiple
                         onChange={async e => {
                           const files = Array.from(e.target.files || []);
@@ -1968,11 +1968,18 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                         >
                           <button
                             type="button"
-                            onClick={mediaSubMode === 'backgrounds' ? applyBackground : undefined}
+                            onClick={
+                              mediaSubMode === 'backgrounds'
+                                ? applyBackground
+                                : () =>
+                                    onPlayVideoNow
+                                      ? onPlayVideoNow(item)
+                                      : onAddMediaToPlaylist(item)
+                            }
                             title={
                               mediaSubMode === 'backgrounds'
                                 ? `Set ${item.name} as the background`
-                                : item.name
+                                : `Play ${item.name} fullscreen`
                             }
                             className="relative block aspect-video w-full overflow-hidden rounded-sm border border-border bg-background"
                           >
@@ -1991,6 +1998,13 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                     event.currentTarget.currentTime = 0.4;
                                   }}
                                 />
+                                {mediaSubMode === 'foreground' && (
+                                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
+                                      <Play className="h-3.5 w-3.5 fill-current" />
+                                    </span>
+                                  </span>
+                                )}
                                 <span className="pointer-events-none absolute bottom-1 right-1 rounded-sm bg-black/70 px-1 text-[10px] leading-4 text-white/80">
                                   Video
                                 </span>
@@ -2057,7 +2071,12 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                         : onAddMediaToPlaylist(item)
                                     }
                                   >
-                                    Present now
+                                    Play fullscreen now
+                                  </DropdownMenuItem>
+                                )}
+                                {isVideo && onSetGlobalVideoBackground && (
+                                  <DropdownMenuItem onSelect={() => onSetGlobalVideoBackground(item)}>
+                                    Set as Live Video BG
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onSelect={() => onAddMediaToPlaylist(item)}>

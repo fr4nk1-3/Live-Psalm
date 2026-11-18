@@ -40,24 +40,34 @@ export const StageDisplayWindow: React.FC = () => {
   const [stageViewMode, setStageViewMode] = useState<AudienceViewMode>(
     () => StorageService.getSettings().stageViewMode || 'near'
   );
+  const [outputFontWeight, setOutputFontWeight] = useState<string>('800');
   const stageVideoRef = useRef<HTMLVideoElement | null>(null);
   const farContainerRef = useRef<HTMLDivElement | null>(null);
   const farTextRef = useRef<HTMLDivElement | null>(null);
   const nearContainerRef = useRef<HTMLDivElement | null>(null);
   const nearTextRef = useRef<HTMLDivElement | null>(null);
+  const nextContainerRef = useRef<HTMLDivElement | null>(null);
+  const nextTextRef = useRef<HTMLDivElement | null>(null);
 
   const farFittedPx = useAutoFitFontSize(
     farContainerRef,
     farTextRef,
     [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
-    { minPx: 22, maxPx: 190, startVw: 9 }
+    { minPx: 24, maxPx: 220, startVw: 9.5 }
   );
 
   const nearFittedPx = useAutoFitFontSize(
     nearContainerRef,
     nearTextRef,
-    [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content],
-    { minPx: 20, maxPx: 150, startVw: 7 }
+    [stageViewMode, stageState.currentSlide?.id, stageState.currentSlide?.content, stageState.countdownRunning],
+    { minPx: 22, maxPx: 160, startVw: 6.2 }
+  );
+
+  const nextFittedPx = useAutoFitFontSize(
+    nextContainerRef,
+    nextTextRef,
+    [stageViewMode, stageState.nextSlide?.id, stageState.nextSlide?.content],
+    { minPx: 11, maxPx: 29, startVw: 1.75 }
   );
 
   useEffect(() => {
@@ -109,6 +119,9 @@ export const StageDisplayWindow: React.FC = () => {
       if (payload.type === 'APP_SETTINGS_UPDATE' && payload.appSettings) {
         setShowVerseRefOnStage(payload.appSettings.showVerseNumbers ?? true);
         setStageViewMode(payload.appSettings.stageViewMode || 'near');
+      }
+      if (payload.type === 'THEME_CHANGE' && payload.theme) {
+        setOutputFontWeight(payload.theme.fontWeight || '800');
       }
       if (stageVideoRef.current) {
         const v = stageVideoRef.current;
@@ -236,131 +249,236 @@ export const StageDisplayWindow: React.FC = () => {
           document.documentElement.requestFullscreen?.().catch(() => {});
         }
       }}
-      className="flex h-screen w-screen select-none flex-col overflow-hidden bg-[#08080a] font-sans text-white"
+      className="flex h-screen w-screen select-none flex-col overflow-hidden bg-background font-sans text-foreground"
     >
-      {/* Header: what is on, where we are, and the time */}
-      <header className="stage-header flex shrink-0 items-center justify-between gap-[2vw] border-b border-white/10 px-[2vw]">
-        <div className="flex min-w-0 items-baseline gap-[1.2vw]">
-          <span className="stage-label shrink-0 text-white/35">Stage</span>
-          {reference ? (
-            <span className="stage-reference truncate font-semibold text-white/90">{reference}</span>
-          ) : (
-            <span className="stage-reference truncate text-white/50">Nothing live</span>
-          )}
-          {translation && <span className="stage-meta shrink-0 text-white/40">{translation}</span>}
-          {subtitle && subtitle !== translation && subtitle.length <= 40 && (
-            <span className="stage-meta hidden shrink-0 truncate text-white/40 lg:inline">{subtitle}</span>
-          )}
-          {itemLabel && !isFar && (
-            <span className="stage-meta hidden shrink-0 truncate text-white/35 xl:inline">{itemLabel}</span>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-baseline gap-[0.8vw]">
-          <span className="stage-label text-white/35">{showTimer ? timerLabel : 'Time'}</span>
+      {/* Top Status Rail */}
+      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-card/70 px-5">
+        <div className="flex min-w-0 items-center gap-3.5">
           <span
-            className={`stage-clock font-mono tabular leading-none tracking-tight ${
-              showTimer && urgent ? 'text-live' : 'text-white/90'
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              currentSlide
+                ? 'border-live/40 bg-live/15 text-live'
+                : 'border-border bg-secondary text-muted-foreground'
             }`}
           >
-            {showTimer ? formatCountdown(secs) : stageState.clockTime}
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                currentSlide ? 'bg-live' : 'bg-muted-foreground/60'
+              }`}
+            />
+            {currentSlide ? 'Live' : 'Standby'}
+          </span>
+
+          <div className="flex min-w-0 items-center gap-3">
+            {reference ? (
+              <span
+                className={`truncate font-extrabold tracking-tight text-foreground ${
+                  isFar ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl'
+                }`}
+              >
+                {reference}
+              </span>
+            ) : (
+              <span className="truncate text-base font-medium text-muted-foreground">Waiting for live slide</span>
+            )}
+            {translation && (
+              <span
+                className={`shrink-0 rounded-md border border-primary/30 bg-primary/15 px-2.5 py-0.5 font-bold uppercase tracking-wider text-foreground ${
+                  isFar ? 'text-lg sm:text-xl' : 'text-sm sm:text-base'
+                }`}
+              >
+                {translation}
+              </span>
+            )}
+            {subtitle && subtitle !== translation && subtitle.length <= 45 && (
+              <span className="hidden shrink-0 truncate text-xs text-muted-foreground lg:inline">
+                {subtitle}
+              </span>
+            )}
+            {itemLabel && !isFar && (
+              <span className="hidden shrink-0 truncate text-xs text-muted-foreground/80 xl:inline">
+                · {itemLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
+            {stageViewMode} view
           </span>
         </div>
       </header>
 
-      {/* Cue message from the operator */}
+      {/* Operator Cue Banner */}
       {stageState.stageMessage && (
         <div
-          className={`stage-cue flex shrink-0 items-center gap-[1.2vw] border-b ${
+          className={`flex shrink-0 items-center gap-3 border-b px-5 py-2.5 ${
             stageState.stageMessageFlash
               ? 'border-live bg-live text-live-foreground'
-              : 'border-live/30 bg-live/10 text-white'
+              : 'border-border border-l-4 border-l-live bg-card text-foreground'
           }`}
         >
           <span
-            className={`stage-cue-label shrink-0 ${
-              stageState.stageMessageFlash ? 'text-live-foreground/70' : 'text-live'
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              stageState.stageMessageFlash
+                ? 'bg-black/20 text-live-foreground'
+                : 'bg-live/15 text-live'
             }`}
           >
             Cue
           </span>
-          <span className="stage-cue-text min-w-0 font-medium">{stageState.stageMessage}</span>
+          <span className="min-w-0 text-base font-semibold leading-snug">{stageState.stageMessage}</span>
         </div>
       )}
 
-      {/* Current slide */}
-      <main className="flex min-h-0 flex-1 flex-col">
-        <div
-          ref={isFar ? farContainerRef : nearContainerRef}
-          className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-[3vw] py-[2vh]"
-        >
-          {isMediaOnly && currentSlide?.backgroundUrl ? (
-            <div className="flex h-full w-full items-center justify-center bg-black">
-              {isVideo ? (
-                <video
-                  ref={stageVideoRef}
-                  key={currentSlide.backgroundUrl}
-                  src={currentSlide.backgroundUrl}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <img
-                  key={currentSlide.backgroundUrl}
-                  src={currentSlide.backgroundUrl}
-                  alt={currentSlide.title || 'Stage media'}
-                  className="h-full w-full object-contain"
-                />
-              )}
-            </div>
-          ) : currentSlide ? (
-            <div
-              ref={isFar ? farTextRef : nearTextRef}
-              className={`w-full whitespace-pre-line text-center font-semibold text-white ${
-                isFar ? 'tracking-tight' : 'leading-tight'
-              }`}
-              style={{
-                fontSize: fitted ? `${fitted}px` : textStyle.fontSize,
-                lineHeight: isFar ? textStyle.lineHeight : '1.25',
-                letterSpacing: isFar ? '0.01em' : 'normal',
-                maxWidth: isFar ? textStyle.maxWidth : '100%'
-              }}
-            >
-              {currentSlide.content}
+      {/* Center Focus: Prominent Countdown OR Clock (Clock hidden whenever countdown is active) + Main Slide Content */}
+      <main className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+        {/* Centered Focal Timer / Clock Bar */}
+        <div className="flex shrink-0 items-center justify-center">
+          {showTimer ? (
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-2">
+              <span
+                className={`rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                  isOvertime
+                    ? 'border-live/40 bg-live/15 text-live'
+                    : isWarning
+                    ? 'border-warning/40 bg-warning/15 text-warning'
+                    : isOnTime
+                    ? 'border-success/40 bg-success/15 text-success'
+                    : 'border-border bg-secondary text-muted-foreground'
+                }`}
+              >
+                {timerLabel}
+              </span>
+              <span
+                className={`tabular font-mono font-bold leading-none tracking-tight ${
+                  isFar ? 'text-5xl sm:text-6xl' : 'text-4xl sm:text-5xl'
+                } ${
+                  isOvertime
+                    ? 'text-live'
+                    : isWarning
+                    ? 'text-warning'
+                    : isOnTime
+                    ? 'text-success'
+                    : 'text-foreground'
+                }`}
+              >
+                {formatCountdown(secs)}
+              </span>
             </div>
           ) : (
-            <span className="stage-panel-text text-white/30">The screen is clear</span>
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Clock
+              </span>
+              <span
+                className={`tabular font-mono font-bold leading-none tracking-tight text-foreground ${
+                  isFar ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-4xl'
+                }`}
+              >
+                {stageState.clockTime}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Next slide and notes, for close viewing */}
-        {!isFar && (
-          <div className="stage-panel grid shrink-0 grid-cols-2 border-t border-white/10">
-            <section className="flex min-h-0 flex-col gap-[1vh] border-r border-white/10 px-[2vw] py-[1.6vh]">
-              <div className="flex items-baseline justify-between gap-[1vw]">
-                <span className="stage-panel-title text-white/35">Next</span>
-                {nextReference && <span className="stage-panel-meta truncate text-white/45">{nextReference}</span>}
-              </div>
-              <div className="stage-panel-text min-h-0 flex-1 overflow-hidden text-white/70">
-                {nextSlide?.content ? (
-                  <p className="whitespace-pre-line">{nextSlide.content}</p>
+        {/* Dominant Center Slide Content */}
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
+          <div
+            ref={isFar ? farContainerRef : nearContainerRef}
+            className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-[4vw] py-[2.5vh]"
+          >
+            {isMediaOnly && currentSlide?.backgroundUrl ? (
+              <div className="flex h-full w-full items-center justify-center rounded bg-black">
+                {isVideo ? (
+                  <video
+                    ref={stageVideoRef}
+                    key={currentSlide.backgroundUrl}
+                    src={currentSlide.backgroundUrl}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="h-full w-full object-contain"
+                  />
                 ) : (
-                  <span className="text-white/30">End of this item</span>
+                  <img
+                    key={currentSlide.backgroundUrl}
+                    src={currentSlide.backgroundUrl}
+                    alt={currentSlide.title || 'Stage media'}
+                    className="h-full w-full object-contain"
+                  />
+                )}
+              </div>
+            ) : currentSlide ? (
+              <div
+                ref={isFar ? farTextRef : nearTextRef}
+                className={`w-full whitespace-pre-line text-center text-foreground ${
+                  isFar ? 'tracking-tight' : 'leading-tight'
+                }`}
+                style={{
+                  fontWeight: outputFontWeight,
+                  fontSize: fitted ? `${fitted}px` : textStyle.fontSize,
+                  lineHeight: isFar ? textStyle.lineHeight : '1.22',
+                  letterSpacing: isFar ? '0.01em' : 'normal',
+                  maxWidth: isFar ? textStyle.maxWidth : '100%'
+                }}
+              >
+                {currentSlide.content}
+              </div>
+            ) : (
+              <span className="text-lg text-muted-foreground">The screen is clear</span>
+            )}
+          </div>
+        </section>
+
+        {/* Compact Bottom Confidence Strip (Near View only: Next + Notes) */}
+        {!isFar && (
+          <div className="grid h-[23vh] min-h-[130px] max-h-[210px] shrink-0 grid-cols-2 gap-3">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+              <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-preview" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-preview">
+                    Next
+                  </span>
+                </div>
+                {nextReference && (
+                  <span className="truncate text-2xs font-medium text-muted-foreground">{nextReference}</span>
+                )}
+              </div>
+              <div
+                ref={nextContainerRef}
+                className="flex min-h-0 flex-1 items-center overflow-hidden px-3.5 py-2 text-foreground/85"
+              >
+                {nextSlide?.content ? (
+                  <p
+                    ref={nextTextRef}
+                    className="w-full whitespace-pre-line leading-snug"
+                    style={{
+                      fontWeight: outputFontWeight,
+                      fontSize: nextFittedPx ? `${nextFittedPx}px` : '13px'
+                    }}
+                  >
+                    {nextSlide.content}
+                  </p>
+                ) : (
+                  <span className="text-xs text-muted-foreground">End of this item</span>
                 )}
               </div>
             </section>
 
-            <section className="flex min-h-0 flex-col gap-[1vh] px-[2vw] py-[1.6vh]">
-              <div className="flex items-baseline justify-between gap-[1vw]">
-                <span className="stage-panel-title text-white/35">Notes</span>
-                {stageState.speakerNotes ? (
-                  <span className="stage-panel-meta text-white/25">Operator and stage only</span>
-                ) : null}
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+              <div className="flex h-8 shrink-0 items-center justify-between border-b border-border px-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Notes
+                </span>
+                <span className="text-2xs text-muted-foreground/70">Stage only</span>
               </div>
-              <div className="stage-panel-text min-h-0 flex-1 overflow-y-auto whitespace-pre-line text-white/75">
-                {stageState.speakerNotes || <span className="text-white/30">No notes for this item</span>}
+              <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-3 py-2 text-sm leading-relaxed text-foreground/85">
+                {stageState.speakerNotes || (
+                  <span className="text-xs text-muted-foreground">No notes for this item</span>
+                )}
               </div>
             </section>
           </div>

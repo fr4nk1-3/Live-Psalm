@@ -82,6 +82,9 @@ export const AudienceOutputWindow: React.FC = () => {
   const [audienceViewMode, setAudienceViewMode] = useState<AudienceViewMode>(() => {
     return StorageService.getSettings().audienceViewMode || 'near';
   });
+  const [audienceMinFontSize, setAudienceMinFontSize] = useState<number>(() => {
+    return Math.max(100, StorageService.getSettings().audienceMinFontSize ?? 100);
+  });
 
   // ── Fullscreen video state ──
   // fullscreenVideoUrl is set when a pure-video slide goes live (no text)
@@ -103,6 +106,8 @@ export const AudienceOutputWindow: React.FC = () => {
   const bgVideoRef = useRef<HTMLVideoElement>(null);
   const audienceSlideContainerRef = useRef<HTMLDivElement>(null);
   const audienceSlideTextRef = useRef<HTMLDivElement>(null);
+  const bannerContainerRef = useRef<HTMLDivElement>(null);
+  const bannerTextRef = useRef<HTMLDivElement>(null);
 
   // Global and item-level looping video backgrounds
   const [globalVideoBgUrl, setGlobalVideoBgUrl] = useState<string | null>(() => {
@@ -166,8 +171,9 @@ export const AudienceOutputWindow: React.FC = () => {
     return () => window.removeEventListener('resize', updateScreen);
   }, []);
 
-  // Base font vw derived from the theme fontSize setting + screen width
-  const baseFontVw = (theme.fontSize / 1920) * 100;
+  // Base font vw derived from the theme fontSize setting (minimum 100px on Audience screen)
+  const effectiveAudienceFontPx = Math.max(100, audienceMinFontSize, theme.fontSize || 100);
+  const baseFontVw = (effectiveAudienceFontPx / 1920) * 100;
 
   const churchProfile = StorageService.getChurchProfile();
 
@@ -303,6 +309,7 @@ export const AudienceOutputWindow: React.FC = () => {
       }
       if (payload.type === 'APP_SETTINGS_UPDATE' && payload.appSettings) {
         setAudienceViewMode(payload.appSettings.audienceViewMode || 'near');
+        setAudienceMinFontSize(Math.max(100, payload.appSettings.audienceMinFontSize ?? 100));
       }
       if (payload.type === 'COUNTDOWN_UPDATE') {
         setCountdownState(prev => ({
@@ -338,12 +345,16 @@ export const AudienceOutputWindow: React.FC = () => {
         try {
           const parsed = e.newValue ? JSON.parse(e.newValue) : null;
           setAudienceViewMode(parsed?.audienceViewMode || 'near');
+          setAudienceMinFontSize(Math.max(100, parsed?.audienceMinFontSize ?? 100));
         } catch (err) {}
       }
     };
     const handleSettingsUpdated = (e: Event) => {
       const detail = (e as CustomEvent)?.detail;
-      if (detail) setAudienceViewMode(detail.audienceViewMode || 'near');
+      if (detail) {
+        setAudienceViewMode(detail.audienceViewMode || 'near');
+        setAudienceMinFontSize(Math.max(100, detail.audienceMinFontSize ?? 100));
+      }
     };
     window.addEventListener('storage', handleStorage);
     window.addEventListener('app-settings-updated', handleSettingsUpdated);
@@ -413,12 +424,41 @@ export const AudienceOutputWindow: React.FC = () => {
   const { fontSize: dynFontSize, lineHeight: dynLineHeight, maxWidth: dynMaxWidth } =
     getOutputFontSize(slideText, baseFontVw, screenInfo.width, audienceViewMode);
 
-  const dynFontVw = parseFloat(dynFontSize) || Math.max(2.5, baseFontVw);
+  const dynFontVw = parseFloat(dynFontSize) || Math.max(5.2, baseFontVw);
   const audienceFittedPx = useAutoFitFontSize(
     audienceSlideContainerRef,
     audienceSlideTextRef,
-    [liveSlide?.id, liveSlide?.content, theme.fontSize, theme.fontFamily, audienceViewMode, dynFontSize],
-    { minPx: 18, maxPx: 140, startVw: dynFontVw }
+    [
+      liveSlide?.id,
+      liveSlide?.content,
+      theme.fontSize,
+      theme.fontWeight,
+      theme.projectorLayout,
+      theme.lowerThirdStyle,
+      audienceMinFontSize,
+      theme.fontFamily,
+      audienceViewMode,
+      dynFontSize,
+      !!lowerThirdAnnouncement
+    ],
+    { minPx: 28, maxPx: 260, startVw: Math.max(dynFontVw, baseFontVw) }
+  );
+
+  const bannerFittedPx = useAutoFitFontSize(
+    bannerContainerRef,
+    bannerTextRef,
+    [
+      liveSlide?.id,
+      liveSlide?.content,
+      theme.fontSize,
+      theme.fontWeight,
+      theme.projectorLayout,
+      theme.lowerThirdStyle,
+      theme.fontFamily,
+      audienceViewMode,
+      !!lowerThirdAnnouncement
+    ],
+    { minPx: 18, maxPx: isFarMode ? 96 : 74, startVw: isFarMode ? 4.4 : 3.4 }
   );
 
   const contentPadding = isFarMode ? 'py-[2.5vh] px-[2.5vw]' : 'py-[4vh] px-[5vw]';
@@ -634,43 +674,56 @@ export const AudienceOutputWindow: React.FC = () => {
             <div
               key={liveSlide.id}
               style={{ animationDuration: `${transition.durationMs}ms` }}
-              className={`absolute inset-0 z-20 flex flex-col ${contentPadding} ${getTransitionClass()}`}
+              className={`absolute inset-0 z-20 flex flex-col ${contentPadding} ${
+                lowerThirdAnnouncement ? 'pb-[11vh]' : ''
+              } ${getTransitionClass()}`}
             >
 
               {/* ── LOWER-THIRD / TOP BANNER MODE ── */}
               {isBanner ? (
                 <div
-                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} w-full pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
+                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} flex w-full max-h-[38vh] flex-col pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
                     isFarMode
-                      ? 'bg-black/95 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[3.5vh]'
-                      : 'bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.5vh] backdrop-blur-md'
+                      ? 'bg-black/95 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[2.8vh]'
+                      : 'bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.2vh] backdrop-blur-md'
                   }`}
                 >
                   {liveSlide.sectionLabel && (
                     <span
-                      className={`font-black uppercase tracking-widest block mb-[0.8vh] ${isFarMode ? 'text-amber-300' : 'text-emerald-400'}`}
+                      className={`font-black uppercase tracking-widest block shrink-0 mb-[0.8vh] ${isFarMode ? 'text-amber-300' : 'text-emerald-400'}`}
                       style={{ fontSize: isFarMode ? 'clamp(1rem, 1.9vw, 2rem)' : 'clamp(0.6rem, 1.2vw, 1.2rem)' }}
                     >
                       {liveSlide.sectionLabel}
                     </span>
                   )}
                   <div
-                    className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white leading-snug`}
-                    style={{
-                      fontFamily: theme.fontFamily,
-                      fontSize: isFarMode ? 'clamp(1.5rem, 4.2vw, 4.8rem)' : 'clamp(1rem, 3vw, 3.5rem)',
-                      color: isFarMode ? '#ffffff' : theme.textColor,
-                      textShadow: isFarMode
-                        ? '0 6px 22px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,1)'
-                        : undefined,
-                      WebkitTextStroke: isFarMode ? '0.016em rgba(0,0,0,0.75)' : undefined
-                    }}
+                    ref={bannerContainerRef}
+                    className="min-h-0 flex-1 overflow-hidden"
                   >
-                    {liveSlide.content}
+                    <div
+                      ref={bannerTextRef}
+                      className="text-white leading-snug whitespace-pre-line"
+                      style={{
+                        fontFamily: theme.fontFamily,
+                        fontWeight: theme.fontWeight || (isFarMode ? '900' : '800'),
+                        fontSize: bannerFittedPx
+                          ? `${bannerFittedPx}px`
+                          : isFarMode
+                          ? 'clamp(1.5rem, 4.2vw, 4.8rem)'
+                          : 'clamp(1rem, 3vw, 3.5rem)',
+                        color: isFarMode ? '#ffffff' : theme.textColor,
+                        textShadow: isFarMode
+                          ? '0 6px 22px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,1)'
+                          : undefined,
+                        WebkitTextStroke: isFarMode ? '0.016em rgba(0,0,0,0.75)' : undefined
+                      }}
+                    >
+                      {liveSlide.content}
+                    </div>
                   </div>
                   {liveSlide.subtitle && (
                     <div
-                      className={`${isFarMode ? 'text-amber-300 font-black' : 'text-slate-400 font-semibold'} mt-[1vh]`}
+                      className={`${isFarMode ? 'text-amber-300 font-black' : 'text-slate-400 font-semibold'} mt-[1vh] shrink-0`}
                       style={{ fontSize: isFarMode ? 'clamp(1rem, 1.8vw, 1.9rem)' : 'clamp(0.6rem, 1.2vw, 1.1rem)' }}
                     >
                       {liveSlide.subtitle}
@@ -680,7 +733,7 @@ export const AudienceOutputWindow: React.FC = () => {
               ) : (
                 /* ── CENTERED / SPLIT / BOXED / MINIMAL MODES ── */
                 <div
-                  className={`flex flex-col justify-center h-full max-h-[90vh] ${
+                  className={`flex flex-col justify-center h-full max-h-full ${
                     layout === 'split_left'
                       ? 'mr-auto items-start text-left bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-[2vw] px-[4vw] py-[4vh]'
                       : layout === 'split_right'
@@ -708,13 +761,14 @@ export const AudienceOutputWindow: React.FC = () => {
                   {/* Main text */}
                   <div
                     ref={audienceSlideContainerRef}
-                    className="w-full flex-1 min-h-0 max-h-[72vh] flex items-center justify-center overflow-hidden"
+                    className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden"
                   >
                     <div
                       ref={audienceSlideTextRef}
-                      className={`${isFarMode ? 'font-black' : 'font-extrabold'} text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]`}
+                      className="text-white whitespace-pre-line drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
                       style={{
                         fontFamily: theme.fontFamily,
+                        fontWeight: theme.fontWeight || (isFarMode ? '900' : '800'),
                         fontSize: audienceFittedPx ? `${audienceFittedPx}px` : dynFontSize,
                         lineHeight: dynLineHeight,
                         textAlign: layout === 'split_left' ? 'left' : layout === 'split_right' ? 'right' : (theme.align as any),

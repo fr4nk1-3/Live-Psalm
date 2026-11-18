@@ -549,6 +549,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === 'projection' && (
               <div className="space-y-5">
+                <FieldGroup
+                  title="Appearance"
+                  description="Match your operating system or lock the console to light or dark mode."
+                >
+                  <div className="grid grid-cols-3 gap-1.5 rounded-md border border-border bg-background/60 p-1">
+                    {[
+                      { id: 'system', label: 'System', desc: 'Follow OS' },
+                      { id: 'light', label: 'Light', desc: 'Daylight' },
+                      { id: 'dark', label: 'Dark', desc: 'Low light' }
+                    ].map(mode => {
+                      const active = (settings.uiTheme || 'system') === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => updateSettings({ uiTheme: mode.id as 'system' | 'light' | 'dark' })}
+                          aria-pressed={active}
+                          className={cn(
+                            'rounded-sm px-2.5 py-2 text-left transition-colors',
+                            active
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <div className="text-xs font-medium">{mode.label}</div>
+                          <div className="text-2xs text-muted-foreground">{mode.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+
                 <FieldGroup title="Displays" description="Where each output window opens.">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-2xs text-muted-foreground">
@@ -767,6 +799,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Open audience screen at startup"
                     />
                   </div>
+
+                  <div className="flex items-start justify-between gap-4 border-t border-border/70 pt-3">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-broadcast-multiview">Broadcast multiview</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Shows the Multiview tab inside the Broadcast dock to monitor Preview, Program, and all scenes.
+                      </p>
+                    </div>
+                    <Switch
+                      id="settings-broadcast-multiview"
+                      checked={settings.broadcastMultiviewEnabled ?? false}
+                      onCheckedChange={(value) => updateSettings({ broadcastMultiviewEnabled: value })}
+                      aria-label="Broadcast multiview"
+                    />
+                  </div>
+
+                  <Field
+                    label="Audience screen font size"
+                    action={
+                      <span className="tabular text-xs font-medium text-foreground">
+                        {Math.max(100, settings.audienceMinFontSize ?? 100)} px (min 100)
+                      </span>
+                    }
+                    className="border-t border-border/70 pt-3"
+                  >
+                    <Slider
+                      value={[Math.max(100, settings.audienceMinFontSize ?? 100)]}
+                      min={100}
+                      max={260}
+                      step={2}
+                      onValueChange={([value]) => updateSettings({ audienceMinFontSize: Math.max(100, value) })}
+                      aria-label="Audience screen font size"
+                    />
+                  </Field>
                 </FieldGroup>
               </div>
             )}
