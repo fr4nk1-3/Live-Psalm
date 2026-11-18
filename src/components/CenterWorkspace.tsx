@@ -186,7 +186,25 @@ const SlideCanvas: React.FC<{
   const [liveTimecode, setLiveTimecode] = useState<{ current: number; duration: number } | null>(null);
   const textContainerRef = React.useRef<HTMLDivElement>(null);
   const textContentRef = React.useRef<HTMLDivElement>(null);
-  const fittedPx = useAutoFitFontSize(textContainerRef, textContentRef, [slide?.content, slide?.title, theme.fontFamily, theme.fontSize], { minPx: 9, maxPx: 46, startVw: 2.4 });
+  const [frameHeight, setFrameHeight] = useState(0);
+  React.useEffect(() => {
+    const element = textContainerRef.current?.parentElement;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(entries => {
+      const height = entries[0]?.contentRect.height || 0;
+      if (height > 0) setFrameHeight(Math.round(height));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  // Keep the monitor type proportional to what the audience sees (~10% of height).
+  const monitorMaxPx = frameHeight ? Math.max(9, Math.round(frameHeight * 0.11)) : 24;
+  const fittedPx = useAutoFitFontSize(
+    textContainerRef,
+    textContentRef,
+    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, monitorMaxPx],
+    { minPx: 8, maxPx: monitorMaxPx, startVw: 2.4 }
+  );
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
   const isSlideVideoBg =
@@ -301,36 +319,39 @@ const SlideCanvas: React.FC<{
         {slide ? (
           isPureMediaSlide ? null : (
             <>
-              {slide.title && (
+              {(slide.title || slide.sectionLabel) && (
                 <div
-                  className="mb-[0.6em] whitespace-nowrap rounded-sm border border-white/15 bg-black/45 px-[0.8em] py-[0.15em] font-medium tracking-[0.08em] text-white/70"
-                  style={{ fontSize: `clamp(8px, ${(fontScale * 3.4).toFixed(2)}cqh, 14px)` }}
+                  className="mb-[0.8em] shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-black/80 px-[1.1em] py-[0.35em] font-black uppercase tracking-[0.25em] text-white/60"
+                  style={{ fontSize: `clamp(7px, ${(fontScale * 2.6).toFixed(2)}cqh, 12px)` }}
                 >
-                  {slide.title}
+                  {slide.title || slide.sectionLabel}
                 </div>
               )}
               <div
                 ref={textContentRef}
-                className="whitespace-pre-line font-semibold text-white"
+                className="w-full whitespace-pre-line font-extrabold text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
                 style={{
                   fontFamily: theme.fontFamily,
                   fontSize: fittedPx ? `${fittedPx}px` : `clamp(10px, ${(fontScale * 11.5).toFixed(2)}cqh, 40px)`,
                   lineHeight,
                   textAlign: theme.align,
+                  color: theme.textColor,
                   letterSpacing: isFarPreview ? '0.02em' : theme.letterSpacing || 'normal',
                   textTransform: theme.textTransform || 'none',
-                  textShadow: '0 2px 10px rgba(0,0,0,0.85)',
-                  maxWidth: '88%'
+                  maxWidth: '86%'
                 }}
               >
                 {slide.content}
               </div>
-              {slide.subtitle && (
+              {(slide.subtitle || slide.bibleMeta) && (
                 <div
-                  className="mt-[0.5em] text-white/70"
-                  style={{ fontSize: `clamp(8px, ${(fontScale * 3.6).toFixed(2)}cqh, 15px)` }}
+                  className="mt-[1em] shrink-0 whitespace-nowrap uppercase tracking-[0.18em] text-white/55"
+                  style={{ fontSize: `clamp(6px, ${(fontScale * 2.4).toFixed(2)}cqh, 11px)` }}
                 >
-                  {slide.subtitle}
+                  {slide.subtitle ||
+                    (slide.bibleMeta
+                      ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}`
+                      : '')}
                 </div>
               )}
             </>
