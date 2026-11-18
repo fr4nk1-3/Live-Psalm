@@ -1811,12 +1811,48 @@ export const App: React.FC = () => {
     }
   };
 
-  /** 1-Click "Translate" Action: switches active Bible chapter & live/preview slide between Primary and Parallel Translation */
+  /** Tracks a single temporarily-translated slide so it reverts when moving to another slide */
+  const tempTranslatedSlideRef = React.useRef<{ slideId: string; originalSlide: Slide } | null>(null);
+
+  const restoreTempTranslatedSlide = (entry: { slideId: string; originalSlide: Slide }) => {
+    const orig = entry.originalSlide;
+    setPlaylist(prev =>
+      prev.map(item =>
+        item.slides.some(s => s.id === entry.slideId)
+          ? { ...item, slides: item.slides.map(s => (s.id === entry.slideId ? orig : s)) }
+          : item
+      )
+    );
+    setQuickPinnedItems(prev =>
+      prev.map(pin =>
+        pin.slides.some(s => s.id === entry.slideId)
+          ? { ...pin, slides: pin.slides.map(s => (s.id === entry.slideId ? orig : s)) }
+          : pin
+      )
+    );
+  };
+
+  useEffect(() => {
+    const temp = tempTranslatedSlideRef.current;
+    if (!temp) return;
+    const behavior = StorageService.getSettings().slideTranslationBehavior || 'single_slide_revert';
+    if (behavior !== 'single_slide_revert') return;
+    if (previewSlide?.id !== temp.slideId && liveSlide?.id !== temp.slideId) {
+      tempTranslatedSlideRef.current = null;
+      restoreTempTranslatedSlide(temp);
+    }
+  }, [previewSlide?.id, liveSlide?.id]);
+
+  /** "Translate" Action: honors Settings -> Slide translation behavior */
   const handleTranslateActiveBible = async (targetVersionId?: string, specificSlide?: Slide) => {
     if (!targetParallelVersionId && !targetVersionId) return;
 
+    const behavior = StorageService.getSettings().slideTranslationBehavior || 'single_slide_revert';
+    const targetSlide = specificSlide || previewSlide || liveSlide;
+    if (!targetSlide) return;
+
     const currentTrans = StorageService.resolveTranslationId(
-      (specificSlide || previewSlide || liveSlide)?.bibleMeta?.translationId ||
+      targetSlide.bibleMeta?.translationId ||
         activeItem?.bibleMeta?.translationId ||
         activeItem?.slides[0]?.bibleMeta?.translationId ||
         activeBibleTranslation
@@ -1832,7 +1868,71 @@ export const App: React.FC = () => {
       ? resolvedParallel
       : primaryBibleTranslation;
 
-    await handleSwitchActiveBibleTranslation(resolvedTarget, null, specificSlide, true);
+    if (behavior === 'entire_chapter') {
+      await handleSwitchActiveBibleTranslation(resolvedTarget, null, specificSlide, true);
+      return;
+    }
+
+    // Single-slide translation ('single_slide_revert' or 'single_slide_keep')
+    if (behavior === 'single_slide_revert' && tempTranslatedSlideRef.current) {
+      const prevTemp = tempTranslatedSlideRef.current;
+      if (prevTemp.slideId !== targetSlide.id) {
+        tempTranslatedSlideRef.current = null;
+        restoreTempTranslatedSlide(prevTemp);
+      } else if (resolvedTarget === prevTemp.originalSlide.bibleMeta?.translationId) {
+        // User toggled back to the original translation
+        const orig = applyBibleBgToSlides([prevTemp.originalSlide])[0];
+        tempTranslatedSlideRef.current = null;
+        setPlaylist(prev =>
+          prev.map(item =>
+            item.slides.some(s => s.id === targetSlide.id)
+              ? { ...item, slides: item.slides.map(s => (s.id === targetSlide.id ? orig : s)) }
+              : item
+          )
+        );
+        setQuickPinnedItems(prev =>
+          prev.map(pin =>
+            pin.slides.some(s => s.id === targetSlide.id)
+              ? { ...pin, slides: pin.slides.map(s => (s.id === targetSlide.id ? orig : s)) }
+              : pin
+          )
+        );
+        if (previewSlide?.id === targetSlide.id) setPreviewSlide(orig);
+        if (liveSlide?.id === targetSlide.id) setLiveSlide(orig);
+        return;
+      }
+    }
+
+    const translatedRaw = await StorageService.translateSingleBibleSlideAsync(
+      targetSlide,
+      resolvedTarget,
+      null,
+      activeItem
+    );
+    if (!translatedRaw) return;
+
+    const translatedSlide = applyBibleBgToSlides([{ ...translatedRaw, id: targetSlide.id }])[0];
+
+    if (behavior === 'single_slide_revert' && !tempTranslatedSlideRef.current) {
+      tempTranslatedSlideRef.current = { slideId: targetSlide.id, originalSlide: targetSlide };
+    }
+
+    setPlaylist(prev =>
+      prev.map(item =>
+        item.slides.some(s => s.id === targetSlide.id)
+          ? { ...item, slides: item.slides.map(s => (s.id === targetSlide.id ? translatedSlide : s)) }
+          : item
+      )
+    );
+    setQuickPinnedItems(prev =>
+      prev.map(pin =>
+        pin.slides.some(s => s.id === targetSlide.id)
+          ? { ...pin, slides: pin.slides.map(s => (s.id === targetSlide.id ? translatedSlide : s)) }
+          : pin
+      )
+    );
+    if (previewSlide?.id === targetSlide.id) setPreviewSlide(translatedSlide);
+    if (liveSlide?.id === targetSlide.id) setLiveSlide(translatedSlide);
   };
 
   const handleAddMediaToCatalogOnly = (mediaAsset: MediaAsset) => {

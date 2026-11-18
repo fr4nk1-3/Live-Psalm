@@ -840,6 +840,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'api' && (
               <div className="space-y-5">
                 <FieldGroup
+                  title="Slide translation behavior"
+                  description="Choose what happens when you click Translate on a Scripture slide."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 rounded-md border border-border bg-background/60 p-1">
+                    {[
+                      {
+                        id: 'single_slide_revert',
+                        label: 'Slide only (revert)',
+                        desc: 'Translate only this slide and revert when moving to next.'
+                      },
+                      {
+                        id: 'single_slide_keep',
+                        label: 'Slide only (keep)',
+                        desc: 'Translate only this slide and keep it translated.'
+                      },
+                      {
+                        id: 'entire_chapter',
+                        label: 'Entire chapter',
+                        desc: 'Translate the whole chapter and pinned Bible items.'
+                      }
+                    ].map(opt => {
+                      const active = (settings.slideTranslationBehavior || 'single_slide_revert') === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() =>
+                            updateSettings({
+                              slideTranslationBehavior: opt.id as
+                                | 'single_slide_revert'
+                                | 'single_slide_keep'
+                                | 'entire_chapter'
+                            })
+                          }
+                          aria-pressed={active}
+                          className={cn(
+                            'rounded-sm px-2.5 py-2 text-left transition-colors',
+                            active
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <div className="text-xs font-medium">{opt.label}</div>
+                          <div className="mt-0.5 text-2xs leading-snug text-muted-foreground">{opt.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+
+                <FieldGroup
                   title="Online Bible search"
                   description="Adds online lookup alongside the offline library."
                 >

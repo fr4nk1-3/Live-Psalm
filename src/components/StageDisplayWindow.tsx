@@ -48,6 +48,8 @@ export const StageDisplayWindow: React.FC = () => {
   const nearTextRef = useRef<HTMLDivElement | null>(null);
   const nextContainerRef = useRef<HTMLDivElement | null>(null);
   const nextTextRef = useRef<HTMLDivElement | null>(null);
+  const notesContainerRef = useRef<HTMLDivElement | null>(null);
+  const notesTextRef = useRef<HTMLParagraphElement | null>(null);
 
   const farFittedPx = useAutoFitFontSize(
     farContainerRef,
@@ -67,6 +69,13 @@ export const StageDisplayWindow: React.FC = () => {
     nextContainerRef,
     nextTextRef,
     [stageViewMode, stageState.nextSlide?.id, stageState.nextSlide?.content],
+    { minPx: 11, maxPx: 29, startVw: 1.75 }
+  );
+
+  const notesFittedPx = useAutoFitFontSize(
+    notesContainerRef,
+    notesTextRef,
+    [stageViewMode, stageState.speakerNotes],
     { minPx: 11, maxPx: 29, startVw: 1.75 }
   );
 
@@ -333,13 +342,25 @@ export const StageDisplayWindow: React.FC = () => {
       )}
 
       {/* Center Focus: Prominent Countdown OR Clock (Clock hidden whenever countdown is active) + Main Slide Content */}
-      <main className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+      <main className={`flex min-h-0 flex-1 flex-col ${isFar ? 'gap-4 p-4' : 'gap-3 p-3.5'}`}>
         {/* Centered Focal Timer / Clock Bar */}
         <div className="flex shrink-0 items-center justify-center">
           {showTimer ? (
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-2">
+            <div
+              className={`flex items-center justify-center gap-4 rounded-xl border border-border border-t-2 bg-card ${
+                isOvertime
+                  ? 'border-t-live'
+                  : isWarning
+                  ? 'border-t-warning'
+                  : isOnTime
+                  ? 'border-t-success'
+                  : 'border-t-border'
+              } ${isFar ? 'w-[95vw] px-7 py-2.5' : 'px-6 py-2'}`}
+            >
               <span
-                className={`rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                className={`rounded border px-2.5 py-0.5 font-semibold uppercase tracking-wider ${
+                  isFar ? 'text-xs' : 'text-[11px]'
+                } ${
                   isOvertime
                     ? 'border-live/40 bg-live/15 text-live'
                     : isWarning
@@ -368,8 +389,16 @@ export const StageDisplayWindow: React.FC = () => {
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div
+              className={`flex items-center justify-center gap-4 rounded-xl border border-border bg-card ${
+                isFar ? 'w-[95vw] px-7 py-2' : 'px-5 py-1.5'
+              }`}
+            >
+              <span
+                className={`font-semibold uppercase tracking-wider text-muted-foreground ${
+                  isFar ? 'text-xs' : 'text-[11px]'
+                }`}
+              >
                 Clock
               </span>
               <span
@@ -383,11 +412,17 @@ export const StageDisplayWindow: React.FC = () => {
           )}
         </div>
 
-        {/* Dominant Center Slide Content */}
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
+        {/* Dominant Center Slide Content (Boxed Card in both Near and Far views, using system design cues) */}
+        <section
+          className={`mx-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card ${
+            isFar ? 'w-[95vw]' : 'w-[92vw] max-w-[1680px]'
+          }`}
+        >
           <div
             ref={isFar ? farContainerRef : nearContainerRef}
-            className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-[4vw] py-[2.5vh]"
+            className={`flex min-h-0 flex-1 items-center justify-center overflow-hidden ${
+              isFar ? 'px-[4.5vw] py-[3.5vh]' : 'px-[3vw] py-[3vh]'
+            }`}
           >
             {isMediaOnly && currentSlide?.backgroundUrl ? (
               <div className="flex h-full w-full items-center justify-center rounded bg-black">
@@ -475,8 +510,22 @@ export const StageDisplayWindow: React.FC = () => {
                 </span>
                 <span className="text-2xs text-muted-foreground/70">Stage only</span>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-3 py-2 text-sm leading-relaxed text-foreground/85">
-                {stageState.speakerNotes || (
+              <div
+                ref={notesContainerRef}
+                className="flex min-h-0 flex-1 items-center overflow-hidden px-3.5 py-2 text-foreground/85"
+              >
+                {stageState.speakerNotes ? (
+                  <p
+                    ref={notesTextRef}
+                    className="w-full whitespace-pre-line leading-snug"
+                    style={{
+                      fontWeight: outputFontWeight,
+                      fontSize: notesFittedPx ? `${notesFittedPx}px` : '13px'
+                    }}
+                  >
+                    {stageState.speakerNotes}
+                  </p>
+                ) : (
                   <span className="text-xs text-muted-foreground">No notes for this item</span>
                 )}
               </div>

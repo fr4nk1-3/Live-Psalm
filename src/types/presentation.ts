@@ -260,6 +260,7 @@ export interface AppSettings {
   broadcastMultiviewEnabled?: boolean;
   audienceMinFontSize?: number;
   uiTheme?: 'system' | 'light' | 'dark';
+  slideTranslationBehavior?: 'single_slide_revert' | 'single_slide_keep' | 'entire_chapter';
   outputDisplayMap?: {
     audience?: string;
     stage?: string;
