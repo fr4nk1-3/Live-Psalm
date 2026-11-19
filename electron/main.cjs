@@ -607,6 +607,30 @@ ipcMain.handle('check-ffmpeg', () => probeFfmpeg());
       return { error: error instanceof Error ? error.message : String(error) };
     }
   });
+ipcMain.handle('test-stream-target', async (_event, { url }) => {
+  const ffmpegPath = resolveFfmpegBinary();
+  if (!ffmpegPath) return { ok: false, error: 'ffmpeg was not found.' };
+  if (!url || typeof url !== 'string') return { ok: false, error: 'No stream URL.' };
+  return new Promise((resolve) => {
+    const args = [
+      '-hide_banner', '-loglevel', 'warning',
+      '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10',
+      '-t', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      '-f', 'flv', url
+    ];
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+    let output = '';
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch {}
+    }, 12000);
+    child.stderr.on('data', (chunk) => { output += chunk.toString(); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      resolve({ ok: code === 0, code, error: lines.slice(-4).join(' ') });
+    });
+  });
+});
 ipcMain.handle('browse-lut', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Choose a 3D LUT',
@@ -659,6 +683,8 @@ function attachStreamLogging() {
   sendStreamEvent('stream-state', { state: 'connecting' });
 
   let announcedLive = false;
+  let lastErrorLine = '';
+  let publishAttempted = false;
   const applyProgress = (line) => {
     const frame = line.match(/frame=\s*(\d+)/);
     const fpsMatch = line.match(/fps=\s*([\d.]+)/);
@@ -698,6 +724,10 @@ function attachStreamLogging() {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
+      if (/Sending publish command/i.test(trimmed)) publishAttempted = true;
+      if (/error|failed|refused|denied|handshake|unreachable|timed out|end of file/i.test(trimmed)) {
+        lastErrorLine = trimmed;
+      }
       // ffmpeg repeats a progress frame twice a second; keep it out of the log.
       if (!applyProgress(trimmed)) sendStreamEvent('stream-log', trimmed);
     }
@@ -708,7 +738,11 @@ function attachStreamLogging() {
     const failed = typeof code === 'number' && code !== 0 && !streamStopRequested;
     sendStreamEvent('stream-state', {
       state: failed ? 'error' : 'ended',
-      error: failed ? `ffmpeg exited with code ${code}` : undefined
+      error: failed
+        ? publishAttempted
+          ? 'The server rejected the stream. Check the stream key and that live streaming is enabled for this account.'
+          : lastErrorLine || `ffmpeg exited with code ${code}`
+        : undefined
     });
     sendStreamEvent('stream-ended');
   });

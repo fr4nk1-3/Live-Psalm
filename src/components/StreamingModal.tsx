@@ -310,8 +310,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const getRtmpUrl = (platform: PlatformId): string => {
     const p = PLATFORMS[platform];
     const k = getKey(platform);
-    if (k.customRtmp) return `${k.customRtmp}/${k.key}`;
-    return `${p.rtmpBase}/${k.key}`;
+    const streamKey = String(k.key || '').trim();
+    const custom = String(k.customRtmp || '').trim().replace(/\/+$/, '');
+    if (custom) return `${custom}/${streamKey}`;
+    return `${p.rtmpBase}/${streamKey}`;
   };
 
   const startStream = async () => {
@@ -955,6 +957,30 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
               : 'Install ffmpeg or locate the executable, then try again.'}
           </p>
           <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={ffmpegStatus !== 'available' || !keyConfig.key.trim()}
+              onClick={async () => {
+                const target = getRtmpUrl(activePlatform);
+                setStreamLog(prev => [...prev, `🧪 Testing ${target.replace(/\/[^/]*$/, '/…')}`]);
+                const result = await ipc.invoke('test-stream-target', { url: target });
+                setStreamLog(prev => [
+                  ...prev,
+                  result.ok
+                    ? '✅ Test succeeded: the server accepted the connection.'
+                    : `❌ Test failed: ${result.error || `ffmpeg exited with code ${result.code}`}`
+                ]);
+                if (!result.ok && /I\/O error|End of file|Connection refused|handshake/i.test(result.error || '')) {
+                  setStreamLog(prev => [
+                    ...prev,
+                    'ℹ This looks like the network blocking the connection: check the firewall and whether the ISP permits RTMP (port 1935) or RTMPS (443).'
+                  ]);
+                }
+              }}
+            >
+              Test connection
+            </Button>
             {isStreaming && streamingPlatform === activePlatform ? (
               <Button variant="secondary" size="sm" onClick={stopStream}>
                 Stop stream

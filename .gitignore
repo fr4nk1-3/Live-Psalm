@@ -40,3 +40,10 @@ build/shots/
 build/shot.ps1
 # Editor atomic-write scratch directories
 .*.tmpdir/
+
+# Local test artifacts
+build/*.pem
+build/*.flv
+build/*.txt
+build/*.mjs
+build/*.png
