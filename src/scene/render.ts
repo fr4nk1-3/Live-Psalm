@@ -108,7 +108,7 @@ function drawTextElement(ctx: CanvasRenderingContext2D, element: TextElement, co
   if (!raw) return;
   const content = element.uppercase ? raw.toUpperCase() : raw;
 
-  const fontFor = (size: number) => `${element.fontWeight} ${size}px ${element.fontFamily}, system-ui, sans-serif`;
+  const fontFor = (size: number) => `${element.fontWeight} ${size}px "${element.fontFamily}", system-ui, sans-serif`;
   const innerWidth = Math.max(32, frame.width - element.padding * 2);
   const innerHeight = Math.max(32, frame.height - element.padding * 2);
 
