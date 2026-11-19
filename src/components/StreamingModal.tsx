@@ -60,11 +60,11 @@ const PLATFORMS = {
 type PlatformId = keyof typeof PLATFORMS;
 
 const QUALITY_OPTIONS = [
-  { label: '1080p 60fps', value: '1080p60', bitrate: 6000, res: '1920x1080', fps: 60 },
-  { label: '1080p 30fps', value: '1080p', bitrate: 4500, res: '1920x1080', fps: 30 },
-  { label: '720p 60fps', value: '720p60', bitrate: 3500, res: '1280x720', fps: 60 },
-  { label: '720p 30fps', value: '720p', bitrate: 2500, res: '1280x720', fps: 30 },
-  { label: '480p 30fps', value: '480p', bitrate: 1500, res: '854x480', fps: 30 },
+  { label: '1080p 60fps', value: '1080p60', bitrate: 9000, res: '1920x1080', fps: 60 },
+  { label: '1080p 30fps', value: '1080p', bitrate: 6000, res: '1920x1080', fps: 30 },
+  { label: '720p 60fps', value: '720p60', bitrate: 6000, res: '1280x720', fps: 60 },
+  { label: '720p 30fps', value: '720p', bitrate: 4000, res: '1280x720', fps: 30 },
+  { label: '480p 30fps', value: '480p', bitrate: 2500, res: '854x480', fps: 30 },
 ];
 
 interface StreamKey {
@@ -323,6 +323,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       return;
     }
     const quality = QUALITY_OPTIONS.find(option => option.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
+    // Recording H.264 lets the encoder copy the video instead of re-encoding it.
+    const supportsH264 =
+      typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=h264');
+    const preferredCodec: 'h264' | 'vp8' = supportsH264 ? 'h264' : 'vp8';
     const rtmpUrl = getRtmpUrl(activePlatform);
 
     if (!ipc) {
@@ -350,6 +354,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         bitrate: quality.bitrate,
         platform: activePlatform,
         mode: 'scene',
+        codec: preferredCodec,
         lut: lutPath,
         encoder,
         audio: {
@@ -405,15 +410,22 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       const combined = new MediaStream(liveTracks);
       const hasAudio = liveTracks.some(track => track.kind === 'audio');
       const candidates = hasAudio
-        ? ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm']
-        : ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
+        ? preferredCodec === 'h264'
+          ? ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+          : ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm']
+        : preferredCodec === 'h264'
+          ? ['video/webm;codecs=h264', 'video/webm;codecs=vp8', 'video/webm']
+          : ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
       const mimeType =
         candidates.find(candidate => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(candidate)) ||
         '';
       const recorder = new MediaRecorder(combined, {
         ...(mimeType ? { mimeType } : {}),
+        // The intermediate is re-encoded, so keep it well above the output
+        // bitrate; a lossy intermediate at the same rate produces a soft image
+        // and an encoder that keeps undershooting.
         videoBitsPerSecond: quality.bitrate * 1000,
-        ...(hasAudio ? { audioBitsPerSecond: 128000 } : {})
+        ...(hasAudio ? { audioBitsPerSecond: 160000 } : {})
       });
       let sentFirstChunk = false;
       recorder.ondataavailable = async event => {

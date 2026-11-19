@@ -818,10 +818,10 @@ function videoCodecArgs(encoder, bitrate, fps) {
     default:
       return ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-profile:v', 'high',
         '-b:v', rate, '-minrate', rate, '-maxrate', rate, '-bufsize', rate,
-        '-x264-params', 'nal-hrd=cbr:force-cfr=1', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
+        '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
   }
 }
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264' }) => {
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264', codec = 'vp8' }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
@@ -868,11 +868,15 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         effectiveEncoder = 'libx264';
       }
 
+      // A LUT needs a filter pass, so it cannot ride on a copied stream.
+      const copyVideo = String(codec).toLowerCase() === 'h264' && lutArgs.length === 0;
       const buildSceneArgs = (encoderName) => [
         '-f', 'webm',
+        '-fflags', '+genpts',
         '-i', 'pipe:0',
+        ...(copyVideo ? [] : ['-fps_mode', 'cfr', '-avoid_negative_ts', 'make_zero']),
         ...lutArgs,
-        ...videoCodecArgs(encoderName, bitrate, fps),
+        ...(copyVideo ? ['-c:v', 'copy'] : videoCodecArgs(encoderName, bitrate, fps)),
         ...audioArgs,
         '-c:a', 'aac',
         '-b:a', '128k',
@@ -945,7 +949,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       '-minrate', `${bitrate}k`,
       '-maxrate', `${bitrate}k`,
       '-bufsize', `${bitrate}k`,
-      '-x264-params', 'nal-hrd=cbr:force-cfr=1',
+      '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1',
       '-pix_fmt', 'yuv420p',
       '-g', String(fps * 2),
       '-r', String(fps),
