@@ -778,18 +778,35 @@ function getStreamCaptureRegion() {
   };
 }
 
+// A hardware encoder can be listed by ffmpeg yet fail to initialise when the
+// machine has no matching GPU, so prove it works with a tiny encode first.
+function encoderUsable(ffmpegPath, encoder) {
+  if (!encoder || encoder === 'libx264') return true;
+  try {
+    execFileSync(
+      ffmpegPath,
+      ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=320x240:r=10',
+        '-t', '0.3', '-c:v', encoder, '-f', 'null', '-'],
+      { timeout: 15000, windowsHide: true, stdio: 'ignore' }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Encoder-specific arguments. NVENC/QSV/AMF are hardware H.264 encoders.
 function videoCodecArgs(encoder, bitrate, fps) {
   const rate = `${bitrate}k`;
   switch (String(encoder || '').toLowerCase()) {
     case 'h264_nvenc':
-      return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-tune', 'll', '-rc', 'cbr', '-b:v', rate,
+      return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-tune', 'll', '-rc', 'cbr', '-profile:v', 'high', '-b:v', rate,
         '-maxrate', rate, '-bufsize', rate, '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
     case 'h264_qsv':
-      return ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-b:v', rate, '-maxrate', rate,
+      return ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-profile:v', 'high', '-b:v', rate, '-maxrate', rate,
         '-bufsize', rate, '-pix_fmt', 'nv12', '-g', String(fps * 2), '-r', String(fps)];
     case 'h264_amf':
-      return ['-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr', '-b:v', rate, '-maxrate', rate,
+      return ['-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr', '-profile:v', 'high', '-b:v', rate, '-maxrate', rate,
         '-bufsize', rate, '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
     case 'libx264':
     default:
@@ -837,17 +854,11 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       const audioArgs = delayMs > 0 ? ['-af', `adelay=${delayMs}|${delayMs}`] : [];
       // Validate the requested encoder; hardware encoders are often absent.
       let effectiveEncoder = String(encoder || 'libx264');
-      try {
-        const available = execFileSync(ffmpegPath, ['-hide_banner', '-encoders'], {
-          encoding: 'utf8',
-          timeout: 8000,
-          windowsHide: true
-        });
-        if (effectiveEncoder !== 'libx264' && !available.includes(effectiveEncoder)) {
-          sendStreamEvent('stream-log', `⚠ ${effectiveEncoder} is not in this ffmpeg build; using x264.`);
-          effectiveEncoder = 'libx264';
-        }
-      } catch {
+      if (!encoderUsable(ffmpegPath, effectiveEncoder)) {
+        sendStreamEvent(
+          'stream-log',
+          `⚠ ${effectiveEncoder} could not start on this machine; using x264 instead.`
+        );
         effectiveEncoder = 'libx264';
       }
 
@@ -866,23 +877,12 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         rtmpUrl
       ];
 
-      let sceneRetried = false;
-      const launchScene = (encoderName) => {
-        activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(encoderName), { windowsHide: true });
-        streamStopRequested = false;
-        attachStreamLogging();
-        activeStreamProcess.once('exit', (code) => {
-          if (code === 0 || streamStopRequested) return;
-          if (encoderName !== 'libx264' && !sceneRetried) {
-            sceneRetried = true;
-            sendStreamEvent('stream-log', `⚠ ${encoderName} failed (exit ${code}); retrying with x264.`);
-            launchScene('libx264');
-          } else {
-            sendStreamEvent('stream-log', `❌ Encoder stopped (exit ${code}).`);
-          }
-        });
-      };
-      launchScene(effectiveEncoder);
+      // A retry would start ffmpeg mid-stream, after the WebM header has already
+      // gone to the failed process, so the encoder must be right before launch.
+      sendStreamEvent('stream-log', `▶ Video encoder: ${effectiveEncoder}`);
+      activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(effectiveEncoder), { windowsHide: true });
+      streamStopRequested = false;
+      attachStreamLogging();
       return { success: true };
     }
 
