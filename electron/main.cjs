@@ -680,6 +680,11 @@ function attachStreamLogging() {
   const process = activeStreamProcess;
   if (!process) return;
 
+  // Writes race with the encoder shutting down; an unhandled stream error here
+  // surfaces as an uncaught exception in the main process.
+  if (process.stdin) process.stdin.on('error', () => {});
+  process.on('error', () => {});
+
   sendStreamEvent('stream-state', { state: 'connecting' });
 
   let announcedLive = false;
@@ -751,7 +756,8 @@ function attachStreamLogging() {
 /** Scene frames arrive from the renderer as WebM chunks. */
 ipcMain.on('stream-data', (_event, chunk) => {
   const process = activeStreamProcess;
-  if (!process || !process.stdin || !process.stdin.writable) return;
+  if (!process || !process.stdin) return;
+  if (process.stdin.destroyed || process.stdin.writableEnded || !process.stdin.writable) return;
   try {
     process.stdin.write(Buffer.from(chunk));
   } catch {
