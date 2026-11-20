@@ -883,6 +883,8 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         '-ar', '48000',
         '-ac', '2',
         '-y',
+        '-rtmp_buffer', '3000',
+        '-rtmp_live', 'live',
         '-f', 'flv',
         rtmpUrl
       ];

@@ -129,6 +129,9 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [lutPath, setLutPath] = useState<string>(() => localStorage.getItem('live_psalms_stream_lut') || '');
   const [encoder, setEncoder] = useState<string>(() => localStorage.getItem('live_psalms_stream_encoder') || 'libx264');
+  const [engine, setEngine] = useState<'stable' | 'copy'>(
+    () => (localStorage.getItem('live_psalms_stream_engine') === 'copy' ? 'copy' : 'stable')
+  );
   const [audioDelayMs, setAudioDelayMs] = useState<number>(() => Number(localStorage.getItem('live_psalms_audio_delay_ms') || 0));
   const [monitor, setMonitor] = useState<MonitorSettings>(() => loadMonitorSettings());
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -293,6 +296,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         }
         reconnectAttemptRef.current += 1;
         const attempt = reconnectAttemptRef.current;
+        const delayMs = Math.min(16000, 1000 * 2 ** (attempt - 1));
         setStreamLog(prev => [...prev, `${reason} Reconnecting in 3 s (attempt ${attempt}/${MAX_ATTEMPTS})`]);
         stopLocal();
         stopCapture();
@@ -301,7 +305,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         reconnectTimerRef.current = window.setTimeout(() => {
           reconnectTimerRef.current = null;
           void startStreamRef.current?.(true);
-        }, 3000);
+        }, delayMs);
       }    };
     const onStreamStats = (_event: any, stats: Record<string, number>) => {
       if (stats) streamStatus.applyStats(stats);
@@ -361,7 +365,15 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     // Recording H.264 lets the encoder copy the video instead of re-encoding it.
     const supportsH264 =
       typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=h264');
-    const preferredCodec: 'h264' | 'vp8' = supportsH264 ? 'h264' : 'vp8';
+    // Stable: encode in ffmpeg with CBR filler. Copy: keep the renderer's H.264
+    // untouched. Copy gives more frames, stable gives a guaranteed bitrate.
+    const preferredCodec: 'h264' | 'vp8' = engine === 'copy' && supportsH264 ? 'h264' : 'vp8';
+    // Repeated failures usually mean the uplink cannot hold the preset; step down.
+    const adaptiveFactor = reconnecting ? Math.max(0.5, 1 - 0.2 * (reconnectAttemptRef.current - 1)) : 1;
+    const streamBitrate = Math.max(800, Math.round(quality.bitrate * adaptiveFactor));
+    if (adaptiveFactor < 1) {
+      setStreamLog(prev => [...prev, `Reducing bitrate to ${streamBitrate} kbps after repeated drops.`]);
+    }
     const rtmpUrl = getRtmpUrl(activePlatform);
 
     if (!ipc) {
@@ -386,7 +398,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         rtmpUrl,
         resolution: quality.res,
         fps: quality.fps,
-        bitrate: quality.bitrate,
+        bitrate: streamBitrate,
         platform: activePlatform,
         mode: 'scene',
         codec: preferredCodec,
@@ -459,7 +471,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         // The intermediate is re-encoded, so keep it well above the output
         // bitrate; a lossy intermediate at the same rate produces a soft image
         // and an encoder that keeps undershooting.
-        videoBitsPerSecond: quality.bitrate * 1000,
+        videoBitsPerSecond:
+          preferredCodec === 'h264'
+            ? streamBitrate * 1000
+            : Math.min(8_000_000, Math.max(4_000_000, streamBitrate * 1200)),
         ...(hasAudio ? { audioBitsPerSecond: 160000 } : {})
       });
       let sentFirstChunk = false;
@@ -791,6 +806,27 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
                 </div>
               </Field>
 
+              <Field
+                label="Engine"
+                hint="Stable bitrate re-encodes with CBR padding; smoother motion copies the renderer's H.264 and can dip on dark scenes."
+              >
+                <Select
+                  value={engine}
+                  onValueChange={value => {
+                    const next = value === 'copy' ? 'copy' : 'stable';
+                    setEngine(next);
+                    localStorage.setItem('live_psalms_stream_engine', next);
+                  }}
+                >
+                  <SelectTrigger aria-label="Streaming engine">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stable">Stable bitrate (recommended)</SelectItem>
+                    <SelectItem value="copy">Smoother motion (copy)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Video encoder" hint="Hardware encoders offload the CPU; use the fallback if one fails.">
                 <Select
                   value={encoder}
