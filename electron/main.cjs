@@ -7,6 +7,7 @@ if (process.platform === 'linux') {
 }
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const os = require('os');
 const { execFile, execFileSync, spawn } = require('child_process');
 
@@ -22,6 +23,29 @@ let stageWindow = null;
 let ledWindow = null;
 let activeStreamProcess = null;
 let streamStopRequested = false;
+
+/**
+ * WebCodecs engine: the renderer encodes H.264 and AAC, main serves both to
+ * ffmpeg over local HTTP so they arrive as two live inputs.
+ */
+let webcodecsOutput = null;
+
+function closeWebcodecsOutput() {
+  if (!webcodecsOutput) return;
+  try {
+    webcodecsOutput.videoRes?.destroy();
+  } catch {}
+  try {
+    webcodecsOutput.audioRes?.destroy();
+  } catch {}
+  try {
+    webcodecsOutput.server?.close();
+  } catch {}
+  try {
+    webcodecsOutput.audioServer?.close();
+  } catch {}
+  webcodecsOutput = null;
+}
 
 // Default directory for Direct OBS File Output (Text GDI+ Read-from-file integration)
 function getObsOutputDir() {
@@ -367,7 +391,7 @@ ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
-    title: 'Live Psalms — Audience Presentation Output',
+    title: 'Live Psalms â€” Audience Presentation Output',
     bgColor: '#000000',
     externalIndex: 0,
     displayId: opts?.displayId
@@ -386,7 +410,7 @@ ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
-    title: 'Live Psalms — Stage Confidence Monitor',
+    title: 'Live Psalms â€” Stage Confidence Monitor',
     bgColor: '#070b12',
     externalIndex: 1,
     displayId: opts?.displayId
@@ -405,7 +429,7 @@ ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
-    title: 'Live Psalms — LED Wall & Motion Display Output',
+    title: 'Live Psalms â€” LED Wall & Motion Display Output',
     bgColor: '#000000',
     externalIndex: 2,
     displayId: opts?.displayId
@@ -765,6 +789,29 @@ ipcMain.on('stream-data', (_event, chunk) => {
   }
 });
 
+/** WebCodecs engine: encoded H.264 and AAC arrive as separate live streams. */
+ipcMain.on('stream-video-chunk', (_event, bytes, isKey) => {
+  const response = webcodecsOutput?.videoRes;
+  if (!response || response.writableEnded) return;
+  // Under backpressure keep only keyframes; they carry the sequence headers.
+  if (!isKey && response.writableLength > 4 * 1024 * 1024) return;
+  try {
+    response.write(Buffer.from(bytes));
+  } catch {
+    /* the encoder has already gone away */
+  }
+});
+
+ipcMain.on('stream-audio-chunk', (_event, bytes) => {
+  const response = webcodecsOutput?.audioRes;
+  if (!response || response.writableEnded) return;
+  try {
+    response.write(Buffer.from(bytes));
+  } catch {
+    /* the encoder has already gone away */
+  }
+});
+
 // Screen region that the live stream should show: the display the audience
 // window occupies, in physical pixels (gdigrab/x11grab ignore DPI scaling).
 function getStreamCaptureRegion() {
@@ -826,6 +873,54 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
     return { success: false, error: 'A stream is already running.' };
   }
   try {
+    if (mode === 'webcodecs') {
+      const ffmpegPath = resolveFfmpegBinary();
+      if (!ffmpegPath) {
+        return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
+      }
+      const hasAudio = Boolean(audio && audio.hasAudio);
+      const listen = (handler) =>
+        new Promise((resolve) => {
+          const server = net.createServer((socket) => {
+            socket.on('error', () => {});
+            socket.setNoDelay(true);
+            handler(socket);
+          });
+          server.on('error', () => {});
+          server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+        });
+      const video = await listen((socket) => {
+        if (webcodecsOutput) webcodecsOutput.videoRes = socket;
+      });
+      const audioServer = hasAudio
+        ? await listen((socket) => {
+            if (webcodecsOutput) webcodecsOutput.audioRes = socket;
+          })
+        : null;
+      webcodecsOutput = {
+        server: video.server,
+        audioServer: audioServer ? audioServer.server : null,
+        videoRes: null,
+        audioRes: null,
+        port: video.port
+      };
+      const wcArgs = [
+        '-f', 'h264', '-framerate', String(fps), '-i', `tcp://127.0.0.1:${video.port}`,
+        ...(hasAudio
+          ? ['-f', 'aac', '-i', `tcp://127.0.0.1:${audioServer.port}`, '-c:a', 'copy', '-bsf:a', 'aac_adtstoasc']
+          : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2']),
+        '-c:v', 'copy',
+        '-rtmp_buffer', '3000',
+        '-rtmp_live', 'live',
+        '-f', 'flv',
+        rtmpUrl
+      ];
+      activeStreamProcess = spawn(ffmpegPath, wcArgs, { windowsHide: true });
+      streamStopRequested = false;
+      attachStreamLogging();
+      activeStreamProcess.once('close', () => closeWebcodecsOutput());
+      return { success: true, port: video.port };
+    }
     // Audio input: a real capture device when one is configured, otherwise silence.
     const audioInputArgs = [];
     let audioFilter = null;
@@ -863,7 +958,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       if (!encoderUsable(ffmpegPath, effectiveEncoder)) {
         sendStreamEvent(
           'stream-log',
-          `⚠ ${effectiveEncoder} could not start on this machine; using x264 instead.`
+          `âš  ${effectiveEncoder} could not start on this machine; using x264 instead.`
         );
         effectiveEncoder = 'libx264';
       }
@@ -891,7 +986,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 
       // A retry would start ffmpeg mid-stream, after the WebM header has already
       // gone to the failed process, so the encoder must be right before launch.
-      sendStreamEvent('stream-log', `▶ Video encoder: ${effectiveEncoder}`);
+      sendStreamEvent('stream-log', `â–¶ Video encoder: ${effectiveEncoder}`);
       activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(effectiveEncoder), { windowsHide: true });
       streamStopRequested = false;
       attachStreamLogging();
@@ -980,6 +1075,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 
 ipcMain.handle('stop-stream', async () => {
   streamStopRequested = true;
+  closeWebcodecsOutput();
   if (activeStreamProcess) {
     try {
       activeStreamProcess.stdin?.end();
