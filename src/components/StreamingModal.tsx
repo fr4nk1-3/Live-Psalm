@@ -143,6 +143,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const sceneStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const manualStopRef = useRef(false);
+  const startStreamRef = useRef<((reconnecting?: boolean) => Promise<void>) | null>(null);
 
 
   const stopCapture = () => {
@@ -267,15 +271,38 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       if (payload.state === 'live') {
         streamStatus.markLive();
         setIsStreaming(true);
-      } else if (payload.state === 'ended') {
-        streamStatus.finish();
+      } else if (payload.state === 'ended' || payload.state === 'error') {
+        const reason = payload.error || 'Stream disconnected.';
+        if (manualStopRef.current) {
+          if (payload.state === 'error') {
+            streamStatus.finish(reason);
+            setStreamLog(prev => [...prev, `Stream error: ${reason}`]);
+          } else {
+            streamStatus.finish();
+          }
+          stopLocal();
+          return;
+        }
+        // Network drops are normal; retry like OBS instead of ending the service.
+        const MAX_ATTEMPTS = 5;
+        if (reconnectAttemptRef.current >= MAX_ATTEMPTS) {
+          streamStatus.finish(reason);
+          stopLocal();
+          setStreamLog(prev => [...prev, `${reason} Reconnect attempts exhausted.`]);
+          return;
+        }
+        reconnectAttemptRef.current += 1;
+        const attempt = reconnectAttemptRef.current;
+        setStreamLog(prev => [...prev, `${reason} Reconnecting in 3 s (attempt ${attempt}/${MAX_ATTEMPTS})`]);
         stopLocal();
-      } else if (payload.state === 'error') {
-        streamStatus.finish(payload.error || 'The stream stopped unexpectedly.');
-        stopLocal();
-        setStreamLog(prev => [...prev, `❌ ${payload.error || 'Stream stopped unexpectedly.'}`]);
-      }
-    };
+        stopCapture();
+        if (ipc) void ipc.invoke('stop-stream').catch(() => {});
+        if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = window.setTimeout(() => {
+          reconnectTimerRef.current = null;
+          void startStreamRef.current?.(true);
+        }, 3000);
+      }    };
     const onStreamStats = (_event: any, stats: Record<string, number>) => {
       if (stats) streamStatus.applyStats(stats);
     };
@@ -316,7 +343,15 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     return `${p.rtmpBase}/${streamKey}`;
   };
 
-  const startStream = async () => {
+  const startStream = async (reconnecting = false) => {
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (!reconnecting) {
+      manualStopRef.current = false;
+      reconnectAttemptRef.current = 0;
+    }
     const key = getKey(activePlatform);
     if (!key.key.trim()) {
       setStreamLog(['❌ Please enter a stream key first.']);
@@ -454,7 +489,14 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       setStreamLog(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'unknown'}`]);
     }
   };
+  startStreamRef.current = startStream;
+
   const stopStream = async () => {
+    manualStopRef.current = true;
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     stopCapture();
     if (ipc) {
       await ipc.invoke('stop-stream').catch(() => {});
@@ -1001,7 +1043,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
               <Button
                 variant="default"
                 size="sm"
-                onClick={startStream}
+                onClick={() => void startStream()}
                 disabled={
                   !keyConfig.key.trim() ||
                   ffmpegStatus !== 'available' ||
