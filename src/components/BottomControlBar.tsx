@@ -165,9 +165,7 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
   const streamLive = stream.state === 'live';
   const streamLabel =
     stream.state === 'live'
-      ? stream.platform
-        ? `Live · ${stream.platform}`
-        : 'Live'
+      ? 'Live'
       : stream.state === 'connecting'
       ? 'Connecting'
       : stream.state === 'error'
@@ -199,8 +197,18 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
         : `${Math.round(stream.stats.bitrateKbps)} kbps`
       : null;
 
-  const streamFrames =
-    typeof stream.stats.frames === 'number' ? stream.stats.frames.toLocaleString() : null;
+  const streamDroppedPct = (() => {
+    const dropped = typeof stream.stats.dropped === 'number' ? stream.stats.dropped : 0;
+    const frames = typeof stream.stats.frames === 'number' ? stream.stats.frames : 0;
+    if (frames + dropped <= 0) return null;
+    return ((dropped / (frames + dropped)) * 100).toFixed(1);
+  })();
+  const [, setClockTick] = React.useState(0);
+  React.useEffect(() => {
+    if (!streamLive) return;
+    const timer = setInterval(() => setClockTick(tick => tick + 1), 1000);
+    return () => clearInterval(timer);
+  }, [streamLive]);
 
   React.useEffect(() => {
     if (isCountdownRunning) setIsEditing(false);
@@ -287,17 +295,17 @@ export const BottomControlBar: React.FC<BottomControlBarProps> = ({
 
         {streamLive && (
           <>
-            <span className="text-muted-foreground/40" aria-hidden>·</span>
-            <span className="tabular hidden font-mono text-muted-foreground 2xl:inline">{streamUptime}</span>
-            <span className="text-muted-foreground/40" aria-hidden>·</span>
-            <span className="tabular font-mono text-foreground/80">{streamBitrate ?? '—'}</span>
-            <span className="hidden text-muted-foreground/40 2xl:inline" aria-hidden>·</span>
-            <span className="tabular hidden font-mono text-muted-foreground 2xl:inline">
-              {stream.stats.fps ? `${Math.round(stream.stats.fps)} fps` : '—'}
-            </span>
-            <span className="text-muted-foreground/40" aria-hidden>·</span>
+            <span className="text-muted-foreground/40" aria-hidden>{'\u00b7'}</span>
+            <span className="tabular font-mono text-muted-foreground">{streamUptime}</span>
+            <span className="text-muted-foreground/40" aria-hidden>{'\u00b7'}</span>
+            <span className="tabular font-mono text-foreground/80">{streamBitrate ?? '\u2014'}</span>
+            <span className="text-muted-foreground/40" aria-hidden>{'\u00b7'}</span>
             <span className="tabular font-mono text-muted-foreground">
-              {streamFrames ? `${streamFrames} frames` : '—'}
+              {stream.stats.fps ? `${Math.round(stream.stats.fps)} fps` : '\u2014'}
+            </span>
+            <span className="text-muted-foreground/40" aria-hidden>{'\u00b7'}</span>
+            <span className="tabular font-mono text-muted-foreground">
+              {streamDroppedPct ? `${streamDroppedPct}% dropped` : '\u2014'}
             </span>
           </>
         )}

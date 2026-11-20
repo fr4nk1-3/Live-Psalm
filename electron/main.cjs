@@ -391,7 +391,7 @@ ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
-    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Audience Presentation Output',
+    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Audience Presentation Output',
     bgColor: '#000000',
     externalIndex: 0,
     displayId: opts?.displayId
@@ -410,7 +410,7 @@ ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
-    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Stage Confidence Monitor',
+    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Stage Confidence Monitor',
     bgColor: '#070b12',
     externalIndex: 1,
     displayId: opts?.displayId
@@ -429,7 +429,7 @@ ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
-    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â LED Wall & Motion Display Output',
+    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â LED Wall & Motion Display Output',
     bgColor: '#000000',
     externalIndex: 2,
     displayId: opts?.displayId
@@ -863,9 +863,9 @@ function videoCodecArgs(encoder, bitrate, fps) {
         '-bufsize', rate, '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
     case 'libx264':
     default:
-      return ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-profile:v', 'high',
+      return ['-c:v', 'libx264', '-preset', 'veryfast', '-threads', '0', '-profile:v', 'high',
         '-b:v', rate, '-minrate', rate, '-maxrate', rate, '-bufsize', rate,
-        '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
+        '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1:sliced-threads=0', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
   }
 }
 ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264', codec = 'vp8', reencode = false, hardwareEncoder = 'auto' }) => {

@@ -1,5 +1,5 @@
 /**
- * StreamingModal Ã¢â‚¬â€ Live stream to YouTube, Twitch, or Facebook Live.
+ * StreamingModal — Live stream to YouTube, Twitch, or Facebook Live.
  * Uses Electron's main process to spawn ffmpeg, capturing the audience
  * output window via desktopCapturer and pushing to the RTMP endpoint.
  * Falls back gracefully if ffmpeg is not installed, showing setup instructions.
@@ -34,7 +34,7 @@ const PLATFORMS = {
     name: 'YouTube Live',
     rtmpBase: 'rtmp://a.rtmp.youtube.com/live2',
     keyPlaceholder: 'xxxx-xxxx-xxxx-xxxx-xxxx',
-    keyHelp: 'YouTube Studio Ã¢â€ â€™ Go Live Ã¢â€ â€™ Stream key',
+    keyHelp: 'YouTube Studio → Go Live → Stream key',
     docsUrl: 'https://support.google.com/youtube/answer/2907883',
     quality: '1080p' as const,
   },
@@ -43,7 +43,7 @@ const PLATFORMS = {
     name: 'Twitch',
     rtmpBase: 'rtmp://live.twitch.tv/live',
     keyPlaceholder: 'live_xxxxxxxxxxxxxxxxxxxxxxxxxx',
-    keyHelp: 'Twitch Dashboard Ã¢â€ â€™ Settings Ã¢â€ â€™ Stream Ã¢â€ â€™ Primary stream key',
+    keyHelp: 'Twitch Dashboard → Settings → Stream → Primary stream key',
     docsUrl: 'https://dashboard.twitch.tv/u/YOUR_USERNAME/settings/stream',
     quality: '720p60' as const,
   },
@@ -52,7 +52,7 @@ const PLATFORMS = {
     name: 'Facebook Live',
     rtmpBase: 'rtmps://live-api-s.facebook.com:443/rtmp',
     keyPlaceholder: 'FB-xxxxxxxxxxxxxxxxxxxx-x-xxxxxxxxxx',
-    keyHelp: 'Facebook Ã¢â€ â€™ Create a live video Ã¢â€ â€™ Use stream key',
+    keyHelp: 'Facebook → Create a live video → Use stream key',
     docsUrl: 'https://www.facebook.com/live/producer',
     quality: '720p' as const,
   },
@@ -93,10 +93,10 @@ function getIpc() {
 
 /** Log lines carry their own level marker; colour is state, never decoration. */
 function logLineClass(line: string): string {
-  if (line.startsWith('Ã¢Å“â€¦')) return 'text-success';
-  if (line.startsWith('Ã¢ÂÅ’')) return 'text-destructive';
-  if (line.startsWith('Ã¢Å¡Â ')) return 'text-warning';
-  if (line.startsWith('Ã¢â€“Â¶')) return 'text-foreground';
+  if (line.startsWith('✅')) return 'text-success';
+  if (line.startsWith('❌')) return 'text-destructive';
+  if (line.startsWith('⚠')) return 'text-warning';
+  if (line.startsWith('▶')) return 'text-foreground';
   return 'text-muted-foreground';
 }
 
@@ -149,6 +149,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const sceneStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const streamerRef = useRef<WebCodecsStreamer | null>(null);
+  const framePumpRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const manualStopRef = useRef(false);
@@ -156,6 +157,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
 
 
   const stopCapture = () => {
+    if (framePumpRef.current !== null) {
+      window.clearInterval(framePumpRef.current);
+      framePumpRef.current = null;
+    }
     if (streamerRef.current) {
       streamerRef.current.stop();
       streamerRef.current = null;
@@ -236,10 +241,10 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     setFfmpegInfo(result);
     if (result.available) {
       setFfmpegStatus('available');
-      setStreamLog(prev => [...prev, `Ã¢Å“â€¦ ffmpeg ready: ${result.path}`]);
+      setStreamLog(prev => [...prev, `✅ ffmpeg ready: ${result.path}`]);
     } else {
       setFfmpegStatus('missing');
-      setStreamLog(prev => [...prev, `Ã¢ÂÅ’ ${result.error || 'That file cannot be used as ffmpeg.'}`]);
+      setStreamLog(prev => [...prev, `❌ ${result.error || 'That file cannot be used as ffmpeg.'}`]);
     }
   };
 
@@ -274,7 +279,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     const onStreamEnded = () => {
       streamStatus.finish();
       stopLocal();
-      setStreamLog(prev => [...prev, 'Ã¢â‚¬â€ Stream ended Ã¢â‚¬â€']);
+      setStreamLog(prev => [...prev, '— Stream ended —']);
     };
     const onStreamState = (_event: any, payload: { state?: string; error?: string }) => {
       if (!payload?.state) return;
@@ -365,7 +370,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     }
     const key = getKey(activePlatform);
     if (!key.key.trim()) {
-      setStreamLog(['Ã¢ÂÅ’ Please enter a stream key first.']);
+      setStreamLog(['❌ Please enter a stream key first.']);
       return;
     }
     const quality = QUALITY_OPTIONS.find(option => option.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
@@ -387,7 +392,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
 
     if (!ipc) {
       streamStatus.finish('Streaming needs the desktop app.');
-      setStreamLog(['Ã¢Å¡Â  Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
+      setStreamLog(['⚠ Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
       return;
     }
 
@@ -395,7 +400,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     const canvas =
       document.querySelector<HTMLCanvasElement>('canvas[data-scene-role="broadcast"]') || getSceneCanvas();
     if (!canvas) {
-      setStreamLog(['Ã¢ÂÅ’ The scene preview is not ready yet.']);
+      setStreamLog(['❌ The scene preview is not ready yet.']);
       return;
     }
 
@@ -459,7 +464,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
       return;
     }
     streamStatus.begin(PLATFORMS[activePlatform].name);
-    setStreamLog([`Ã¢â€“Â¶ Starting stream to ${PLATFORMS[activePlatform].name}...`]);
+    setStreamLog([`▶ Starting stream to ${PLATFORMS[activePlatform].name}...`]);
 
     try {
       const result = await ipc.invoke('start-stream', {
@@ -485,7 +490,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
 
       if (!result.success) {
         streamStatus.finish(result.error || 'Could not start the encoder.');
-        setStreamLog(prev => [...prev, `Ã¢ÂÅ’ Failed: ${result.error}`]);
+        setStreamLog(prev => [...prev, `❌ Failed: ${result.error}`]);
         return;
       }
 
@@ -515,14 +520,14 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
           if (!audio.muted) tracks.push(...mic.getAudioTracks());
         } else {
           micRequest.then(late => late?.getTracks().forEach(track => track.stop())).catch(() => {});
-          setStreamLog(prev => [...prev, 'Ã¢Å¡Â  Starting without microphone audio.']);
+          setStreamLog(prev => [...prev, '⚠ Starting without microphone audio.']);
         }
       }
 
       const liveTracks = tracks.filter(track => track.readyState === 'live');
       setStreamLog(prev => [
         ...prev,
-        `Ã¢â€“Â¶ Capture: ${liveTracks.filter(track => track.kind === 'video').length} video, ${liveTracks.filter(track => track.kind === 'audio').length} audio`
+        `▶ Capture: ${liveTracks.filter(track => track.kind === 'video').length} video, ${liveTracks.filter(track => track.kind === 'audio').length} audio`
       ]);
       const combined = new MediaStream(liveTracks);
       const hasAudio = liveTracks.some(track => track.kind === 'audio');
@@ -543,7 +548,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         // and an encoder that keeps undershooting.
         videoBitsPerSecond:
           engine === 'stable' && preferredCodec === 'h264'
-            ? Math.min(15_000_000, Math.max(8_000_000, streamBitrate * 2500))
+            ? Math.min(10_000_000, Math.max(4_000_000, streamBitrate * 1000))
             : streamBitrate * 1000,
         ...(hasAudio ? { audioBitsPerSecond: 160000 } : {})
       });
@@ -554,24 +559,41 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         ipc.send('stream-data', bytes);
         if (!sentFirstChunk) {
           sentFirstChunk = true;
-          setStreamLog(prev => [...prev, `Ã¢â€“Â¶ Capturing scene (${mimeType || 'default webm'})`]);
+          setStreamLog(prev => [...prev, `▶ Capturing scene (${mimeType || 'default webm'})`]);
         }
       };
       recorder.onerror = event => {
         const message = (event as unknown as { error?: Error }).error?.message || 'recorder error';
-        setStreamLog(prev => [...prev, `Ã¢ÂÅ’ ${message}`]);
+        setStreamLog(prev => [...prev, `❌ ${message}`]);
       };
       recorder.start(250);
       recorderRef.current = recorder;
 
+      // Canvas capture timestamps frames nominally, so a slow paint loop makes
+      // media time lag wall-clock and the published bitrate collapse. Asking
+      // the track for a frame at the target rate keeps the stream real-time.
+      const canvasTrack = combined.getVideoTracks()[0] as
+        | (MediaStreamTrack & { requestFrame?: () => void })
+        | undefined;
+      if (canvasTrack && typeof canvasTrack.requestFrame === 'function') {
+        const period = Math.max(16, Math.round(1000 / quality.fps));
+        framePumpRef.current = window.setInterval(() => {
+          try {
+            canvasTrack.requestFrame?.();
+          } catch {
+            /* track ended */
+          }
+        }, period);
+      }
+
       setIsStreaming(true);
       setStreamingPlatform(activePlatform);
       setStreamStartTime(new Date());
-      setStreamLog(prev => [...prev, 'Ã¢Å“â€¦ Stream started successfully']);
+      setStreamLog(prev => [...prev, '✅ Stream started successfully']);
     } catch (error) {
       stopCapture();
       streamStatus.finish(error instanceof Error ? error.message : 'Could not start streaming.');
-      setStreamLog(prev => [...prev, `Ã¢ÂÅ’ Error: ${error instanceof Error ? error.message : 'unknown'}`]);
+      setStreamLog(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'unknown'}`]);
     }
   };
   startStreamRef.current = startStream;
@@ -590,7 +612,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     setStreamingPlatform(null);
     setStreamStartTime(null);
     streamStatus.finish();
-    setStreamLog(prev => [...prev, 'Ã¢ÂÂ¹ Stream stopped by operator.']);
+    setStreamLog(prev => [...prev, '⏹ Stream stopped by operator.']);
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -656,7 +678,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
           >
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-                {lutPath ? lutPath : 'No LUT Ã¢â‚¬â€ colours pass through unchanged'}
+                {lutPath ? lutPath : 'No LUT — colours pass through unchanged'}
               </span>
               <Button
                 size="xs"
@@ -669,7 +691,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
                   }
                 }}
               >
-                Choose LUTÃ¢â‚¬Â¦
+                Choose LUT…
               </Button>
               {lutPath && (
                 <Button
@@ -717,13 +739,13 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs font-medium text-foreground">ffmpeg was not found</h3>
                 <Button variant="secondary" size="xs" onClick={locateFfmpeg}>
-                  Locate ffmpegÃ¢â‚¬Â¦
+                  Locate ffmpeg…
                 </Button>
               </div>
               <p className="text-2xs leading-relaxed text-muted-foreground">
                 {ffmpegInfo?.error
                   ? ffmpegInfo.error
-                  : 'Live Psalms looks on PATH and in the usual install folders. If you just installed it, a packaged app can still hold the PATH it started with Ã¢â‚¬â€ point it at the executable once, or restart the app.'}
+                  : 'Live Psalms looks on PATH and in the usual install folders. If you just installed it, a packaged app can still hold the PATH it started with — point it at the executable once, or restart the app.'}
               </p>
               {ffmpegInfo?.path && (
                 <p className="break-all font-mono text-2xs text-muted-foreground/80">Tried: {ffmpegInfo.path}</p>
@@ -872,7 +894,7 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
 
               <Field label="Output" hint="Captured from the audience output window.">
                 <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
-                  {qualityObj.res} Ã‚Â· {qualityObj.fps} fps Ã‚Â· {qualityObj.bitrate} kbps
+                  {qualityObj.res} · {qualityObj.fps} fps · {qualityObj.bitrate} kbps
                 </div>
               </Field>
 
@@ -1124,18 +1146,18 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
               disabled={ffmpegStatus !== 'available' || !keyConfig.key.trim()}
               onClick={async () => {
                 const target = getRtmpUrl(activePlatform);
-                setStreamLog(prev => [...prev, `Ã°Å¸Â§Âª Testing ${target.replace(/\/[^/]*$/, '/Ã¢â‚¬Â¦')}`]);
+                setStreamLog(prev => [...prev, `🧪 Testing ${target.replace(/\/[^/]*$/, '/…')}`]);
                 const result = await ipc.invoke('test-stream-target', { url: target });
                 setStreamLog(prev => [
                   ...prev,
                   result.ok
-                    ? 'Ã¢Å“â€¦ Test succeeded: the server accepted the connection.'
-                    : `Ã¢ÂÅ’ Test failed: ${result.error || `ffmpeg exited with code ${result.code}`}`
+                    ? '✅ Test succeeded: the server accepted the connection.'
+                    : `❌ Test failed: ${result.error || `ffmpeg exited with code ${result.code}`}`
                 ]);
                 if (!result.ok && /I\/O error|End of file|Connection refused|handshake/i.test(result.error || '')) {
                   setStreamLog(prev => [
                     ...prev,
-                    'Ã¢â€žÂ¹ This looks like the network blocking the connection: check the firewall and whether the ISP permits RTMP (port 1935) or RTMPS (443).'
+                    'ℹ This looks like the network blocking the connection: check the firewall and whether the ISP permits RTMP (port 1935) or RTMPS (443).'
                   ]);
                 }
               }}
