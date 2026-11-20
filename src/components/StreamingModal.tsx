@@ -435,6 +435,8 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
         streamerRef.current = streamer;
         await streamer.start({
           canvas,
+          targetWidth: Number(quality.res.split('x')[0]) || canvas.width,
+          targetHeight: Number(quality.res.split('x')[1]) || canvas.height,
           fps: quality.fps,
           bitrateKbps: streamBitrate,
           audioTrack: hasAudio ? audioTrack : null,

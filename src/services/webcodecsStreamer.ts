@@ -8,6 +8,8 @@
 
 export interface WebCodecsOptions {
   canvas: HTMLCanvasElement;
+  targetWidth: number;
+  targetHeight: number;
   fps: number;
   bitrateKbps: number;
   audioTrack: MediaStreamTrack | null;
@@ -21,6 +23,9 @@ const KEYFRAME_INTERVAL_MS = 2000;
 
 export class WebCodecsStreamer {
   private canvas: HTMLCanvasElement | null = null;
+  private scratch: HTMLCanvasElement | null = null;
+  private targetWidth = 0;
+  private targetHeight = 0;
   private videoEncoder: VideoEncoder | null = null;
   private audioEncoder: AudioEncoder | null = null;
   private timer: number | null = null;
@@ -45,6 +50,13 @@ export class WebCodecsStreamer {
   async start(options: WebCodecsOptions): Promise<void> {
     this.options = options;
     this.canvas = options.canvas;
+    this.targetWidth = options.targetWidth;
+    this.targetHeight = options.targetHeight;
+    if (options.canvas.width !== options.targetWidth || options.canvas.height !== options.targetHeight) {
+      this.scratch = document.createElement('canvas');
+      this.scratch.width = options.targetWidth;
+      this.scratch.height = options.targetHeight;
+    }
     this.fps = options.fps;
     this.bitrateKbps = options.bitrateKbps;
     this.running = true;
@@ -53,8 +65,8 @@ export class WebCodecsStreamer {
 
     const config: VideoEncoderConfig = {
       codec: 'avc1.640028',
-      width: options.canvas.width,
-      height: options.canvas.height,
+      width: options.targetWidth,
+      height: options.targetHeight,
       bitrate: this.bitrateKbps * 1000,
       framerate: this.fps,
       latencyMode: 'realtime',
@@ -88,7 +100,13 @@ export class WebCodecsStreamer {
     const now = performance.now();
     const keyFrame = this.keyframeRequested || now - this.lastKeyframe >= KEYFRAME_INTERVAL_MS;
     try {
-      const frame = new VideoFrame(canvas, { timestamp: Math.round(now * 1000) });
+      let source = canvas;
+      if (this.scratch) {
+        const context = this.scratch.getContext('2d');
+        context?.drawImage(canvas, 0, 0, this.targetWidth, this.targetHeight);
+        source = this.scratch;
+      }
+      const frame = new VideoFrame(source, { timestamp: Math.round(now * 1000) });
       this.videoEncoder.encode(frame, { keyFrame });
       frame.close();
       if (keyFrame) {
@@ -164,8 +182,8 @@ export class WebCodecsStreamer {
     try {
       this.videoEncoder.configure({
         codec: 'avc1.640028',
-        width: this.canvas.width,
-        height: this.canvas.height,
+        width: this.targetWidth,
+        height: this.targetHeight,
         bitrate: this.bitrateKbps * 1000,
         framerate: this.fps,
         latencyMode: 'realtime',

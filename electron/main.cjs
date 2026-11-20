@@ -391,7 +391,7 @@ ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
-    title: 'Live Psalms â€” Audience Presentation Output',
+    title: 'Live Psalms Ã¢â‚¬â€ Audience Presentation Output',
     bgColor: '#000000',
     externalIndex: 0,
     displayId: opts?.displayId
@@ -410,7 +410,7 @@ ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
-    title: 'Live Psalms â€” Stage Confidence Monitor',
+    title: 'Live Psalms Ã¢â‚¬â€ Stage Confidence Monitor',
     bgColor: '#070b12',
     externalIndex: 1,
     displayId: opts?.displayId
@@ -429,7 +429,7 @@ ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
-    title: 'Live Psalms â€” LED Wall & Motion Display Output',
+    title: 'Live Psalms Ã¢â‚¬â€ LED Wall & Motion Display Output',
     bgColor: '#000000',
     externalIndex: 2,
     displayId: opts?.displayId
@@ -905,7 +905,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         port: video.port
       };
       const wcArgs = [
-        '-f', 'h264', '-framerate', String(fps), '-i', `tcp://127.0.0.1:${video.port}`,
+        '-use_wallclock_as_timestamps', '1', '-f', 'h264', '-framerate', String(fps), '-i', `tcp://127.0.0.1:${video.port}`,
         ...(hasAudio
           ? ['-f', 'aac', '-i', `tcp://127.0.0.1:${audioServer.port}`, '-c:a', 'copy', '-bsf:a', 'aac_adtstoasc']
           : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2']),
@@ -958,7 +958,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       if (!encoderUsable(ffmpegPath, effectiveEncoder)) {
         sendStreamEvent(
           'stream-log',
-          `âš  ${effectiveEncoder} could not start on this machine; using x264 instead.`
+          `Ã¢Å¡Â  ${effectiveEncoder} could not start on this machine; using x264 instead.`
         );
         effectiveEncoder = 'libx264';
       }
@@ -986,7 +986,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 
       // A retry would start ffmpeg mid-stream, after the WebM header has already
       // gone to the failed process, so the encoder must be right before launch.
-      sendStreamEvent('stream-log', `â–¶ Video encoder: ${effectiveEncoder}`);
+      sendStreamEvent('stream-log', `Ã¢â€“Â¶ Video encoder: ${effectiveEncoder}`);
       activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(effectiveEncoder), { windowsHide: true });
       streamStopRequested = false;
       attachStreamLogging();
