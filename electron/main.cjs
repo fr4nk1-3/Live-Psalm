@@ -391,7 +391,7 @@ ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
-    title: 'Live Psalms Ã¢â‚¬â€ Audience Presentation Output',
+    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Audience Presentation Output',
     bgColor: '#000000',
     externalIndex: 0,
     displayId: opts?.displayId
@@ -410,7 +410,7 @@ ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
-    title: 'Live Psalms Ã¢â‚¬â€ Stage Confidence Monitor',
+    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Stage Confidence Monitor',
     bgColor: '#070b12',
     externalIndex: 1,
     displayId: opts?.displayId
@@ -429,7 +429,7 @@ ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
-    title: 'Live Psalms Ã¢â‚¬â€ LED Wall & Motion Display Output',
+    title: 'Live Psalms ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â LED Wall & Motion Display Output',
     bgColor: '#000000',
     externalIndex: 2,
     displayId: opts?.displayId
@@ -868,7 +868,7 @@ function videoCodecArgs(encoder, bitrate, fps) {
         '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
   }
 }
-ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264', codec = 'vp8' }) => {
+ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode = 'scene', lut = '', encoder = 'libx264', codec = 'vp8', reencode = false, hardwareEncoder = 'auto' }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
@@ -953,18 +953,21 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 
       const delayMs = audio && typeof audio.delayMs === 'number' ? Math.max(0, Math.min(5000, Math.round(audio.delayMs))) : 0;
       const audioArgs = delayMs > 0 ? ['-af', `adelay=${delayMs}|${delayMs}`] : [];
-      // Validate the requested encoder; hardware encoders are often absent.
-      let effectiveEncoder = String(encoder || 'libx264');
-      if (!encoderUsable(ffmpegPath, effectiveEncoder)) {
-        sendStreamEvent(
-          'stream-log',
-          `Ã¢Å¡Â  ${effectiveEncoder} could not start on this machine; using x264 instead.`
-        );
-        effectiveEncoder = 'libx264';
+      // Pick the fastest encoder that actually initialises: hardware keeps the
+      // CPU free and still honours CBR, which is what OBS relies on.
+      const hardwareCandidates = ['h264_qsv', 'h264_nvenc', 'h264_amf'];
+      let effectiveEncoder = 'libx264';
+      if (String(hardwareEncoder) !== 'auto' && encoderUsable(ffmpegPath, hardwareEncoder)) {
+        effectiveEncoder = hardwareEncoder;
+      } else if (String(hardwareEncoder) === 'auto') {
+        effectiveEncoder = hardwareCandidates.find((name) => encoderUsable(ffmpegPath, name)) || 'libx264';
+      }
+      if (reencode && effectiveEncoder === 'libx264' && String(hardwareEncoder) !== 'auto') {
+        sendStreamEvent('stream-log', `${hardwareEncoder} could not start; using x264.`);
       }
 
       // A LUT needs a filter pass, so it cannot ride on a copied stream.
-      const copyVideo = String(codec).toLowerCase() === 'h264' && lutArgs.length === 0;
+      const copyVideo = String(codec).toLowerCase() === 'h264' && lutArgs.length === 0 && !reencode;
       const buildSceneArgs = (encoderName) => [
         '-f', 'webm',
         '-fflags', '+genpts',
@@ -986,7 +989,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
 
       // A retry would start ffmpeg mid-stream, after the WebM header has already
       // gone to the failed process, so the encoder must be right before launch.
-      sendStreamEvent('stream-log', `Ã¢â€“Â¶ Video encoder: ${effectiveEncoder}`);
+      sendStreamEvent('stream-log', 'Video encoder: ' + effectiveEncoder + (copyVideo ? ' (copy)' : ' (CBR)'));
       activeStreamProcess = spawn(ffmpegPath, buildSceneArgs(effectiveEncoder), { windowsHide: true });
       streamStopRequested = false;
       attachStreamLogging();
@@ -1103,4 +1106,5 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
 
