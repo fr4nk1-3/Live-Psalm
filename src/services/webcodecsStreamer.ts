@@ -70,8 +70,9 @@ export class WebCodecsStreamer {
       bitrate: this.bitrateKbps * 1000,
       framerate: this.fps,
       latencyMode: 'realtime',
-      // Hardware rate control ignored the target bitrate here; software honours it.
-      hardwareAcceleration: 'prefer-software',
+      // Hardware encodes 1080p in real time; ffmpeg re-encodes to CBR after it,
+      // so the hardware encoder's loose rate control no longer matters.
+      hardwareAcceleration: 'prefer-hardware',
       ...({ avc: { format: 'annexb' }, bitrateMode: 'constant' } as Record<string, unknown>)
     } as VideoEncoderConfig;
     const support = await VideoEncoder.isConfigSupported(config);
@@ -187,7 +188,7 @@ export class WebCodecsStreamer {
         bitrate: this.bitrateKbps * 1000,
         framerate: this.fps,
         latencyMode: 'realtime',
-        hardwareAcceleration: 'prefer-software',
+        hardwareAcceleration: 'prefer-hardware',
         ...({ avc: { format: 'annexb' }, bitrateMode: 'constant' } as Record<string, unknown>)
       } as VideoEncoderConfig);
       this.keyframeRequested = true;

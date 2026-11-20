@@ -909,7 +909,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         ...(hasAudio
           ? ['-f', 'aac', '-i', `tcp://127.0.0.1:${audioServer.port}`, '-c:a', 'copy', '-bsf:a', 'aac_adtstoasc']
           : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2']),
-        '-c:v', 'copy',
+        ...videoCodecArgs('libx264', bitrate, fps),
         '-rtmp_buffer', '3000',
         '-rtmp_live', 'live',
         '-f', 'flv',
