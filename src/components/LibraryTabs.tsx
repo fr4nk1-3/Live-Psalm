@@ -7,7 +7,7 @@ import { MediaVaultService } from '../services/mediaVault';
 import { BibleVersionModal, getBibleLanguageGroup, LanguageGroup } from './BibleVersionModal';
 import { BibleBookVerseModal } from './BibleBookVerseModal';
 import { SongEditorModal } from './SongEditorModal';
-import { Check, ChevronDown, MoreHorizontal, Search, X } from 'lucide-react';
+import { Check, ChevronDown, MoreHorizontal, Play, Search, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -1916,10 +1916,14 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                         </button>
                       ))}
                     </div>
+                    <p className="text-2xs leading-relaxed text-muted-foreground">
+                      Click a tile to apply it behind the live slide. To show the media on its own,
+                      use ⋯ → Present now.
+                    </p>
                   </div>
                 ) : (
                   <p className="text-2xs leading-relaxed text-muted-foreground">
-                    Plays fullscreen with audio and opens the broadcast transport deck.
+                    Click a clip to present it fullscreen with audio. The broadcast transport deck opens below.
                   </p>
                 )}
 
@@ -1953,6 +1957,15 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                         }
                       };
 
+                      /** Present the asset itself on the audience output, not as a background layer. */
+                      const presentMedia = () => {
+                        if (onPlayVideoNow) {
+                          onPlayVideoNow(item);
+                        } else {
+                          onAddMediaToPlaylist(item);
+                        }
+                      };
+
                       return (
                         <div
                           key={item.id}
@@ -1968,11 +1981,11 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                         >
                           <button
                             type="button"
-                            onClick={mediaSubMode === 'backgrounds' ? applyBackground : undefined}
+                            onClick={mediaSubMode === 'backgrounds' ? applyBackground : presentMedia}
                             title={
                               mediaSubMode === 'backgrounds'
                                 ? `Set ${item.name} as the background`
-                                : item.name
+                                : `Present ${item.name} fullscreen`
                             }
                             className="relative block aspect-video w-full overflow-hidden rounded-sm border border-border bg-background"
                           >
@@ -2008,6 +2021,16 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                   <Check className="h-3 w-3" />
                                   Applied
                                 </Badge>
+                              </span>
+                            )}
+                            {mediaSubMode === 'foreground' && (
+                              <span
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/25 group-hover:opacity-100"
+                              >
+                                <span className="rounded-full bg-black/70 p-2">
+                                  <Play className="h-4 w-4 fill-current text-white" />
+                                </span>
                               </span>
                             )}
                           </button>
@@ -2046,17 +2069,16 @@ export const LibraryTabs: React.FC<LibraryTabsProps> = ({
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 {mediaSubMode === 'backgrounds' ? (
-                                  <DropdownMenuItem onSelect={applyBackground}>
-                                    Apply as background
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem onSelect={applyBackground}>
+                                      Apply as background
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={presentMedia}>
+                                      Present now
+                                    </DropdownMenuItem>
+                                  </>
                                 ) : (
-                                  <DropdownMenuItem
-                                    onSelect={() =>
-                                      onPlayVideoNow
-                                        ? onPlayVideoNow(item)
-                                        : onAddMediaToPlaylist(item)
-                                    }
-                                  >
+                                  <DropdownMenuItem onSelect={presentMedia}>
                                     Present now
                                   </DropdownMenuItem>
                                 )}
