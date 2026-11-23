@@ -53,6 +53,7 @@ const DEFAULT_SOLID_COLOR = 'rgb(9 9 11)';
 
 const isVideoAssetUrl = (url?: string, type?: string) => {
   if (type === 'video') return true;
+  if (type === 'image') return false;
   if (!url) return false;
   return (
     url.endsWith('.mp4') ||

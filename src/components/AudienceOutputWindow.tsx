@@ -10,6 +10,9 @@ import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
 function isVideoUrl(url?: string | null, bgType?: Slide['backgroundType']): boolean {
   if (!url) return false;
   if (bgType === 'video') return true;
+  // Uploaded images are blob: URLs with no extension; the slide already says
+  // it is an image, so do not fall through to the video heuristic.
+  if (bgType === 'image') return false;
   const lower = url.toLowerCase();
   return (
     lower.endsWith('.mp4') ||

@@ -219,18 +219,22 @@ const SlideCanvas: React.FC<{
   );
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
+  // An explicit backgroundType wins. A blob: URL has no extension, so the
+  // heuristics below would otherwise treat an uploaded image as a video and
+  // render a <video> that cannot decode it (a black monitor).
   const isSlideVideoBg =
     slide?.backgroundType === 'video' ||
-    !!(
-      slideBgUrl &&
-      (slideBgUrl.endsWith('.mp4') ||
-        slideBgUrl.endsWith('.webm') ||
-        slideBgUrl.endsWith('.mov') ||
-        slideBgUrl.endsWith('.mkv') ||
-        slideBgUrl.endsWith('.m4v') ||
-        slideBgUrl.startsWith('data:video') ||
-        slideBgUrl.startsWith('blob:'))
-    );
+    (slide?.backgroundType !== 'image' &&
+      !!(
+        slideBgUrl &&
+        (slideBgUrl.endsWith('.mp4') ||
+          slideBgUrl.endsWith('.webm') ||
+          slideBgUrl.endsWith('.mov') ||
+          slideBgUrl.endsWith('.mkv') ||
+          slideBgUrl.endsWith('.m4v') ||
+          slideBgUrl.startsWith('data:video') ||
+          slideBgUrl.startsWith('blob:'))
+      ));
   const isPureMediaSlide = !!(slide && slideBgUrl && !slide.content?.trim());
   const isPureForegroundVideo = !!(isPureMediaSlide && isSlideVideoBg);
   const isPureImageSlide = !!(isPureMediaSlide && !isSlideVideoBg);

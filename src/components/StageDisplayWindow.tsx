@@ -16,6 +16,9 @@ function formatTranslationBadge(translationId?: string | null): string | null {
 function isVideoMediaSlide(slide?: Slide | null): boolean {
   if (!slide?.backgroundUrl) return false;
   if (slide.backgroundType === 'video') return true;
+  // Uploaded images are blob: URLs with no extension; the slide already says
+  // it is an image, so do not fall through to the video heuristic.
+  if (slide.backgroundType === 'image') return false;
   const u = slide.backgroundUrl.toLowerCase();
   return (
     u.endsWith('.mp4') ||
