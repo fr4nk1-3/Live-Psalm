@@ -482,6 +482,18 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
             {/* Layers */}
             <div className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto rounded-md border border-border bg-card/60 p-1.5">
               <span className="field-label px-1">Layers</span>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className={cn(
+                  'flex items-center justify-between rounded-sm px-1.5 py-1 text-left text-2xs transition-colors',
+                  selectedId === null ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+                )}
+              >
+                <span className="truncate font-medium">Canvas & background</span>
+                <span className="text-[10px] opacity-70">{draft.canvas.background.type}</span>
+              </button>
+              <span className="my-0.5 h-px w-full bg-border/60" aria-hidden />
               {ordered.map(element => (
                 <div
                   key={element.id}
@@ -578,15 +590,23 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
 
             {/* Properties */}
             <div className="flex w-64 shrink-0 flex-col gap-2 overflow-y-auto rounded-md border border-border bg-card/60 p-2">
-              <span className="field-label">Properties</span>
+              <div className="flex items-center justify-between">
+                <span className="field-label">{selected ? 'Element properties' : 'Canvas & layout'}</span>
+                {selected && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    className="text-2xs text-muted-foreground hover:text-foreground"
+                  >
+                    Canvas
+                  </button>
+                )}
+              </div>
               {!selected && (
                 <div className="space-y-3">
-                  <p className="text-2xs text-muted-foreground">
-                    Select an element on the canvas, or apply a slide layout preset to this scene.
-                  </p>
                   <Field
                     label="Apply slide layout"
-                    hint="Arranges the live slide title, content and reference elements in this scene."
+                    hint="Arranges the live slide title, content, reference and camera frame in this scene."
                   >
                     <Select
                       value={draft.layoutOverride || 'theme'}
@@ -594,7 +614,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                         if (value === 'theme') {
                           apply({ ...draft, layoutOverride: 'theme' }, false);
                         } else {
-                          apply(applyLayoutToScene(draft, value as Exclude<SceneDocument['layoutOverride'], 'theme' | undefined>), false);
+                          apply(applyLayoutToScene(draft, value as Exclude<SceneDocument['layoutOverride'], 'theme' | undefined>), true);
                         }
                       }}
                     >
@@ -613,6 +633,231 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
                       </SelectContent>
                     </Select>
                   </Field>
+
+                  <Field
+                    label="Background source"
+                    hint="Shown behind the layout and camera elements."
+                  >
+                    <Select
+                      value={draft.canvas.background.type || 'gradient'}
+                      onValueChange={value => {
+                        const type = value as SceneDocument['canvas']['background']['type'];
+                        apply(
+                          {
+                            ...draft,
+                            canvas: {
+                              ...draft.canvas,
+                              background: {
+                                ...draft.canvas.background,
+                                type,
+                                followLiveBackground: type === 'live' ? true : draft.canvas.background.followLiveBackground
+                              }
+                            }
+                          },
+                          true
+                        );
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-2xs" aria-label="Scene background type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="live">Live slide / global background</SelectItem>
+                        <SelectItem value="image">Image background</SelectItem>
+                        <SelectItem value="video">Video loop background</SelectItem>
+                        <SelectItem value="gradient">Color gradient</SelectItem>
+                        <SelectItem value="solid">Solid color</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  {mediaList.filter(a => a.type === 'image' || a.type === 'video').length > 0 && (
+                    <Field label="Media library background">
+                      <Select
+                        value={draft.canvas.background.assetId || 'none'}
+                        onValueChange={value => {
+                          if (value === 'none') {
+                            apply(
+                              {
+                                ...draft,
+                                canvas: {
+                                  ...draft.canvas,
+                                  background: {
+                                    ...draft.canvas.background,
+                                    assetId: undefined,
+                                    src: '',
+                                    type: 'live',
+                                    followLiveBackground: true
+                                  }
+                                }
+                              },
+                              true
+                            );
+                            return;
+                          }
+                          const asset = mediaList.find(item => item.id === value);
+                          if (!asset) return;
+                          apply(
+                            {
+                              ...draft,
+                              canvas: {
+                                ...draft.canvas,
+                                background: {
+                                  ...draft.canvas.background,
+                                  type: asset.type === 'video' ? 'video' : 'image',
+                                  assetId: asset.id,
+                                  src: asset.url,
+                                  followLiveBackground: false
+                                }
+                              }
+                            },
+                            true
+                          );
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-2xs" aria-label="Scene background asset">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None (use live or stage color)</SelectItem>
+                          {mediaList
+                            .filter(a => a.type === 'image' || a.type === 'video')
+                            .map(asset => (
+                              <SelectItem key={asset.id} value={asset.id}>
+                                {asset.name} ({asset.type})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
+
+                  {(draft.canvas.background.type === 'image' || draft.canvas.background.type === 'video') && (
+                    <Field label="Background URL" hint="Paste an image or video URL.">
+                      <Input
+                        value={draft.canvas.background.src || ''}
+                        onChange={event =>
+                          apply(
+                            {
+                              ...draft,
+                              canvas: {
+                                ...draft.canvas,
+                                background: {
+                                  ...draft.canvas.background,
+                                  src: event.target.value,
+                                  assetId: undefined
+                                }
+                              }
+                            },
+                            false
+                          )
+                        }
+                        className="h-7 text-2xs"
+                        placeholder="https://…"
+                      />
+                    </Field>
+                  )}
+
+                  {draft.canvas.background.type === 'solid' && (
+                    <Field label="Stage color">
+                      <Input
+                        type="color"
+                        value={draft.canvas.background.color || '#0e0e10'}
+                        onChange={event =>
+                          apply(
+                            {
+                              ...draft,
+                              canvas: {
+                                ...draft.canvas,
+                                background: {
+                                  ...draft.canvas.background,
+                                  color: event.target.value
+                                }
+                              }
+                            },
+                            false
+                          )
+                        }
+                        className="h-7 w-full p-1"
+                      />
+                    </Field>
+                  )}
+
+                  {draft.canvas.background.type === 'gradient' && (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Field label="From">
+                        <Input
+                          type="color"
+                          value={draft.canvas.background.from || '#111827'}
+                          onChange={event =>
+                            apply(
+                              {
+                                ...draft,
+                                canvas: {
+                                  ...draft.canvas,
+                                  background: {
+                                    ...draft.canvas.background,
+                                    from: event.target.value
+                                  }
+                                }
+                              },
+                              false
+                            )
+                          }
+                          className="h-7 w-full p-1"
+                        />
+                      </Field>
+                      <Field label="To">
+                        <Input
+                          type="color"
+                          value={draft.canvas.background.to || '#020617'}
+                          onChange={event =>
+                            apply(
+                              {
+                                ...draft,
+                                canvas: {
+                                  ...draft.canvas,
+                                  background: {
+                                    ...draft.canvas.background,
+                                    to: event.target.value
+                                  }
+                                }
+                              },
+                              false
+                            )
+                          }
+                          className="h-7 w-full p-1"
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <Label className="text-2xs">Show live slide background</Label>
+                    <Switch
+                      checked={
+                        draft.canvas.background.type === 'live' ||
+                        Boolean(draft.canvas.background.followLiveBackground)
+                      }
+                      onCheckedChange={checked =>
+                        apply(
+                          {
+                            ...draft,
+                            canvas: {
+                              ...draft.canvas,
+                              background: {
+                                ...draft.canvas.background,
+                                type: checked ? 'live' : draft.canvas.background.type === 'live' ? 'gradient' : draft.canvas.background.type,
+                                followLiveBackground: checked
+                              }
+                            }
+                          },
+                          true
+                        )
+                      }
+                      aria-label="Follow live slide background"
+                    />
+                  </div>
                 </div>
               )}
               {selected && (
@@ -1022,12 +1267,13 @@ const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial
           <SelectItem value="slide.title">Slide title</SelectItem>
           <SelectItem value="slide.subtitle">Slide subtitle</SelectItem>
           <SelectItem value="slide.reference">Scripture reference</SelectItem>
+          <SelectItem value="countdown.time">Countdown timer</SelectItem>
           <SelectItem value="theme.name">Theme name</SelectItem>
         </SelectContent>
       </Select>
     </Field>
-    {!element.binding && (
-      <Field label="Text">
+    {(!element.binding || element.binding === 'countdown.time') && (
+      <Field label={element.binding === 'countdown.time' ? 'Start duration (MM:SS)' : 'Text'}>
         <Input value={element.content} onChange={event => onChange({ content: event.target.value })} className="h-7 text-2xs" />
       </Field>
     )}
@@ -1087,30 +1333,77 @@ const TextProperties: React.FC<{ element: TextElement; onChange: (patch: Partial
   );
 };
 
+function parseShapeFill(fill: string): { hex: string; alpha: number } {
+  const trimmed = (fill || '').trim();
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.length === 7 ? trimmed : '#020617';
+    return { hex, alpha: 1 };
+  }
+  const match = trimmed.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\s*\)/i);
+  if (match) {
+    const r = Math.min(255, Math.max(0, Number(match[1]))).toString(16).padStart(2, '0');
+    const g = Math.min(255, Math.max(0, Number(match[2]))).toString(16).padStart(2, '0');
+    const b = Math.min(255, Math.max(0, Number(match[3]))).toString(16).padStart(2, '0');
+    const a = match[4] !== undefined ? Math.min(1, Math.max(0, Number(match[4]))) : 1;
+    return { hex: `#${r}${g}${b}`, alpha: a };
+  }
+  return { hex: '#020617', alpha: 0.45 };
+}
+
+function formatShapeFill(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2) || '02', 16);
+  const g = parseInt(clean.slice(2, 4) || '06', 16);
+  const b = parseInt(clean.slice(4, 6) || '17', 16);
+  if (alpha >= 0.995) return `#${clean}`;
+  return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(2))})`;
+}
+
 const ShapeProperties: React.FC<{ element: ShapeElement; onChange: (patch: Partial<ShapeElement>) => void }> = ({
   element,
   onChange
-}) => (
-  <>
-    <Field label="Kind">
-      <Select value={element.kind} onValueChange={value => onChange({ kind: value as ShapeElement['kind'] })}>
-        <SelectTrigger className="h-7 text-2xs" aria-label="Shape kind">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="rect">Rectangle</SelectItem>
-          <SelectItem value="circle">Circle</SelectItem>
-        </SelectContent>
-      </Select>
-    </Field>
-    <Field label="Fill">
-      <Input type="color" value={element.fill.startsWith('#') ? element.fill : '#101014'} onChange={event => onChange({ fill: event.target.value })} className="h-7 w-full p-1" />
-    </Field>
-    <Field label="Radius">
-      <Input type="number" value={element.radius} onChange={event => onChange({ radius: Number(event.target.value) })} className="h-7 text-2xs" />
-    </Field>
-  </>
-);
+}) => {
+  const { hex, alpha } = parseShapeFill(element.fill);
+  return (
+    <>
+      <Field label="Kind">
+        <Select value={element.kind} onValueChange={value => onChange({ kind: value as ShapeElement['kind'] })}>
+          <SelectTrigger className="h-7 text-2xs" aria-label="Shape kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="rect">Rectangle</SelectItem>
+            <SelectItem value="circle">Circle</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Fill color">
+        <Input
+          type="color"
+          value={hex}
+          onChange={event => onChange({ fill: formatShapeFill(event.target.value, alpha) })}
+          className="h-7 w-full p-1"
+        />
+      </Field>
+      <Field
+        label="Fill transparency"
+        action={<span className="tabular text-2xs text-muted-foreground">{Math.round(alpha * 100)}%</span>}
+      >
+        <Slider
+          value={[Math.round(alpha * 100)]}
+          min={5}
+          max={100}
+          step={5}
+          onValueChange={([value]) => onChange({ fill: formatShapeFill(hex, value / 100) })}
+          aria-label="Fill transparency"
+        />
+      </Field>
+      <Field label="Radius">
+        <Input type="number" value={element.radius} onChange={event => onChange({ radius: Number(event.target.value) })} className="h-7 text-2xs" />
+      </Field>
+    </>
+  );
+};
 
 const ImageProperties: React.FC<{
   element: ImageElement;

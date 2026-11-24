@@ -39,11 +39,11 @@ export function defaultScenes(): SceneDocument[] {
 
   scenes.push(
     createScene('Full screen presentation', {
-      description: 'Presentation text over a dark stage.',
+      description: 'Presentation text over the active slide background.',
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
-        background: { type: 'gradient', from: '#111827', to: '#020617', angle: 160 }
+        background: { type: 'gradient', from: '#111827', to: '#020617', angle: 160, followLiveBackground: true }
       },
       elements: [fullText('slide.content', 88), reference()]
     })
@@ -51,14 +51,14 @@ export function defaultScenes(): SceneDocument[] {
 
   scenes.push(
     createScene('Presentation with lower third', {
-      description: 'Slide text with a name strap along the bottom.',
+      description: 'Slide text with a translucent name strap along the bottom.',
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
-        background: { type: 'gradient', from: '#0f172a', to: '#020617', angle: 120 }
+        background: { type: 'gradient', from: '#0f172a', to: '#020617', angle: 120, followLiveBackground: true }
       },
       elements: [
-        createShapeElement({ name: 'Lower third bar', fill: 'rgba(8, 8, 10, 0.86)', frame: { x: 120, y: 800, width: 1120, height: 170 }, radius: 10, zIndex: 5 }),
+        createShapeElement({ name: 'Lower third bar', fill: 'rgba(8, 8, 14, 0.45)', frame: { x: 120, y: 800, width: 1120, height: 170 }, radius: 10, zIndex: 5 }),
         createTextElement({
           name: 'Speaker',
           content: 'Pastor name',
@@ -71,7 +71,7 @@ export function defaultScenes(): SceneDocument[] {
           name: 'Role',
           content: 'Role or church',
           fontSize: 30,
-          color: 'rgba(255,255,255,0.72)',
+          color: 'rgba(255,255,255,0.78)',
           align: 'left',
           frame: { x: 160, y: 888, width: 1040, height: 50 },
           zIndex: 6
@@ -83,7 +83,7 @@ export function defaultScenes(): SceneDocument[] {
 
   scenes.push(
     createScene('Speaker introduction', {
-      description: 'Camera full frame with a name strap.',
+      description: 'Camera full frame with a translucent name strap.',
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
@@ -91,7 +91,7 @@ export function defaultScenes(): SceneDocument[] {
       },
       elements: [
         createCameraElement({ name: 'Camera', deviceId: '', frame: { x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT }, radius: 0, zIndex: 1 }),
-        createShapeElement({ name: 'Strap', fill: 'rgba(8, 8, 10, 0.82)', frame: { x: 0, y: 840, width: 1080, height: 200 }, radius: 0, zIndex: 4 }),
+        createShapeElement({ name: 'Strap', fill: 'rgba(8, 8, 14, 0.45)', frame: { x: 0, y: 840, width: 1080, height: 200 }, radius: 0, zIndex: 4 }),
         createTextElement({
           name: 'Speaker',
           content: 'Pastor name',
@@ -104,7 +104,7 @@ export function defaultScenes(): SceneDocument[] {
           name: 'Role',
           content: 'Role or church',
           fontSize: 32,
-          color: 'rgba(255,255,255,0.72)',
+          color: 'rgba(255,255,255,0.78)',
           align: 'left',
           frame: { x: 80, y: 950, width: 940, height: 50 },
           zIndex: 5
@@ -133,7 +133,7 @@ export function defaultScenes(): SceneDocument[] {
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
-        background: { type: 'gradient', from: '#0b1220', to: '#1e1b4b', angle: 200 }
+        background: { type: 'gradient', from: '#0b1220', to: '#1e1b4b', angle: 200, followLiveBackground: true }
       },
       elements: [
         fullText('slide.content', 80),
@@ -144,11 +144,11 @@ export function defaultScenes(): SceneDocument[] {
 
   scenes.push(
     createScene('Worship lyrics', {
-      description: 'Large lyric text on a near-black stage.',
+      description: 'Large lyric text on the active slide background or dark stage.',
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
-        background: { type: 'solid', color: '#07070a' }
+        background: { type: 'solid', color: '#07070a', followLiveBackground: true }
       },
       elements: [
         createTextElement({
@@ -212,6 +212,7 @@ export function defaultScenes(): SceneDocument[] {
         }),
         createTextElement({
           name: 'Time',
+          binding: 'countdown.time',
           content: '10:00',
           fontSize: 150,
           fontWeight: '700',
@@ -222,17 +223,22 @@ export function defaultScenes(): SceneDocument[] {
     })
   );
 
+  // Camera + Layout scenes: pair a live Camera element with each slide layout (all elements remain editable in SceneEditor)
+  for (const camPreset of cameraLayoutScenes()) {
+    scenes.push(camPreset.scene);
+  }
+
   return scenes;
 }
 
 export const SCENE_LAYOUT_OPTIONS: { id: ProjectorLayout; label: string; description: string }[] = [
   { id: 'centered', label: 'Centered', description: 'Centered slide text with section badge and reference.' },
-  { id: 'lower_third', label: 'Lower third', description: 'Bottom broadcast banner with accent bar and live text.' },
-  { id: 'top_banner', label: 'Top banner', description: 'Top broadcast banner with accent bar and live text.' },
-  { id: 'split_left', label: 'Left split', description: 'Left-hand presentation card leaving the right side open.' },
-  { id: 'split_right', label: 'Right split', description: 'Right-hand presentation card leaving the left side open.' },
-  { id: 'boxed_card', label: 'Boxed card', description: 'Centered cinema boxed card with section badge and reference.' },
-  { id: 'minimal', label: 'Minimal', description: 'Distraction-free centered lyrics or verse text only.' }
+  { id: 'lower_third', label: 'Lower third', description: 'Translucent bottom broadcast banner with accent bar and live text.' },
+  { id: 'top_banner', label: 'Top banner', description: 'Translucent top broadcast banner with accent bar and live text.' },
+  { id: 'split_left', label: 'Left split', description: 'Left-hand presentation card paired with right-hand camera or stage.' },
+  { id: 'split_right', label: 'Right split', description: 'Right-hand presentation card paired with left-hand camera or stage.' },
+  { id: 'boxed_card', label: 'Boxed card', description: 'Centered translucent cinema card with section badge and reference.' },
+  { id: 'minimal', label: 'Minimal', description: 'Distraction-free lyrics or verse text over camera or background.' }
 ];
 
 const LAYOUT_SHAPE_NAMES = new Set([
@@ -242,8 +248,34 @@ const LAYOUT_SHAPE_NAMES = new Set([
   'Top banner accent bar',
   'Left split card',
   'Right split card',
-  'Boxed card'
+  'Boxed card',
+  'Strap',
+  'Lower third bar'
 ]);
+
+/** Best-matching camera frame and corner radius for each slide layout. */
+export function cameraFrameForLayout(layout: ProjectorLayout): {
+  frame: { x: number; y: number; width: number; height: number };
+  radius: number;
+} {
+  switch (layout) {
+    case 'split_left':
+      return {
+        frame: { x: 1010, y: 96, width: 830, height: 888 },
+        radius: 28
+      };
+    case 'split_right':
+      return {
+        frame: { x: 80, y: 96, width: 830, height: 888 },
+        radius: 28
+      };
+    default:
+      return {
+        frame: { x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT },
+        radius: 0
+      };
+  }
+}
 
 /** Builds Chris-style SceneElements (shapes + bound text elements) for any of the 7 slide layouts. */
 export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
@@ -252,7 +284,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
       return [
         createShapeElement({
           name: 'Lower third backdrop',
-          fill: 'rgba(2, 6, 23, 0.90)',
+          fill: 'rgba(2, 6, 23, 0.45)',
           radius: 14,
           frame: { x: 80, y: 710, width: 1760, height: 310 },
           zIndex: 10
@@ -292,7 +324,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           binding: 'slide.reference',
           content: '',
           fontSize: 24,
-          color: 'rgba(148, 163, 184, 0.92)',
+          color: 'rgba(226, 232, 240, 0.92)',
           align: 'left',
           frame: { x: 124, y: 958, width: 1660, height: 44 },
           zIndex: 14
@@ -303,7 +335,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
       return [
         createShapeElement({
           name: 'Top banner backdrop',
-          fill: 'rgba(2, 6, 23, 0.90)',
+          fill: 'rgba(2, 6, 23, 0.45)',
           radius: 14,
           frame: { x: 80, y: 60, width: 1760, height: 310 },
           zIndex: 10
@@ -343,7 +375,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           binding: 'slide.reference',
           content: '',
           fontSize: 24,
-          color: 'rgba(148, 163, 184, 0.92)',
+          color: 'rgba(226, 232, 240, 0.92)',
           align: 'left',
           frame: { x: 124, y: 308, width: 1660, height: 44 },
           zIndex: 14
@@ -354,9 +386,9 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
       return [
         createShapeElement({
           name: 'Left split card',
-          fill: 'rgba(2, 6, 23, 0.80)',
+          fill: 'rgba(2, 6, 23, 0.54)',
           radius: 28,
-          frame: { x: 80, y: 96, width: 1020, height: 888 },
+          frame: { x: 80, y: 96, width: 900, height: 888 },
           zIndex: 10
         }),
         createTextElement({
@@ -365,21 +397,21 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           content: '',
           fontSize: 26,
           fontWeight: '700',
-          color: 'rgba(255,255,255,0.68)',
+          color: '#34d399',
           align: 'left',
           uppercase: true,
-          frame: { x: 136, y: 140, width: 908, height: 52 },
+          frame: { x: 136, y: 140, width: 788, height: 52 },
           zIndex: 11
         }),
         createTextElement({
           name: 'Presentation text',
           binding: 'slide.content',
           content: 'Slide text',
-          fontSize: 72,
+          fontSize: 68,
           fontWeight: '700',
           color: '#ffffff',
           align: 'left',
-          frame: { x: 136, y: 210, width: 908, height: 660 },
+          frame: { x: 136, y: 210, width: 788, height: 660 },
           zIndex: 12
         }),
         createTextElement({
@@ -387,9 +419,9 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           binding: 'slide.reference',
           content: '',
           fontSize: 28,
-          color: 'rgba(255,255,255,0.72)',
+          color: 'rgba(226, 232, 240, 0.85)',
           align: 'left',
-          frame: { x: 136, y: 890, width: 908, height: 60 },
+          frame: { x: 136, y: 890, width: 788, height: 60 },
           zIndex: 13
         })
       ];
@@ -398,9 +430,9 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
       return [
         createShapeElement({
           name: 'Right split card',
-          fill: 'rgba(2, 6, 23, 0.80)',
+          fill: 'rgba(2, 6, 23, 0.54)',
           radius: 28,
-          frame: { x: 820, y: 96, width: 1020, height: 888 },
+          frame: { x: 940, y: 96, width: 900, height: 888 },
           zIndex: 10
         }),
         createTextElement({
@@ -409,21 +441,21 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           content: '',
           fontSize: 26,
           fontWeight: '700',
-          color: 'rgba(255,255,255,0.68)',
+          color: '#34d399',
           align: 'right',
           uppercase: true,
-          frame: { x: 876, y: 140, width: 908, height: 52 },
+          frame: { x: 996, y: 140, width: 788, height: 52 },
           zIndex: 11
         }),
         createTextElement({
           name: 'Presentation text',
           binding: 'slide.content',
           content: 'Slide text',
-          fontSize: 72,
+          fontSize: 68,
           fontWeight: '700',
           color: '#ffffff',
           align: 'right',
-          frame: { x: 876, y: 210, width: 908, height: 660 },
+          frame: { x: 996, y: 210, width: 788, height: 660 },
           zIndex: 12
         }),
         createTextElement({
@@ -431,9 +463,9 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           binding: 'slide.reference',
           content: '',
           fontSize: 28,
-          color: 'rgba(255,255,255,0.72)',
+          color: 'rgba(226, 232, 240, 0.85)',
           align: 'right',
-          frame: { x: 876, y: 890, width: 908, height: 60 },
+          frame: { x: 996, y: 890, width: 788, height: 60 },
           zIndex: 13
         })
       ];
@@ -442,7 +474,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
       return [
         createShapeElement({
           name: 'Boxed card',
-          fill: 'rgba(2, 6, 23, 0.82)',
+          fill: 'rgba(2, 6, 23, 0.52)',
           radius: 32,
           frame: { x: 160, y: 100, width: 1600, height: 880 },
           zIndex: 10
@@ -453,7 +485,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           content: '',
           fontSize: 26,
           fontWeight: '700',
-          color: 'rgba(255,255,255,0.68)',
+          color: '#34d399',
           align: 'center',
           uppercase: true,
           frame: { x: 240, y: 148, width: 1440, height: 52 },
@@ -475,7 +507,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           binding: 'slide.reference',
           content: '',
           fontSize: 30,
-          color: 'rgba(255,255,255,0.72)',
+          color: 'rgba(226, 232, 240, 0.85)',
           align: 'center',
           frame: { x: 240, y: 884, width: 1440, height: 60 },
           zIndex: 13
@@ -506,7 +538,7 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
           content: '',
           fontSize: 28,
           fontWeight: '700',
-          color: 'rgba(255,255,255,0.68)',
+          color: 'rgba(255,255,255,0.78)',
           align: 'center',
           uppercase: true,
           frame: { x: 460, y: 170, width: 1000, height: 56 },
@@ -520,7 +552,9 @@ export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
 
 /**
  * Applies one of the 7 slide layouts to an existing SceneDocument, preserving
- * any cameras, media, captures, images, or non-slide static elements.
+ * the scene canvas background and any cameras, media, captures, images, or
+ * non-slide static elements, while automatically framing a single primary
+ * camera to best match the chosen layout.
  */
 export function applyLayoutToScene(scene: SceneDocument, layout: ProjectorLayout): SceneDocument {
   const hasPresentationEl = scene.elements.some(el => el.type === 'presentation');
@@ -541,7 +575,9 @@ export function applyLayoutToScene(scene: SceneDocument, layout: ProjectorLayout
       (el.binding === 'slide.content' ||
         el.binding === 'slide.title' ||
         el.binding === 'slide.reference' ||
-        el.binding === 'slide.subtitle')
+        el.binding === 'slide.subtitle' ||
+        (el.name === 'Speaker' && el.content === 'Pastor name') ||
+        (el.name === 'Role' && el.content === 'Role or church'))
     ) {
       return false;
     }
@@ -551,11 +587,37 @@ export function applyLayoutToScene(scene: SceneDocument, layout: ProjectorLayout
     return true;
   });
 
+  const cameraCount = kept.filter(el => el.type === 'camera').length;
+  const bestCam = cameraFrameForLayout(layout);
+  const adjustedKept =
+    cameraCount === 1
+      ? kept.map(el =>
+          el.type === 'camera'
+            ? {
+                ...el,
+                frame: { ...el.frame, ...bestCam.frame },
+                radius: bestCam.radius
+              }
+            : el
+        )
+      : kept;
+
+  const isSplit = layout === 'split_left' || layout === 'split_right';
+  const hasFullFrameCamera = cameraCount > 0 && !isSplit;
+  const nextBackground =
+    !hasFullFrameCamera && layout === 'centered' && !scene.canvas.background.src && !scene.canvas.background.assetId
+      ? { ...scene.canvas.background, followLiveBackground: true }
+      : scene.canvas.background;
+
   return {
     ...scene,
     layoutOverride: layout,
     updatedAt: Date.now(),
-    elements: [...kept, ...buildLayoutElements(layout)]
+    canvas: {
+      ...scene.canvas,
+      background: nextBackground
+    },
+    elements: [...adjustedKept, ...buildLayoutElements(layout)]
   };
 }
 
@@ -570,9 +632,90 @@ export function layoutScenes(): { id: ProjectorLayout; label: string; scene: Sce
       canvas: {
         width: SCENE_WIDTH,
         height: SCENE_HEIGHT,
-        background: { type: 'gradient', from: '#111827', to: '#020617', angle: 160 }
+        background: { type: 'gradient', from: '#111827', to: '#020617', angle: 160, followLiveBackground: true }
       },
       elements: buildLayoutElements(opt.id)
     })
   }));
+}
+
+/** Editable Camera + Layout scenes that pair a live Camera element with each of the 7 slide layouts. */
+export function cameraLayoutScenes(): { id: ProjectorLayout; label: string; scene: SceneDocument }[] {
+  const ordered: { id: ProjectorLayout; label: string; description: string }[] = [
+    {
+      id: 'lower_third',
+      label: 'Camera + Lower third',
+      description: 'Full-frame live camera with a translucent lower-third scripture/lyric strap.'
+    },
+    {
+      id: 'top_banner',
+      label: 'Camera + Top banner',
+      description: 'Full-frame live camera with a translucent top broadcast banner.'
+    },
+    {
+      id: 'split_left',
+      label: 'Camera + Left split',
+      description: 'Left slide presentation card paired with a right-hand live camera frame.'
+    },
+    {
+      id: 'split_right',
+      label: 'Camera + Right split',
+      description: 'Left-hand live camera frame paired with a right slide presentation card.'
+    },
+    {
+      id: 'boxed_card',
+      label: 'Camera + Boxed card',
+      description: 'Full-frame live camera behind a translucent centered boxed slide card.'
+    },
+    {
+      id: 'minimal',
+      label: 'Camera + Minimal',
+      description: 'Full-frame live camera with clean shadowed lyrics or scripture overlay.'
+    },
+    {
+      id: 'centered',
+      label: 'Camera + Centered',
+      description: 'Full-frame live camera with centered title, lyrics/scripture, and reference.'
+    }
+  ];
+
+  return ordered.map(opt => {
+    const camPlacement = cameraFrameForLayout(opt.id);
+    const isSplit = opt.id === 'split_left' || opt.id === 'split_right';
+    return {
+      id: opt.id,
+      label: opt.label,
+      scene: createScene(opt.label, {
+        description: opt.description,
+        layoutOverride: opt.id,
+        canvas: {
+          width: SCENE_WIDTH,
+          height: SCENE_HEIGHT,
+          background: isSplit
+            ? {
+                type: 'gradient',
+                from: '#0f172a',
+                to: '#020617',
+                angle: 145,
+                followLiveBackground: true
+              }
+            : {
+                type: 'solid',
+                color: '#050508',
+                followLiveBackground: false
+              }
+        },
+        elements: [
+          createCameraElement({
+            name: 'Camera',
+            deviceId: '',
+            frame: camPlacement.frame,
+            radius: camPlacement.radius,
+            zIndex: 1
+          }),
+          ...buildLayoutElements(opt.id)
+        ]
+      })
+    };
+  });
 }

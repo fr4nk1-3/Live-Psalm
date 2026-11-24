@@ -38,6 +38,7 @@ import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { EmptyState } from './ui/primitives';
 import { AudioMeter } from './AudioMeter';
+import { AudienceCameraLayer } from './AudienceCameraLayer';
 import { useAudioLevels, useAudioSettings, useStreamStatus } from '../hooks/useAudio';
 import { audioMonitor } from '../services/audioMonitor';
 import { SceneCanvas } from '../scene/SceneCanvas';
@@ -320,17 +321,37 @@ const SlideCanvas: React.FC<{
         ))}
       {!bgUrl && <div className="absolute inset-0 bg-neutral-950" />}
 
-      {/* Scrim (skipped for full-frame media so the asset plays cleanly) */}
-      {!isPureMediaSlide && (
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundColor: isFarPreview
-              ? `rgba(0,0,0,${Math.max(theme.scrimOpacity ?? 0.45, 0.88)})`
-              : `rgba(0,0,0,${theme.scrimOpacity ?? 0.45})`
-          }}
+      {/* Live Camera Layer on Audience Screen / Program Monitor */}
+      {theme.audienceCameraEnabled && !isPureForegroundVideo && (
+        <AudienceCameraLayer
+          enabled={Boolean(theme.audienceCameraEnabled)}
+          deviceId={theme.audienceCameraDeviceId}
+          mirror={theme.audienceCameraMirror !== false}
+          layout={layout}
+          hasSlideContent={Boolean(slide && !isPureMediaSlide)}
         />
       )}
+
+      {/* Scrim (skipped for full-frame media or reduced when full-frame Audience Camera is active) */}
+      {!isPureMediaSlide && (() => {
+        const isFullFrameCam =
+          Boolean(theme.audienceCameraEnabled) &&
+          !((layout === 'split_left' || layout === 'split_right') && slide);
+        if (isFullFrameCam && (isBanner || isBoxed || !slide)) return null;
+        const scrimAlpha = isFullFrameCam
+          ? Math.min(theme.scrimOpacity ?? 0.45, 0.2)
+          : isFarPreview
+          ? Math.max(theme.scrimOpacity ?? 0.45, 0.88)
+          : (theme.scrimOpacity ?? 0.45);
+        return (
+          <div
+            className="absolute inset-0 z-[7]"
+            style={{
+              backgroundColor: `rgba(0,0,0,${scrimAlpha})`
+            }}
+          />
+        );
+      })()}
 
       {/* Foreground video timecode */}
       {isPureForegroundVideo && liveTimecode && liveTimecode.duration > 0 && (
@@ -349,7 +370,7 @@ const SlideCanvas: React.FC<{
             {slide ? (
               isPureMediaSlide ? null : isBanner ? (
                 <div
-                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} flex max-h-[410px] w-full flex-col rounded-r-[18px] border-l-[12px] border-emerald-500 bg-slate-950/90 py-[24px] pl-[56px] pr-[64px] text-left shadow-2xl`}
+                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} flex max-h-[410px] w-full flex-col rounded-r-[18px] border-l-[12px] border-emerald-500 bg-slate-950/50 backdrop-blur-md py-[24px] pl-[56px] pr-[64px] text-left shadow-2xl`}
                 >
                   {(slide.sectionLabel || slide.title) && (
                     <span
@@ -386,14 +407,14 @@ const SlideCanvas: React.FC<{
                 <div
                   className={`flex h-full max-h-full flex-col justify-center ${
                     layout === 'split_left'
-                      ? 'mr-auto items-start rounded-[36px] border border-white/10 bg-slate-950/75 px-[72px] py-[44px] text-left'
+                      ? 'mr-auto items-start rounded-[36px] border border-white/10 bg-slate-950/55 backdrop-blur-md px-[64px] py-[44px] text-left'
                       : layout === 'split_right'
-                      ? 'ml-auto items-end rounded-[36px] border border-white/10 bg-slate-950/75 px-[72px] py-[44px] text-right'
+                      ? 'ml-auto items-end rounded-[36px] border border-white/10 bg-slate-950/55 backdrop-blur-md px-[64px] py-[44px] text-right'
                       : isBoxed
-                      ? 'm-auto items-center rounded-[40px] border-2 border-white/15 bg-slate-950/75 px-[80px] py-[48px] text-center shadow-2xl'
+                      ? 'm-auto items-center rounded-[40px] border-2 border-white/15 bg-slate-950/55 backdrop-blur-md px-[80px] py-[48px] text-center shadow-2xl'
                       : 'm-auto items-center text-center'
                   }`}
-                  style={{ maxWidth: isSplit ? '56%' : `${designMaxWidthPct}%`, width: '100%' }}
+                  style={{ maxWidth: isSplit ? (theme.audienceCameraEnabled ? '48%' : '54%') : `${designMaxWidthPct}%`, width: '100%' }}
                 >
                   {!isMinimal && (slide.title || slide.sectionLabel) && (
                     <div
@@ -489,6 +510,34 @@ const BroadcastMonitor: React.FC<{
   const sourceLabel =
     audio.source === 'program' ? 'Programme audio' : audio.source === 'silent' ? 'Silent' : 'Microphone';
 
+  const handleBroadcastMediaDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!activeScene) return;
+    try {
+      const raw = e.dataTransfer.getData('application/livepsalms-media');
+      if (!raw) return;
+      const asset: MediaAsset = JSON.parse(raw);
+      if (!asset?.url) return;
+      sceneLibrary.updateScene(activeScene.id, current => ({
+        ...current,
+        updatedAt: Date.now(),
+        canvas: {
+          ...current.canvas,
+          background: {
+            type: asset.type === 'video' ? 'video' : 'image',
+            src: asset.url,
+            assetId: asset.id,
+            from: '#0f172a',
+            to: '#020617',
+            followLiveBackground: false
+          }
+        }
+      }));
+    } catch {
+      /* ignore invalid drop */
+    }
+  };
+
   return (
     <section className="flex min-w-0 flex-1 flex-col">
       <header className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -499,12 +548,14 @@ const BroadcastMonitor: React.FC<{
       </header>
 
       <div
+        onDragOver={e => e.preventDefault()}
+        onDrop={handleBroadcastMediaDrop}
         className={cn(
           'relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border bg-black',
           status.live ? 'border-emerald-500/60' : 'border-border'
         )}
         style={{ aspectRatio: '16/9', containerType: 'size' }}
-        title="What the live stream is sending"
+        title="What the live stream is sending (drop a background here to set the broadcast scene background)"
       >
         {activeScene && (
           <SceneCanvas
@@ -513,6 +564,7 @@ const BroadcastMonitor: React.FC<{
             theme={theme}
             globalVideoBgUrl={globalVideoBgUrl}
             itemVideoBgUrl={itemVideoBgUrl}
+            countdownSeconds={countdownSeconds}
             enableAudio
             sceneRole="broadcast"
             mediaList={mediaList}
@@ -528,7 +580,7 @@ const BroadcastMonitor: React.FC<{
         )}
 
         {lowerThird?.content && (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t border-white/10 bg-black/85 px-2 py-1">
+          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t border-white/10 bg-black/45 px-2 py-1 backdrop-blur-[2px]">
             <div
               className="animate-crawl-line whitespace-nowrap text-2xs font-medium text-white"
               style={{
@@ -644,10 +696,28 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
     } catch (err) {}
   };
 
-  // Stage Message state
+  // Stage Message state (persisted so Stage Display always receives it even if opened later)
   const [stageMsgInput, setStageMsgInput] = useState('');
-  const [stageMsgFlash, setStageMsgFlash] = useState(true);
-  const [activeStageMsg, setActiveStageMsg] = useState<string | null>(null);
+  const [stageMsgFlash, setStageMsgFlash] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('live_psalms_stage_message_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return typeof parsed?.flash === 'boolean' ? parsed.flash : true;
+      }
+    } catch {}
+    return true;
+  });
+  const [activeStageMsg, setActiveStageMsg] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('live_psalms_stage_message_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed?.message || null;
+      }
+    } catch {}
+    return null;
+  });
 
   // Nursery / Parent Pager Alert state
   const [pagerCode, setPagerCode] = useState('');
@@ -770,20 +840,30 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   }, [padVolume, activePadKey]);
 
   // Stage Message handlers
-  const handleSendStageMessage = (msgText?: string) => {
+  const handleSendStageMessage = (msgText?: string, flashOverride?: boolean) => {
     const text = (msgText !== undefined ? msgText : stageMsgInput).trim();
     if (!text) return;
+    const flash = flashOverride !== undefined ? flashOverride : stageMsgFlash;
     setActiveStageMsg(text);
     setStageMsgInput(text);
+    try {
+      localStorage.setItem(
+        'live_psalms_stage_message_v1',
+        JSON.stringify({ message: text, flash })
+      );
+    } catch {}
     BroadcastService.postMessage({
       type: 'STAGE_MESSAGE_CHANGE',
       stageMessage: text,
-      stageMessageFlash: stageMsgFlash
+      stageMessageFlash: flash
     });
   };
 
   const handleClearStageMessage = () => {
     setActiveStageMsg(null);
+    try {
+      localStorage.removeItem('live_psalms_stage_message_v1');
+    } catch {}
     BroadcastService.postMessage({
       type: 'STAGE_MESSAGE_CHANGE',
       stageMessage: null,
@@ -940,6 +1020,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   theme={activeTheme}
                   globalVideoBgUrl={globalVideoBgUrl}
                   itemVideoBgUrl={activeItem?.videoBackgroundUrl}
+                  countdownSeconds={countdownSeconds}
                   sceneRole="preview-scene"
                   mediaList={mediaList}
                   className="absolute inset-0"
@@ -1023,8 +1104,16 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
         {/* Program */}
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="mb-1.5 flex items-baseline justify-between gap-2">
-            <span className={cn('state-label', liveSlide ? 'text-live' : 'text-muted-foreground')}>Program</span>
-            <span className={cn('min-w-0 truncate text-2xs', liveSlide ? 'text-live' : 'text-muted-foreground')}>{liveSlide ? 'On air' : 'Clear'}</span>
+            <span className={cn('state-label', liveSlide || activeTheme.audienceCameraEnabled ? 'text-live' : 'text-muted-foreground')}>Program</span>
+            <span className={cn('min-w-0 truncate text-2xs', liveSlide || activeTheme.audienceCameraEnabled ? 'text-live' : 'text-muted-foreground')}>
+              {liveSlide
+                ? activeTheme.audienceCameraEnabled
+                  ? 'On air · Camera'
+                  : 'On air'
+                : activeTheme.audienceCameraEnabled
+                ? 'Camera on air'
+                : 'Clear'}
+            </span>
           </header>
 
           <div
@@ -1032,12 +1121,12 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             onDrop={e => handleMediaDrop(e, 'global')}
             className={cn(
               'relative mx-auto w-full max-w-[calc(26vh*16/9)] overflow-hidden rounded border bg-black',
-              liveSlide ? 'border-live/60' : 'border-border'
+              liveSlide || activeTheme.audienceCameraEnabled ? 'border-live/60' : 'border-border'
             )}
             style={{ aspectRatio: '16/9', containerType: 'size' }}
             title="Drop a background here to set the live layer background for every slide"
           >
-            {liveSlide ? (
+            {liveSlide || activeTheme.audienceCameraEnabled ? (
               <SlideCanvas
                 slide={liveSlide}
                 theme={activeTheme}
@@ -1058,6 +1147,28 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             {activeAlert && (
               <div className="absolute right-2 top-2 z-30">
                 <Badge variant="warning">{activeAlert.code}</Badge>
+              </div>
+            )}
+
+            {activeStageMsg && (
+              <div
+                className={cn(
+                  'absolute inset-x-2 top-2 z-30 flex items-center justify-between gap-2 rounded border px-2 py-1 text-2xs font-semibold shadow-lg',
+                  stageMsgFlash
+                    ? 'animate-pulse border-amber-400 bg-amber-500/95 text-black'
+                    : 'border-amber-500/50 bg-black/85 text-amber-300'
+                )}
+                title="Active Stage Display message (visible on Stage Display)"
+              >
+                <span className="truncate">STAGE: {activeStageMsg}</span>
+                <button
+                  type="button"
+                  onClick={handleClearStageMessage}
+                  className="shrink-0 rounded px-1 opacity-75 hover:opacity-100"
+                  title="Clear stage message"
+                >
+                  ×
+                </button>
               </div>
             )}
 
@@ -1096,6 +1207,25 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
 
           <footer className="mt-2 flex items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {onUpdateTheme && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateTheme({
+                      audienceCameraEnabled: !activeTheme.audienceCameraEnabled
+                    })
+                  }
+                  className={cn(
+                    'inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-2xs transition-colors',
+                    activeTheme.audienceCameraEnabled
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+                      : 'border-border bg-background/60 text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Display live camera on the Audience screen paired with the active Audience layout"
+                >
+                  {activeTheme.audienceCameraEnabled ? 'Camera on' : 'Camera'}
+                </button>
+              )}
               {liveSlide && onClearLiveSlide && (
                 <LayerChip onClick={onClearLiveSlide} label="Clear slide" />
               )}
@@ -1314,7 +1444,13 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
               <input
                 type="checkbox"
                 checked={stageMsgFlash}
-                onChange={e => setStageMsgFlash(e.target.checked)}
+                onChange={e => {
+                  const nextFlash = e.target.checked;
+                  setStageMsgFlash(nextFlash);
+                  if (activeStageMsg) {
+                    handleSendStageMessage(activeStageMsg, nextFlash);
+                  }
+                }}
                 className="accent-foreground"
               />
               Flash

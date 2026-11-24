@@ -12,9 +12,9 @@ import {
 } from '../components/ui/dropdown-menu';
 import { Input } from '../components/ui/input';
 import { sceneThumbnail } from './render';
-import { applyLayoutToScene, defaultScenes, layoutScenes, SCENE_LAYOUT_OPTIONS } from './presets';
+import { applyLayoutToScene, cameraLayoutScenes, defaultScenes, layoutScenes, SCENE_LAYOUT_OPTIONS } from './presets';
 import { getActiveScene, sceneLibrary, useSceneLibrary } from './store';
-import { SceneDocument } from './types';
+import { SceneBackground, SceneDocument } from './types';
 import { SceneEditor } from './SceneEditor';
 import type { MediaAsset, ProjectorLayout, Slide, Theme } from '../types/presentation';
 
@@ -80,6 +80,23 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     }
   };
 
+  const applyBackgroundToScene = (scene: SceneDocument | undefined, background: SceneBackground) => {
+    if (!scene) return;
+    sceneLibrary.updateScene(scene.id, current => ({
+      ...current,
+      updatedAt: Date.now(),
+      canvas: {
+        ...current.canvas,
+        background
+      }
+    }));
+  };
+
+  const backgroundAssets = React.useMemo(
+    () => mediaList.filter(asset => asset.type === 'image' || asset.type === 'video'),
+    [mediaList]
+  );
+
   return (
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
       <div className="flex items-center justify-between gap-2">
@@ -139,25 +156,104 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="xs" variant="ghost">
+                Background
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">
+              <DropdownMenuLabel>
+                Background for {(activeScene || previewScene) ? `“${(activeScene || previewScene).name}”` : 'scene'}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={() =>
+                  applyBackgroundToScene(activeScene || previewScene, {
+                    type: 'live',
+                    from: '#0f172a',
+                    to: '#020617',
+                    angle: 145,
+                    followLiveBackground: true
+                  })
+                }
+              >
+                Follow live slide background
+                {((activeScene || previewScene)?.canvas.background.type === 'live' ||
+                  (activeScene || previewScene)?.canvas.background.followLiveBackground) &&
+                  !(activeScene || previewScene)?.canvas.background.src &&
+                  !(activeScene || previewScene)?.canvas.background.assetId && (
+                    <span className="ml-auto text-2xs text-emerald-400">Active</span>
+                  )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  applyBackgroundToScene(activeScene || previewScene, {
+                    type: 'gradient',
+                    from: '#111827',
+                    to: '#020617',
+                    angle: 160,
+                    followLiveBackground: false
+                  })
+                }
+              >
+                Dark stage gradient
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  applyBackgroundToScene(activeScene || previewScene, {
+                    type: 'solid',
+                    color: '#050508',
+                    followLiveBackground: false
+                  })
+                }
+              >
+                Solid black stage
+              </DropdownMenuItem>
+              {backgroundAssets.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Media library backgrounds</DropdownMenuLabel>
+                  {backgroundAssets.map(asset => (
+                    <DropdownMenuItem
+                      key={asset.id}
+                      onSelect={() =>
+                        applyBackgroundToScene(activeScene || previewScene, {
+                          type: asset.type === 'video' ? 'video' : 'image',
+                          src: asset.url,
+                          assetId: asset.id,
+                          from: '#0f172a',
+                          to: '#020617',
+                          followLiveBackground: false
+                        })
+                      }
+                    >
+                      <span className="truncate">{asset.name}</span>
+                      <span className="ml-auto pl-2 text-2xs uppercase text-muted-foreground">{asset.type}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="xs" variant="ghost">
                 Add scene
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">
-              <DropdownMenuLabel>Start from</DropdownMenuLabel>
-              {defaultScenes().map(preset => (
+              <DropdownMenuLabel>Camera + Layout scenes</DropdownMenuLabel>
+              {cameraLayoutScenes().map(({ id, label, scene: preset }) => (
                 <DropdownMenuItem
-                  key={preset.name}
+                  key={`cam-${id}`}
                   onSelect={() =>
                     sceneLibrary.addScene({
                       ...preset,
                       id: `scene-${Math.random().toString(36).slice(2, 10)}`,
-                      name: preset.name,
+                      name: label,
                       createdAt: Date.now(),
                       updatedAt: Date.now()
                     })
                   }
                 >
-                  {preset.name}
+                  {label}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
@@ -178,6 +274,26 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                   {label}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Start from</DropdownMenuLabel>
+              {defaultScenes()
+                .filter(preset => !preset.name.startsWith('Camera + '))
+                .map(preset => (
+                  <DropdownMenuItem
+                    key={preset.name}
+                    onSelect={() =>
+                      sceneLibrary.addScene({
+                        ...preset,
+                        id: `scene-${Math.random().toString(36).slice(2, 10)}`,
+                        name: preset.name,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                      })
+                    }
+                  >
+                    {preset.name}
+                  </DropdownMenuItem>
+                ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() =>
@@ -211,7 +327,27 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                 draggable
                 onDragStart={() => setDragId(scene.id)}
                 onDragOver={event => event.preventDefault()}
-                onDrop={() => {
+                onDrop={event => {
+                  const mediaRaw = event.dataTransfer?.getData('application/livepsalms-media');
+                  if (mediaRaw) {
+                    event.preventDefault();
+                    try {
+                      const asset = JSON.parse(mediaRaw) as MediaAsset;
+                      if (asset && asset.url) {
+                        applyBackgroundToScene(scene, {
+                          type: asset.type === 'video' ? 'video' : 'image',
+                          src: asset.url,
+                          assetId: asset.id,
+                          from: '#0f172a',
+                          to: '#020617',
+                          followLiveBackground: false
+                        });
+                      }
+                    } catch {
+                      /* ignore invalid drop */
+                    }
+                    return;
+                  }
                   if (!dragId || dragId === scene.id) return;
                   const from = library.scenes.findIndex(item => item.id === dragId);
                   const to = library.scenes.findIndex(item => item.id === scene.id);
@@ -298,6 +434,51 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                           {scene.layoutOverride === opt.id && (
                             <span className="ml-auto text-2xs text-emerald-400">Active</span>
                           )}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Scene background</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          applyBackgroundToScene(scene, {
+                            type: 'live',
+                            from: '#0f172a',
+                            to: '#020617',
+                            angle: 145,
+                            followLiveBackground: true
+                          })
+                        }
+                      >
+                        Follow live slide background
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          applyBackgroundToScene(scene, {
+                            type: 'gradient',
+                            from: '#111827',
+                            to: '#020617',
+                            angle: 160,
+                            followLiveBackground: false
+                          })
+                        }
+                      >
+                        Dark stage gradient
+                      </DropdownMenuItem>
+                      {backgroundAssets.slice(0, 6).map(asset => (
+                        <DropdownMenuItem
+                          key={asset.id}
+                          onSelect={() =>
+                            applyBackgroundToScene(scene, {
+                              type: asset.type === 'video' ? 'video' : 'image',
+                              src: asset.url,
+                              assetId: asset.id,
+                              from: '#0f172a',
+                              to: '#020617',
+                              followLiveBackground: false
+                            })
+                          }
+                        >
+                          <span className="truncate">{asset.name}</span>
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />

@@ -32,6 +32,10 @@ export interface SceneRenderContext {
   theme: Theme;
   globalVideoBgUrl?: string | null;
   itemVideoBgUrl?: string | null;
+  /** Active countdown timer in seconds from the main operator timer. */
+  countdownSeconds?: number;
+  /** True when rendering a static thumbnail for the Scene library cards. */
+  isThumbnail?: boolean;
   /** Looping background / foreground slide videos keyed by URL. */
   bgVideos?: Record<string, HTMLVideoElement | null>;
   videos?: Record<string, HTMLVideoElement | null>;
@@ -47,6 +51,57 @@ export interface SceneRenderContext {
   assets?: Record<string, string>;
 }
 
+const sceneCountdownAnchors = new Map<string, { startedAtMs: number; initialSeconds: number; lastSeenMs: number }>();
+
+function parseCountdownDuration(raw: string): number {
+  const trimmed = (raw || '').trim();
+  const match = trimmed.match(/^(\d{1,3}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return 600;
+  if (match[3] !== undefined) {
+    return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function formatCountdownSeconds(secs: number): string {
+  const isOvertime = secs < 0;
+  const total = Math.max(0, Math.abs(Math.floor(secs)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const formatted =
+    h > 0
+      ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+      : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return isOvertime ? `+${formatted}` : formatted;
+}
+
+function resolveCountdownText(element: TextElement, context: SceneRenderContext, scene?: SceneDocument): string {
+  if (context.isThumbnail) {
+    return element.content || '10:00';
+  }
+  if (typeof context.countdownSeconds === 'number' && context.countdownSeconds !== 0) {
+    return formatCountdownSeconds(context.countdownSeconds);
+  }
+  const initialSeconds = parseCountdownDuration(element.content || '10:00');
+  const key = `${scene?.id || 'scene'}:${element.id}:${initialSeconds}`;
+  const now = Date.now();
+  const existing = sceneCountdownAnchors.get(key);
+  // Reset the automatic scene timer if this scene hasn't been painted in the last 3 seconds
+  if (!existing || now - existing.lastSeenMs > 3000) {
+    sceneCountdownAnchors.set(key, {
+      startedAtMs: now,
+      initialSeconds,
+      lastSeenMs: now
+    });
+    return formatCountdownSeconds(initialSeconds);
+  }
+  existing.lastSeenMs = now;
+  const elapsed = Math.floor((now - existing.startedAtMs) / 1000);
+  const remaining = Math.max(0, existing.initialSeconds - elapsed);
+  return formatCountdownSeconds(remaining);
+}
+
 export function resolveAudienceLayout(
   theme: Theme,
   override?: 'theme' | ProjectorLayout | null
@@ -58,20 +113,32 @@ export function resolveAudienceLayout(
   return theme.broadcastLayout || 'centered';
 }
 
-export function resolveText(element: TextElement, context: SceneRenderContext): string {
+export function resolveText(element: TextElement, context: SceneRenderContext, scene?: SceneDocument): string {
+  const isCountdownTime =
+    element.binding === 'countdown.time' ||
+    (!element.binding &&
+      Boolean(scene?.name.toLowerCase().includes('countdown')) &&
+      (element.name === 'Time' || /^\d{1,2}:\d{2}$/.test((element.content || '').trim())));
+  if (isCountdownTime) {
+    return resolveCountdownText(element, context, scene);
+  }
   if (!element.binding) return element.content;
   const { slide, theme } = context;
   switch (element.binding) {
     case 'slide.title':
-      return slide?.title || element.content;
+      return slide?.title || slide?.sectionLabel || element.content;
     case 'slide.content':
+      if (slide?.id === 'slide-cd-1' || slide?.content === 'SERVICE STARTS IN') {
+        const cd = resolveCountdownText({ ...element, content: '05:00' }, context, scene);
+        return `${slide?.content || 'SERVICE STARTS IN'}\n${cd}`;
+      }
       return slide?.content || element.content;
     case 'slide.subtitle':
       return slide?.subtitle || '';
     case 'slide.reference':
       return slide?.bibleMeta
         ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}`
-        : '';
+        : slide?.subtitle || '';
     case 'theme.name':
       return theme.name;
     default:
@@ -117,9 +184,14 @@ function roundedPath(
   ctx.closePath();
 }
 
-function drawTextElement(ctx: CanvasRenderingContext2D, element: TextElement, context: SceneRenderContext) {
+function drawTextElement(
+  ctx: CanvasRenderingContext2D,
+  element: TextElement,
+  context: SceneRenderContext,
+  scene?: SceneDocument
+) {
   const frame = element.frame;
-  const raw = resolveText(element, context);
+  const raw = resolveText(element, context, scene);
   if (!raw) return;
   const content = element.uppercase ? raw.toUpperCase() : raw;
 
@@ -221,12 +293,14 @@ function drawShapeElement(ctx: CanvasRenderingContext2D, element: Extract<SceneE
 function placeholder(
   ctx: CanvasRenderingContext2D,
   frame: { x: number; y: number; width: number; height: number },
-  label: string
+  label: string,
+  showLabel = true
 ) {
-  ctx.fillStyle = '#16161a';
+  ctx.fillStyle = '#08080c';
   ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.font = `500 ${Math.max(20, Math.round(frame.height * 0.07))}px system-ui, sans-serif`;
+  if (!showLabel) return;
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.font = `500 ${Math.max(18, Math.round(frame.height * 0.05))}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, frame.x + frame.width / 2, frame.y + frame.height / 2);
@@ -236,16 +310,23 @@ function drawVideoSource(
   ctx: CanvasRenderingContext2D,
   element: { frame: { x: number; y: number; width: number; height: number }; fit?: 'cover' | 'contain'; radius?: number; mirror?: boolean },
   video: HTMLVideoElement | null | undefined,
-  label: string
+  label: string,
+  showPlaceholderLabel = true
 ) {
   const frame = element.frame;
   ctx.save();
   roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius ?? 0);
   ctx.clip();
-  if (!video || video.readyState < 2 || video.videoWidth === 0) {
-    placeholder(ctx, frame, label);
+  if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+    if (video && video.paused) {
+      void video.play().catch(() => {});
+    }
+    placeholder(ctx, frame, label, showPlaceholderLabel);
     ctx.restore();
     return;
+  }
+  if (video.paused) {
+    void video.play().catch(() => {});
   }
   const scale =
     (element.fit ?? 'cover') === 'cover'
@@ -275,7 +356,9 @@ function drawCameraElement(
     context.videos?.[element.id] ||
     context.videos?.['default'] ||
     context.videos?.['camera:default'];
-  drawVideoSource(ctx, element, video, 'Camera');
+  const isSplitFrame = element.frame.width < 1600 || element.frame.height < 900;
+  // On full-frame camera scenes (like Speaker introduction or Camera + Lower third), keep the background clean without giant "Camera" text in the middle
+  drawVideoSource(ctx, element, video, 'Camera', isSplitFrame && Boolean(context.isThumbnail));
 }
 
 function drawCaptureElement(ctx: CanvasRenderingContext2D, element: CaptureElement, context: SceneRenderContext) {
@@ -361,7 +444,8 @@ function drawAudienceLayoutPresentation(
     let drewMedia = false;
     if (bgUrl && isVideoBg) {
       const vid = context.bgVideos?.[bgUrl];
-      if (vid && vid.readyState >= 2 && vid.videoWidth > 0) {
+      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+        if (vid.paused) void vid.play().catch(() => {});
         const scale = isPureMediaSlide
           ? Math.min(frame.width / vid.videoWidth, frame.height / vid.videoHeight)
           : Math.max(frame.width / vid.videoWidth, frame.height / vid.videoHeight);
@@ -426,7 +510,7 @@ function drawAudienceLayoutPresentation(
 
     ctx.save();
     roundedPath(ctx, bx, by, bw, bh, rad);
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.45)';
     ctx.fill();
     ctx.clip();
     ctx.fillStyle = theme.accentColor || '#10b981';
@@ -516,7 +600,7 @@ function drawAudienceLayoutPresentation(
     const rad = Math.max(16, Math.round(frame.width * 0.02));
     ctx.save();
     roundedPath(ctx, cardX, cardY, cardW, cardH, rad);
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.54)';
     ctx.fill();
     ctx.lineWidth = isBoxed ? 2 : 1.5;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -676,14 +760,58 @@ function drawSceneSourceElement(
   ctx.restore();
 }
 
+function drawCoverMediaUrl(
+  ctx: CanvasRenderingContext2D,
+  url: string,
+  isVideo: boolean,
+  context: SceneRenderContext,
+  width: number,
+  height: number,
+  scrimAlpha = 0
+): boolean {
+  if (!url) return false;
+  if (isVideo) {
+    const vid = context.bgVideos?.[url];
+    if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+      if (vid.paused) void vid.play().catch(() => {});
+      const scale = Math.max(width / vid.videoWidth, height / vid.videoHeight);
+      const drawWidth = vid.videoWidth * scale;
+      const drawHeight = vid.videoHeight * scale;
+      ctx.drawImage(vid, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+      if (scrimAlpha > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${scrimAlpha})`;
+        ctx.fillRect(0, 0, width, height);
+      }
+      return true;
+    }
+    return false;
+  }
+  const image = getImage(url);
+  if (image) {
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    if (scrimAlpha > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${scrimAlpha})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+    return true;
+  }
+  return false;
+}
+
 function drawBackground(
   ctx: CanvasRenderingContext2D,
   scene: SceneDocument,
+  context: SceneRenderContext,
   width: number,
   height: number
 ) {
   const background = scene.canvas.background;
-  if (background.type === 'gradient') {
+
+  // Base solid or gradient fill first (serves as fallback while media loads)
+  if (background.type === 'gradient' || (background.from && background.to)) {
     const angle = ((background.angle ?? 135) * Math.PI) / 180;
     const x = Math.cos(angle) * width;
     const y = Math.sin(angle) * height;
@@ -692,20 +820,48 @@ function drawBackground(
     gradient.addColorStop(1, background.to || '#020617');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
-    return;
+  } else {
+    ctx.fillStyle = background.color || '#0e0e10';
+    ctx.fillRect(0, 0, width, height);
   }
-  if (background.type === 'image' && background.src) {
-    const image = getImage(background.src);
-    if (image) {
-      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
-      const drawWidth = image.naturalWidth * scale;
-      const drawHeight = image.naturalHeight * scale;
-      ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+
+  // 1. Explicit scene image or video background (with layout kept in place)
+  const resolvedSceneBg = resolveSource(background.src || '', background.assetId, context.assets);
+  if ((background.type === 'image' || background.type === 'video' || resolvedSceneBg) && resolvedSceneBg) {
+    const isVid =
+      background.type === 'video' ||
+      (background.type !== 'image' && isVideoMediaUrl(resolvedSceneBg));
+    if (drawCoverMediaUrl(ctx, resolvedSceneBg, isVid, context, width, height, 0.22)) {
       return;
     }
   }
-  ctx.fillStyle = background.color || '#0e0e10';
-  ctx.fillRect(0, 0, width, height);
+
+  // 2. Live slide / item / global background when scene is set to 'live', followLiveBackground, or Audience layout is centered
+  const hasFullFrameCamera = scene.elements.some(
+    el => el.type === 'camera' && el.visible && el.frame.width >= 1600 && el.frame.height >= 900
+  );
+  const audienceLayout =
+    context.theme.projectorLayout || (context.theme.lowerThirdStyle ? 'lower_third' : 'centered');
+  const shouldShowLiveSlideBg =
+    !hasFullFrameCamera &&
+    (background.type === 'live' ||
+      background.followLiveBackground ||
+      (background.followLiveBackground !== false &&
+        (audienceLayout === 'centered' || scene.layoutOverride === 'centered')));
+
+  if (shouldShowLiveSlideBg) {
+    const slide = context.slide;
+    const slideBgUrl = slide?.backgroundUrl ?? null;
+    const isSlideVideo = isVideoMediaUrl(slideBgUrl, slide?.backgroundType);
+    const activeMotionUrl = isSlideVideo
+      ? slideBgUrl
+      : context.itemVideoBgUrl || context.globalVideoBgUrl || null;
+    const liveBgUrl = activeMotionUrl || slideBgUrl || context.theme.backgroundUrl || null;
+    if (liveBgUrl) {
+      const isVid = Boolean(activeMotionUrl || isVideoMediaUrl(liveBgUrl, slide?.backgroundType));
+      drawCoverMediaUrl(ctx, liveBgUrl, isVid, context, width, height, context.theme.scrimOpacity ?? 0.35);
+    }
+  }
 }
 
 /** Paints a scene into a 2D context at the requested output size. */
@@ -721,7 +877,7 @@ export function drawScene(
   ctx.save();
   ctx.scale(width / scene.canvas.width, height / scene.canvas.height);
 
-  drawBackground(ctx, scene, scene.canvas.width, scene.canvas.height);
+  drawBackground(ctx, scene, context, scene.canvas.width, scene.canvas.height);
 
   const ordered = [...scene.elements].filter(element => element.visible).sort((a, b) => a.zIndex - b.zIndex);
   for (const element of ordered) {
@@ -739,7 +895,7 @@ export function drawScene(
         -(element.frame.y + element.frame.height / 2)
       );
     }
-    if (element.type === 'text') drawTextElement(ctx, element, context);
+    if (element.type === 'text') drawTextElement(ctx, element, context, scene);
     else if (element.type === 'image') drawImageElement(ctx, element, context);
     else if (element.type === 'shape') drawShapeElement(ctx, element);
     else if (element.type === 'camera') drawCameraElement(ctx, element, context);
@@ -771,6 +927,7 @@ export function sceneThumbnail(scene: SceneDocument, width = 320, height = 180):
     scene,
     {
       slide: null,
+      isThumbnail: true,
       theme: {
         id: 'thumb',
         name: 'Thumbnail',

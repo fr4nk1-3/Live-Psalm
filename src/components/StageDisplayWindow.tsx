@@ -32,9 +32,23 @@ function isVideoMediaSlide(slide?: Slide | null): boolean {
 }
 
 export const StageDisplayWindow: React.FC = () => {
-  const [stageState, setStageState] = useState<StageDisplayState>({
-    clockTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    countdownRemaining: 0
+  const [stageState, setStageState] = useState<StageDisplayState>(() => {
+    let savedMsg: string | null = null;
+    let savedFlash = false;
+    try {
+      const raw = localStorage.getItem('live_psalms_stage_message_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        savedMsg = parsed?.message || null;
+        savedFlash = Boolean(parsed?.flash);
+      }
+    } catch {}
+    return {
+      clockTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      countdownRemaining: 0,
+      stageMessage: savedMsg,
+      stageMessageFlash: savedFlash
+    };
   });
   const [countdownTargetScreen, setCountdownTargetScreen] = useState<'audience' | 'stage' | 'both'>('both');
   const [showVerseRefOnStage, setShowVerseRefOnStage] = useState<boolean>(
@@ -157,6 +171,17 @@ export const StageDisplayWindow: React.FC = () => {
         const s = StorageService.getSettings();
         setShowVerseRefOnStage(s.showVerseNumbers ?? true);
         setStageViewMode(s.stageViewMode || 'near');
+      } else if (e.key === 'live_psalms_stage_message_v1') {
+        try {
+          const parsed = e.newValue ? JSON.parse(e.newValue) : null;
+          setStageState(prev => ({
+            ...prev,
+            stageMessage: parsed?.message || null,
+            stageMessageFlash: Boolean(parsed?.flash)
+          }));
+        } catch {
+          setStageState(prev => ({ ...prev, stageMessage: null, stageMessageFlash: false }));
+        }
       }
     };
     const handleCustomSettings = (e: Event) => {
@@ -327,7 +352,7 @@ export const StageDisplayWindow: React.FC = () => {
         <div
           className={`flex shrink-0 items-center gap-3 border-b px-5 py-2.5 ${
             stageState.stageMessageFlash
-              ? 'border-live bg-live text-live-foreground'
+              ? 'animate-pulse border-live bg-live text-live-foreground'
               : 'border-border border-l-4 border-l-live bg-card text-foreground'
           }`}
         >

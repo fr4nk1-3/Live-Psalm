@@ -164,6 +164,12 @@ export interface Theme {
   broadcastLayout?: ProjectorLayout;
   /** When true, the Audience Screen layout also drives Broadcast Scenes; when false, they are independent */
   linkLayoutToBroadcast?: boolean;
+  /** When true, displays the live camera on the Audience Screen paired with the Audience layout */
+  audienceCameraEnabled?: boolean;
+  /** Camera deviceId for the Audience Screen (empty/undefined = system default) */
+  audienceCameraDeviceId?: string;
+  /** Mirror the Audience Screen camera horizontally (default true) */
+  audienceCameraMirror?: boolean;
   accentColor: string;
   backgroundUrl?: string;
   textTransform?: 'none' | 'uppercase' | 'capitalize';

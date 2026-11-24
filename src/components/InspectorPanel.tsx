@@ -2,6 +2,7 @@ import React from 'react';
 import { Theme, Slide, MediaAsset, PlaylistItem, ProjectorLayout } from '../types/presentation';
 import { StorageService } from '../services/storage';
 import { applyLayoutToScene } from '../scene/presets';
+import { listVideoDevices } from '../scene/sources';
 import { getActiveScene, sceneLibrary, useSceneLibrary } from '../scene/store';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -63,6 +64,12 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const isScripture = activeSlide?.sectionLabel === 'Scripture';
   const sceneState = useSceneLibrary();
   const activeBroadcastScene = getActiveScene(sceneState);
+  const [cameraDevices, setCameraDevices] = React.useState<MediaDeviceInfo[]>([]);
+
+  React.useEffect(() => {
+    if (!open && !theme.audienceCameraEnabled) return;
+    void listVideoDevices().then(setCameraDevices).catch(() => {});
+  }, [open, theme.audienceCameraEnabled]);
 
   const backgroundValue = activeSlide?.backgroundUrl || '__default__';
 
@@ -119,6 +126,67 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 })}
               </div>
             </Field>
+
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/25 px-2.5 py-2">
+              <div className="min-w-0">
+                <Label htmlFor="inspector-audience-camera">Show camera on Audience screen</Label>
+                <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                  Displays the live camera feed on the Audience screen paired with the active Audience layout.
+                </p>
+              </div>
+              <Switch
+                id="inspector-audience-camera"
+                checked={Boolean(theme.audienceCameraEnabled)}
+                onCheckedChange={checked =>
+                  onUpdateTheme({
+                    audienceCameraEnabled: checked
+                  })
+                }
+                aria-label="Show camera on Audience screen"
+              />
+            </div>
+
+            {theme.audienceCameraEnabled && (
+              <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2">
+                <Field label="Audience camera device">
+                  <Select
+                    value={theme.audienceCameraDeviceId || 'default'}
+                    onValueChange={value =>
+                      onUpdateTheme({
+                        audienceCameraDeviceId: value === 'default' ? '' : value
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-7 text-2xs" aria-label="Audience camera device">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">System default camera</SelectItem>
+                      {cameraDevices.map(device => (
+                        <SelectItem key={device.deviceId} value={device.deviceId}>
+                          {device.label || 'Camera'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="inspector-audience-camera-mirror" className="text-2xs">
+                    Mirror camera
+                  </Label>
+                  <Switch
+                    id="inspector-audience-camera-mirror"
+                    checked={theme.audienceCameraMirror !== false}
+                    onCheckedChange={checked =>
+                      onUpdateTheme({
+                        audienceCameraMirror: checked
+                      })
+                    }
+                    aria-label="Mirror Audience camera"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/25 px-2.5 py-2">
               <div className="min-w-0">

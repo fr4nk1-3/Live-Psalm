@@ -1,8 +1,106 @@
 import { useEffect, useState } from 'react';
-import { defaultScenes } from './presets';
+import { cameraLayoutScenes, defaultScenes } from './presets';
 import { normaliseScene, SceneDocument, SceneElement } from './types';
 
 const STORAGE_KEY = 'live_psalms_scene_library_v1';
+
+const TRANSPARENT_SHAPE_FILL_MIGRATIONS: Record<string, string> = {
+  'rgba(8, 8, 10, 0.86)': 'rgba(8, 8, 14, 0.45)',
+  'rgba(8, 8, 10, 0.82)': 'rgba(8, 8, 14, 0.45)',
+  'rgba(2, 6, 23, 0.90)': 'rgba(2, 6, 23, 0.45)',
+  'rgba(2, 6, 23, 0.80)': 'rgba(2, 6, 23, 0.54)',
+  'rgba(2, 6, 23, 0.82)': 'rgba(2, 6, 23, 0.52)'
+};
+
+function migrateSceneTransparency(scene: SceneDocument): SceneDocument {
+  let changed = false;
+  let elements = scene.elements.map(el => {
+    if (el.type === 'shape' && TRANSPARENT_SHAPE_FILL_MIGRATIONS[el.fill]) {
+      changed = true;
+      return { ...el, fill: TRANSPARENT_SHAPE_FILL_MIGRATIONS[el.fill] };
+    }
+    if (
+      el.type === 'text' &&
+      !el.binding &&
+      (el.name === 'Time' || /^\d{1,2}:\d{2}$/.test((el.content || '').trim())) &&
+      scene.name.toLowerCase().includes('countdown')
+    ) {
+      changed = true;
+      return { ...el, binding: 'countdown.time' as const };
+    }
+    return el;
+  });
+
+  // If a scene has both a slide layout lower-third backdrop AND leftover Speaker introduction Strap/Speaker/Role elements, strip the leftovers
+  const hasLayoutBackdrop = elements.some(
+    el =>
+      el.type === 'shape' &&
+      (el.name === 'Lower third backdrop' ||
+        el.name === 'Top banner backdrop' ||
+        el.name === 'Left split card' ||
+        el.name === 'Right split card' ||
+        el.name === 'Boxed card')
+  );
+  if (hasLayoutBackdrop) {
+    const filtered = elements.filter(el => {
+      if (el.type === 'shape' && (el.name === 'Strap' || el.name === 'Lower third bar')) return false;
+      if (
+        el.type === 'text' &&
+        !el.binding &&
+        ((el.name === 'Speaker' && el.content === 'Pastor name') ||
+          (el.name === 'Role' && el.content === 'Role or church'))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    if (filtered.length !== elements.length) {
+      elements = filtered;
+      changed = true;
+    }
+  }
+
+  let background = scene.canvas.background;
+  const hasFullFrameCamera = elements.some(
+    el => el.type === 'camera' && el.frame.width >= 1600 && el.frame.height >= 900
+  );
+
+  // Full-frame camera presets should not auto-bleed the slide background behind the camera
+  if (hasFullFrameCamera && (background.followLiveBackground || scene.name === 'Camera + Lower third' || scene.name === 'Speaker introduction')) {
+    if (background.followLiveBackground || background.assetId === 'media-img-1' || background.src?.includes('photo-1518837695005')) {
+      background = {
+        type: 'solid',
+        color: '#050508',
+        followLiveBackground: false
+      };
+      changed = true;
+    }
+  } else if (
+    !hasFullFrameCamera &&
+    background.followLiveBackground === undefined &&
+    !background.src &&
+    !background.assetId &&
+    (scene.name === 'Full screen presentation' ||
+      scene.name === 'Scripture display' ||
+      scene.name === 'Worship lyrics' ||
+      scene.name === 'Centered layout' ||
+      scene.layoutOverride === 'centered')
+  ) {
+    background = {
+      ...background,
+      followLiveBackground: true
+    };
+    changed = true;
+  }
+
+  return changed
+    ? {
+        ...scene,
+        canvas: { ...scene.canvas, background },
+        elements
+      }
+    : scene;
+}
 
 export interface SceneLibrary {
   scenes: SceneDocument[];
@@ -37,7 +135,16 @@ function loadLibrary(): SceneLibrary {
     }
     const parsed = JSON.parse(raw) as Partial<SceneLibrary> & { version?: number };
     if (!Array.isArray(parsed.scenes) || parsed.scenes.length === 0) return freshLibrary();
-    const scenes = parsed.scenes.map(scene => normaliseScene(scene));
+    const scenes = parsed.scenes.map(scene => migrateSceneTransparency(normaliseScene(scene)));
+    const existingNames = new Set(scenes.map(s => s.name));
+    let addedDefaults = false;
+    for (const preset of cameraLayoutScenes()) {
+      if (!existingNames.has(preset.scene.name)) {
+        scenes.push(preset.scene);
+        existingNames.add(preset.scene.name);
+        addedDefaults = true;
+      }
+    }
     const activeSceneId =
       typeof parsed.activeSceneId === 'string' && scenes.some(scene => scene.id === parsed.activeSceneId)
         ? parsed.activeSceneId
@@ -46,7 +153,9 @@ function loadLibrary(): SceneLibrary {
       typeof parsed.previewSceneId === 'string' && scenes.some(scene => scene.id === parsed.previewSceneId)
         ? parsed.previewSceneId
         : activeSceneId;
-    return { scenes, activeSceneId, previewSceneId };
+    const loaded = { scenes, activeSceneId, previewSceneId };
+    if (addedDefaults) persistLibrary(loaded);
+    return loaded;
   } catch {
     return freshLibrary();
   }

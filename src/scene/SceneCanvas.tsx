@@ -16,6 +16,7 @@ interface SceneCanvasProps {
   theme: Theme;
   globalVideoBgUrl?: string | null;
   itemVideoBgUrl?: string | null;
+  countdownSeconds?: number;
   className?: string;
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
   /** Preview surfaces can run without requesting capture access. */
@@ -41,6 +42,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   theme,
   globalVideoBgUrl = null,
   itemVideoBgUrl = null,
+  countdownSeconds = 0,
   className,
   onCanvasReady,
   enableCamera = true,
@@ -81,32 +83,39 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   const canvasWidth = scene.canvas.width;
   const canvasHeight = scene.canvas.height;
 
-  const sourceElements = React.useMemo(
+  const captureElements = React.useMemo(
     () =>
       scene.elements.filter(
         element =>
           element.type === 'camera' ||
           element.type === 'videoDevice' ||
           element.type === 'display' ||
-          element.type === 'window' ||
-          element.type === 'media'
+          element.type === 'window'
       ),
     [scene]
   );
 
-  const sourceKey = sourceElements
-    .map(element => {
-      if (element.type === 'camera' || element.type === 'videoDevice') {
-        return `${element.type}:${element.id}:${element.deviceId}`;
-      }
-      if (element.type === 'display' || element.type === 'window') {
-        return `${element.type}:${element.id}:${element.sourceId}`;
-      }
-      if (element.type === 'media') {
-        return `media:${element.id}:${element.src}`;
-      }
-      return `${element.type}:${element.id}`;
-    })
+  // Keyed by device/source rather than element.id so switching between camera scenes does not tear down the video element
+  const captureKey = Array.from(
+    new Set(
+      captureElements.map(element => {
+        if (element.type === 'camera' || element.type === 'videoDevice') {
+          return `${element.type}:${element.deviceId || 'default'}`;
+        }
+        if (element.type === 'display' || element.type === 'window') {
+          return `${element.type}:${element.id}:${element.sourceId}`;
+        }
+        return `${element.type}:${element.id}`;
+      })
+    )
+  ).join('|');
+
+  const mediaElements = React.useMemo(
+    () => scene.elements.filter(element => element.type === 'media'),
+    [scene]
+  );
+  const mediaKey = mediaElements
+    .map(element => (element.type === 'media' ? `media:${element.id}:${element.src}:${element.assetId || ''}` : ''))
     .join('|');
 
   const browserElements = React.useMemo(
@@ -132,7 +141,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
     return () => onCanvasReady?.(null);
   }, [onCanvasReady]);
 
-  // Cameras, capture devices and media files.
+  // Cameras and desktop capture devices (independent of media library assets so camera never restarts on asset load).
   React.useEffect(() => {
     if (!enableCamera) return;
     let cancelled = false;
@@ -146,15 +155,17 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       video.autoplay = true;
       video.style.cssText =
         'position:absolute;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;';
-      video.srcObject = stream;
-      video.onloadedmetadata = () => {
-        void video.play().catch(() => {});
-      };
       if (hostRef.current) {
         hostRef.current.appendChild(video);
         mountedVideos.push(video);
       }
-      void video.play().catch(() => {});
+      video.srcObject = stream;
+      const tryPlay = () => {
+        if (video.paused) void video.play().catch(() => {});
+      };
+      video.onloadedmetadata = tryPlay;
+      video.oncanplay = tryPlay;
+      tryPlay();
       return video;
     };
 
@@ -176,7 +187,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
     };
 
     const start = async () => {
-      for (const element of sourceElements) {
+      for (const element of captureElements) {
         if (cancelled) return;
         try {
           if (element.type === 'camera') {
@@ -199,23 +210,32 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
               if (vid) {
                 videosRef.current[devKey] = vid;
                 videosRef.current[element.id] = vid;
+                if (vid.paused) void vid.play().catch(() => {});
               }
             }
           } else if (element.type === 'videoDevice') {
             const devKey = element.deviceId || 'default';
             const key = `video:${devKey}`;
-            if (streamsRef.current[element.id]) continue;
-            const stream = await acquireStream(key, () => openCameraOrVideoDevice(element.deviceId));
-            if (cancelled) {
-              releaseStream(key);
-              continue;
+            if (!streamsRef.current[key]) {
+              const stream = await acquireStream(key, () => openCameraOrVideoDevice(element.deviceId));
+              if (cancelled) {
+                releaseStream(key);
+                continue;
+              }
+              acquiredKeys.push(key);
+              streamsRef.current[key] = stream;
+              const vid = videoFor(stream);
+              mediaRef.current[element.id] = vid;
+              videosRef.current[devKey] = vid;
+              videosRef.current[key] = vid;
+            } else {
+              const vid = videosRef.current[key];
+              if (vid) {
+                mediaRef.current[element.id] = vid;
+                videosRef.current[devKey] = vid;
+                if (vid.paused) void vid.play().catch(() => {});
+              }
             }
-            acquiredKeys.push(key);
-            streamsRef.current[element.id] = stream;
-            const vid = videoFor(stream);
-            mediaRef.current[element.id] = vid;
-            videosRef.current[devKey] = vid;
-            videosRef.current[key] = vid;
           } else if (element.type === 'display' || element.type === 'window') {
             if (!element.sourceId || streamsRef.current[element.id]) continue;
             const key = `desktop:${element.sourceId}`;
@@ -227,17 +247,6 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
             acquiredKeys.push(key);
             streamsRef.current[element.id] = stream;
             mediaRef.current[element.id] = videoFor(stream);
-          } else if (element.type === 'media') {
-            const resolved = resolveSource(element.src, element.assetId, assets);
-            if (!resolved || mediaRef.current[element.id]) continue;
-            const video = document.createElement('video');
-            video.src = resolved;
-            video.loop = element.loop;
-            video.muted = element.muted;
-            video.playsInline = true;
-            video.preload = 'auto';
-            void video.play().catch(() => {});
-            mediaRef.current[element.id] = video;
           }
           setSourceError(null);
         } catch (error) {
@@ -256,17 +265,37 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
         video.srcObject = null;
         video.remove();
       });
-      Object.values(mediaRef.current).forEach(video => {
-        video.pause();
-        video.srcObject = null;
-        video.removeAttribute('src');
-      });
       streamsRef.current = {};
-      mediaRef.current = {};
       videosRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceKey, enableCamera, assets]);
+  }, [captureKey, enableCamera]);
+
+  // Media file elements
+  React.useEffect(() => {
+    const createdVideos: HTMLVideoElement[] = [];
+    for (const element of mediaElements) {
+      if (element.type !== 'media') continue;
+      const resolved = resolveSource(element.src, element.assetId, assets);
+      if (!resolved) continue;
+      const video = document.createElement('video');
+      video.src = resolved;
+      video.loop = element.loop;
+      video.muted = element.muted;
+      video.playsInline = true;
+      video.preload = 'auto';
+      void video.play().catch(() => {});
+      mediaRef.current[element.id] = video;
+      createdVideos.push(video);
+    }
+    return () => {
+      createdVideos.forEach(video => {
+        video.pause();
+        video.removeAttribute('src');
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaKey, assets]);
 
 
   // Scene audio inputs contribute tracks to the stream and feed the Broadcast audio meter.
@@ -399,7 +428,32 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
     ensureVideo(itemVideoBgUrl, 'video');
     ensureVideo(globalVideoBgUrl, 'video');
     ensureVideo(theme.backgroundUrl);
-  }, [slide?.backgroundUrl, slide?.backgroundType, itemVideoBgUrl, globalVideoBgUrl, theme.backgroundUrl]);
+    const resolvedSceneBg = resolveSource(
+      scene.canvas.background.src || '',
+      scene.canvas.background.assetId,
+      assets
+    );
+    if (resolvedSceneBg) {
+      ensureVideo(
+        resolvedSceneBg,
+        scene.canvas.background.type === 'video'
+          ? 'video'
+          : scene.canvas.background.type === 'image'
+          ? 'image'
+          : undefined
+      );
+    }
+  }, [
+    slide?.backgroundUrl,
+    slide?.backgroundType,
+    itemVideoBgUrl,
+    globalVideoBgUrl,
+    theme.backgroundUrl,
+    scene.canvas.background.src,
+    scene.canvas.background.assetId,
+    scene.canvas.background.type,
+    assets
+  ]);
 
   React.useEffect(() => {
     let frame = 0;
@@ -418,6 +472,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
             theme,
             globalVideoBgUrl,
             itemVideoBgUrl,
+            countdownSeconds,
             bgVideos: bgVideosRef.current,
             videos: videosRef.current,
             media: mediaRef.current,
@@ -437,7 +492,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       running = false;
       cancelAnimationFrame(frame);
     };
-  }, [scene, slide, theme, globalVideoBgUrl, itemVideoBgUrl, scenesById, assets]);
+  }, [scene, slide, theme, globalVideoBgUrl, itemVideoBgUrl, countdownSeconds, scenesById, assets]);
 
   return (
     <div className={className}>

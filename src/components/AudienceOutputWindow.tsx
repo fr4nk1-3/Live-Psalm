@@ -6,6 +6,7 @@ import { Flame, Megaphone, Bell } from 'lucide-react';
 import { getOutputFontSize } from '../utils/fontSize';
 import { useAutoFitFontSize } from '../utils/useAutoFitFontSize';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
+import { AudienceCameraLayer } from './AudienceCameraLayer';
 
 function isVideoUrl(url?: string | null, bgType?: Slide['backgroundType']): boolean {
   if (!url) return false;
@@ -56,20 +57,27 @@ export const AudienceOutputWindow: React.FC = () => {
       return null;
     }
   });
-  const [theme, setTheme] = useState<Theme>({
-    id: 'default',
-    name: 'Modern Worship',
-    fontFamily: 'Inter',
-    fontSize: 52,
-    fontWeight: '800',
-    textColor: '#ffffff',
-    align: 'center',
-    scrimOpacity: 0.5,
-    blurAmount: 0,
-    shadowColor: 'rgba(0,0,0,0.9)',
-    lowerThirdStyle: false,
-    accentColor: '#6366f1',
-    backgroundUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80'
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const saved = StorageService.getSavedData();
+      const matched = saved.themes.find((t: Theme) => t.id === saved.activeThemeId) || saved.themes[0];
+      if (matched) return matched;
+    } catch {}
+    return {
+      id: 'default',
+      name: 'Modern Worship',
+      fontFamily: 'Inter',
+      fontSize: 52,
+      fontWeight: '800',
+      textColor: '#ffffff',
+      align: 'center',
+      scrimOpacity: 0.5,
+      blurAmount: 0,
+      shadowColor: 'rgba(0,0,0,0.9)',
+      lowerThirdStyle: false,
+      accentColor: '#6366f1',
+      backgroundUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80'
+    };
   });
   const [emergency, setEmergency] = useState<EmergencyState>({
     isBlack: false,
@@ -609,19 +617,52 @@ export const AudienceOutputWindow: React.FC = () => {
             )
           )}
 
-          {/* SCRIM (skip for pure foreground video or pure image slides) */}
-          {!isPureMediaSlide && !fullscreenVideoUrl && (
-            <div
-              className="absolute inset-0 z-10"
-              style={{
-                backgroundColor: `rgba(0,0,0,${effectiveScrimOpacity})`,
-                backgroundImage: isFarMode
-                  ? 'radial-gradient(circle at center, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.68) 100%)'
-                  : undefined,
-                backdropFilter: theme.blurAmount ? `blur(${theme.blurAmount}px)` : undefined
-              }}
+          {/* LIVE CAMERA LAYER ON AUDIENCE SCREEN (when enabled in Slide settings / Program footer) */}
+          {theme.audienceCameraEnabled && !fullscreenVideoUrl && !isPureVideoSlide && (
+            <AudienceCameraLayer
+              enabled={Boolean(theme.audienceCameraEnabled)}
+              deviceId={theme.audienceCameraDeviceId}
+              mirror={theme.audienceCameraMirror !== false}
+              layout={theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered')}
+              hasSlideContent={Boolean(!emergency.isClear && !showFullSlideCountdown && liveSlide && !isPureMediaSlide)}
             />
           )}
+
+          {/* SCRIM (skip for pure foreground video/image slides, or reduce when full-frame Audience Camera is active) */}
+          {!isPureMediaSlide && !fullscreenVideoUrl && (() => {
+            const activeLayout = theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+            const isFullFrameCamera =
+              Boolean(theme.audienceCameraEnabled) &&
+              !(
+                (activeLayout === 'split_left' || activeLayout === 'split_right') &&
+                !emergency.isClear &&
+                !showFullSlideCountdown &&
+                liveSlide
+              );
+            if (
+              isFullFrameCamera &&
+              (activeLayout === 'lower_third' ||
+                activeLayout === 'top_banner' ||
+                activeLayout === 'boxed_card' ||
+                emergency.isClear ||
+                !liveSlide)
+            ) {
+              return null;
+            }
+            const scrimAlpha = isFullFrameCamera ? Math.min(effectiveScrimOpacity, 0.2) : effectiveScrimOpacity;
+            return (
+              <div
+                className="absolute inset-0 z-10"
+                style={{
+                  backgroundColor: `rgba(0,0,0,${scrimAlpha})`,
+                  backgroundImage: isFarMode && !isFullFrameCamera
+                    ? 'radial-gradient(circle at center, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.68) 100%)'
+                    : undefined,
+                  backdropFilter: !isFullFrameCamera && theme.blurAmount ? `blur(${theme.blurAmount}px)` : undefined
+                }}
+              />
+            );
+          })()}
 
           {/* ── FULL-SLIDE COUNTDOWN MODE ── */}
           {showFullSlideCountdown && (
@@ -687,8 +728,8 @@ export const AudienceOutputWindow: React.FC = () => {
                 <div
                   className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} flex w-full max-h-[38vh] flex-col pr-[4vw] rounded-r-[1vw] shadow-2xl text-left ${
                     isFarMode
-                      ? 'bg-black/95 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[2.8vh]'
-                      : 'bg-slate-950/90 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.2vh] backdrop-blur-md'
+                      ? 'bg-black/80 border-l-[1vw] border-amber-400 pl-[3.5vw] py-[2.8vh]'
+                      : 'bg-slate-950/50 border-l-[0.6vw] border-emerald-500 pl-[3vw] py-[2.2vh] backdrop-blur-md'
                   }`}
                 >
                   {liveSlide.sectionLabel && (
@@ -738,14 +779,14 @@ export const AudienceOutputWindow: React.FC = () => {
                 <div
                   className={`flex flex-col justify-center h-full max-h-full ${
                     layout === 'split_left'
-                      ? 'mr-auto items-start text-left bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-[2vw] px-[4vw] py-[4vh]'
+                      ? 'mr-auto items-start text-left bg-slate-950/55 backdrop-blur-md border border-white/10 rounded-[2vw] px-[3.5vw] py-[4vh]'
                       : layout === 'split_right'
-                      ? 'ml-auto items-end text-right bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-[2vw] px-[4vw] py-[4vh]'
+                      ? 'ml-auto items-end text-right bg-slate-950/55 backdrop-blur-md border border-white/10 rounded-[2vw] px-[3.5vw] py-[4vh]'
                       : isBoxed
-                      ? 'm-auto items-center text-center bg-slate-950/75 backdrop-blur-md border-2 border-white/15 rounded-[2.2vw] px-[4.5vw] py-[4.5vh] shadow-2xl'
+                      ? 'm-auto items-center text-center bg-slate-950/55 backdrop-blur-md border-2 border-white/15 rounded-[2.2vw] px-[4.5vw] py-[4.5vh] shadow-2xl'
                       : 'm-auto items-center text-center'
                   }`}
-                  style={{ maxWidth: isSplit ? '56vw' : dynMaxWidth, width: '100%' }}
+                  style={{ maxWidth: isSplit ? (theme.audienceCameraEnabled ? '46vw' : '54vw') : dynMaxWidth, width: '100%' }}
                 >
                   {/* Section / title badge — hidden in minimal mode */}
                   {!isMinimal && (liveSlide.title || liveSlide.sectionLabel) && (

@@ -25,12 +25,15 @@ export interface SceneFrame {
 }
 
 export interface SceneBackground {
-  type: 'solid' | 'gradient' | 'image';
+  type: 'solid' | 'gradient' | 'image' | 'video' | 'live';
   color?: string;
   from?: string;
   to?: string;
   angle?: number;
   src?: string;
+  assetId?: string;
+  /** When true, displays the active slide/item/global background behind the scene layout. */
+  followLiveBackground?: boolean;
 }
 
 interface BaseElement {
@@ -46,7 +49,7 @@ export interface TextElement extends BaseElement {
   type: 'text';
   content: string;
   /** When set, content comes from the live presentation instead of the literal text. */
-  binding?: 'slide.title' | 'slide.content' | 'slide.subtitle' | 'slide.reference' | 'theme.name' | null;
+  binding?: 'slide.title' | 'slide.content' | 'slide.subtitle' | 'slide.reference' | 'theme.name' | 'countdown.time' | null;
   fontFamily: string;
   fontSize: number;
   fontWeight: string;

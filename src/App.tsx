@@ -608,6 +608,16 @@ export const App: React.FC = () => {
   // Broadcast Updates to Stage Display (Confidence Monitor)
   useEffect(() => {
     const upcomingNext = getUpcomingNextSlide();
+    let savedMsg: string | null = null;
+    let savedFlash = false;
+    try {
+      const raw = localStorage.getItem('live_psalms_stage_message_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        savedMsg = parsed?.message || null;
+        savedFlash = Boolean(parsed?.flash);
+      }
+    } catch {}
     BroadcastService.postMessage({
       type: 'STAGE_DISPLAY_UPDATE',
       stageState: {
@@ -617,7 +627,9 @@ export const App: React.FC = () => {
         clockTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         countdownRemaining: countdownSeconds,
         countdownRunning: isCountdownRunning,
-        speakerNotes
+        speakerNotes,
+        stageMessage: savedMsg,
+        stageMessageFlash: savedFlash
       }
     });
   }, [liveSlide, previewSlide, activeItem, playlist, countdownSeconds, isCountdownRunning, speakerNotes]);
@@ -643,6 +655,16 @@ export const App: React.FC = () => {
           countdownTitle,
           countdownOvertimeTitle
         });
+        let savedMsg: string | null = null;
+        let savedFlash = false;
+        try {
+          const raw = localStorage.getItem('live_psalms_stage_message_v1');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            savedMsg = parsed?.message || null;
+            savedFlash = Boolean(parsed?.flash);
+          }
+        } catch {}
         BroadcastService.postMessage({
           type: 'STAGE_DISPLAY_UPDATE',
           stageState: {
@@ -652,7 +674,9 @@ export const App: React.FC = () => {
             clockTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             countdownRemaining: countdownSeconds,
             countdownRunning: isCountdownRunning,
-            speakerNotes
+            speakerNotes,
+            stageMessage: savedMsg,
+            stageMessageFlash: savedFlash
           }
         });
       }
