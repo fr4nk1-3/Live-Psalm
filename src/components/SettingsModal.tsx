@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { StorageService, CustomBibleTranslation } from '../services/storage';
 import { BroadcastService } from '../services/broadcast';
-import { AppSettings, ChurchProfile } from '../types/presentation';
+import { AppSettings, ChurchProfile, ProjectorLayout } from '../types/presentation';
 import { ImporterService } from '../services/importer';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -84,6 +84,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [obsOutputDir, setObsOutputDir] = useState<string>('~/Documents/LivePsalms-OBS');
   const [copiedKey, setCopiedKey] = useState<string>('');
   const [backupNotice, setBackupNotice] = useState<string>('');
+  const [profileNotice, setProfileNotice] = useState<string>('');
 
   const xmlFileInputRef = React.useRef<HTMLInputElement>(null);
   const backupFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -124,10 +125,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           })
           .catch(() => {});
       } else {
-        // Browser Multi-Screen Window Placement API (when available) + fallback
+        // Dev server / OS-level display scan, then the browser API, then a static fallback
         let detected: any[] = [];
         try {
-          if (typeof (window as any).getScreenDetails === 'function') {
+          const res = await fetch('/api/system/displays');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data?.displays) && data.displays.length > 0) detected = data.displays;
+          }
+        } catch {}
+        try {
+          if (detected.length === 0 && typeof (window as any).getScreenDetails === 'function') {
             const details = await (window as any).getScreenDetails();
             if (details && Array.isArray(details.screens)) {
               detected = details.screens.map((s: any, idx: number) => ({
@@ -153,6 +161,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               resolution: `${window.screen.width}x${window.screen.height}`
             }
           ];
+          if ((window.screen as any).isExtended) {
+            detected.push({
+              id: '2',
+              index: 2,
+              label: 'External Display (Extended Desktop)',
+              isPrimary: false,
+              bounds: { x: window.screen.width, y: 0, width: window.screen.width, height: window.screen.height },
+              resolution: `${window.screen.width}x${window.screen.height}`
+            });
+          }
         }
         setDisplays(detected);
         try {
@@ -172,13 +190,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   useEffect(() => {
-    if (isOpen) {
-      setSettings(StorageService.getSettings());
-      setCustomBibles(StorageService.getCustomBibles());
-      setObsConnected(BroadcastService.isObsConnected());
-      setBackupNotice('');
-      refreshSystemInfo();
+    if (!isOpen) return;
+    setSettings(StorageService.getSettings());
+    setCustomBibles(StorageService.getCustomBibles());
+    setObsConnected(BroadcastService.isObsConnected());
+    setBackupNotice('');
+    refreshSystemInfo();
+
+    let ipcRenderer: any = null;
+    const onDisplaysChanged = (_event: any, list: any[]) => {
+      if (!Array.isArray(list)) return;
+      setDisplays(list);
+      try {
+        localStorage.setItem('live_psalms_detected_displays_v1', JSON.stringify(list));
+      } catch {}
+    };
+    try {
+      if ((window as any).require) {
+        ipcRenderer = (window as any).require('electron').ipcRenderer;
+        ipcRenderer.on('displays-changed', onDisplaysChanged);
+      }
+    } catch {
+      /* browser preview */
     }
+    return () => {
+      if (ipcRenderer) ipcRenderer.removeListener('displays-changed', onDisplaysChanged);
+    };
   }, [isOpen]);
 
   const storageStats = useMemo(() => {
@@ -205,6 +242,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleUpdateProfile = (updated: Partial<ChurchProfile>) => {
+    setProfileNotice('');
     updateSettings({
       churchProfile: {
         ...settings.churchProfile,
@@ -213,13 +251,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
+  const handleSaveProfile = () => {
+    StorageService.saveSettings(settings);
+    BroadcastService.postMessage({ type: 'APP_SETTINGS_UPDATE', appSettings: settings });
+    setProfileNotice('Church profile and logo saved.');
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const dataUrl = evt.target?.result as string;
-      handleUpdateProfile({ logoUrl: dataUrl });
+      const rawDataUrl = evt.target?.result as string;
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const maxDim = 512;
+          const scale = Math.min(1, maxDim / Math.max(image.width || 1, image.height || 1));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext('2d');
+          if (!context) {
+            handleUpdateProfile({ logoUrl: rawDataUrl });
+            setProfileNotice('Logo uploaded.');
+            return;
+          }
+          context.drawImage(image, 0, 0, width, height);
+          let optimized = canvas.toDataURL('image/png');
+          if (optimized.length > 350_000) {
+            const webp = canvas.toDataURL('image/webp', 0.9);
+            if (webp.startsWith('data:image/webp') && webp.length < optimized.length) optimized = webp;
+          }
+          handleUpdateProfile({ logoUrl: optimized });
+          setProfileNotice('Logo uploaded.');
+        } catch {
+          handleUpdateProfile({ logoUrl: rawDataUrl });
+          setProfileNotice('Logo uploaded.');
+        }
+      };
+      image.onerror = () => {
+        handleUpdateProfile({ logoUrl: rawDataUrl });
+        setProfileNotice('Logo uploaded.');
+      };
+      image.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -453,12 +530,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Logo size"
                     />
                   </Field>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    {profileNotice ? (
+                      <span className="text-2xs text-success">{profileNotice}</span>
+                    ) : (
+                      <span className="text-2xs text-muted-foreground">
+                        Changes apply as you type. Save to push them to the outputs.
+                      </span>
+                    )}
+                    <Button size="xs" variant="secondary" onClick={handleSaveProfile}>
+                      Save profile
+                    </Button>
+                  </div>
                 </FieldGroup>
               </div>
             )}
 
             {activeTab === 'projection' && (
               <div className="space-y-5">
+                <FieldGroup
+                  title="Appearance"
+                  description="Match your operating system or lock the console to light or dark mode."
+                >
+                  <div className="grid grid-cols-3 gap-1.5 rounded-md border border-border bg-background/60 p-1">
+                    {[
+                      { id: 'system', label: 'System', desc: 'Follow OS' },
+                      { id: 'light', label: 'Light', desc: 'Daylight' },
+                      { id: 'dark', label: 'Dark', desc: 'Low light' }
+                    ].map(mode => {
+                      const active = (settings.uiTheme || 'system') === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => updateSettings({ uiTheme: mode.id as 'system' | 'light' | 'dark' })}
+                          aria-pressed={active}
+                          className={cn(
+                            'rounded-sm px-2.5 py-2 text-left transition-colors',
+                            active
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <div className="text-xs font-medium">{mode.label}</div>
+                          <div className="text-2xs text-muted-foreground">{mode.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+
                 <FieldGroup title="Displays" description="Where each output window opens.">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-2xs text-muted-foreground">
@@ -555,6 +677,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </div>
+                </FieldGroup>
+
+                <Separator />
+
+                <FieldGroup
+                  title="Audience display"
+                  description="Match the layout and distance to your sanctuary projector."
+                >
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ audienceViewMode: 'near' })}
+                      aria-pressed={(settings.audienceViewMode || 'near') === 'near'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        (settings.audienceViewMode || 'near') === 'near'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Near audience</span>
+                        {(settings.audienceViewMode || 'near') === 'near' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        Balanced sanctuary framing with theme accents and layout cards.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ audienceViewMode: 'far' })}
+                      aria-pressed={settings.audienceViewMode === 'far'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        settings.audienceViewMode === 'far'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Far audience</span>
+                        {settings.audienceViewMode === 'far' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        High-contrast enlarged typography for large halls and bright rooms.
+                      </span>
+                    </button>
+                  </div>
+
+                  <Field
+                    label="Audience projector layout"
+                    hint="How slides and scripture are arranged on the audience screen."
+                    className="pt-2"
+                  >
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      {[
+                        { id: 'centered', label: 'Centered' },
+                        { id: 'boxed_card', label: 'Boxed card' },
+                        { id: 'lower_third', label: 'Lower third' },
+                        { id: 'top_banner', label: 'Top banner' },
+                        { id: 'split_left', label: 'Split left' },
+                        { id: 'split_right', label: 'Split right' },
+                        { id: 'minimal', label: 'Minimal' }
+                      ].map(layout => {
+                        const active = (settings.defaultProjectorLayout || 'centered') === layout.id;
+                        return (
+                          <button
+                            key={layout.id}
+                            type="button"
+                            onClick={() =>
+                              updateSettings({ defaultProjectorLayout: layout.id as ProjectorLayout })
+                            }
+                            aria-pressed={active}
+                            className={cn(
+                              'h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors',
+                              active
+                                ? 'border-border bg-accent text-accent-foreground'
+                                : 'border-transparent bg-background/40 text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                            )}
+                          >
+                            {layout.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
                 </FieldGroup>
 
                 <Separator />
@@ -677,12 +889,97 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Open audience screen at startup"
                     />
                   </div>
+
+                  <div className="flex items-start justify-between gap-4 border-t border-border/70 pt-3">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-broadcast-multiview">Broadcast multiview</Label>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+                        Shows the Multiview tab inside the Broadcast dock to monitor Preview, Program, and all scenes.
+                      </p>
+                    </div>
+                    <Switch
+                      id="settings-broadcast-multiview"
+                      checked={settings.broadcastMultiviewEnabled ?? false}
+                      onCheckedChange={(value) => updateSettings({ broadcastMultiviewEnabled: value })}
+                      aria-label="Broadcast multiview"
+                    />
+                  </div>
+
+                  <Field
+                    label="Audience screen font size"
+                    action={
+                      <span className="tabular text-xs font-medium text-foreground">
+                        {Math.max(100, settings.audienceMinFontSize ?? 100)} px (min 100)
+                      </span>
+                    }
+                    className="border-t border-border/70 pt-3"
+                  >
+                    <Slider
+                      value={[Math.max(100, settings.audienceMinFontSize ?? 100)]}
+                      min={100}
+                      max={260}
+                      step={2}
+                      onValueChange={([value]) => updateSettings({ audienceMinFontSize: Math.max(100, value) })}
+                      aria-label="Audience screen font size"
+                    />
+                  </Field>
                 </FieldGroup>
               </div>
             )}
 
             {activeTab === 'api' && (
               <div className="space-y-5">
+                <FieldGroup
+                  title="Slide translation behavior"
+                  description="Choose what happens when you click Translate on a Scripture slide."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 rounded-md border border-border bg-background/60 p-1">
+                    {[
+                      {
+                        id: 'single_slide_revert',
+                        label: 'Slide only (revert)',
+                        desc: 'Translate only this slide and revert when moving to next.'
+                      },
+                      {
+                        id: 'single_slide_keep',
+                        label: 'Slide only (keep)',
+                        desc: 'Translate only this slide and keep it translated.'
+                      },
+                      {
+                        id: 'entire_chapter',
+                        label: 'Entire chapter',
+                        desc: 'Translate the whole chapter and pinned Bible items.'
+                      }
+                    ].map(opt => {
+                      const active = (settings.slideTranslationBehavior || 'single_slide_revert') === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() =>
+                            updateSettings({
+                              slideTranslationBehavior: opt.id as
+                                | 'single_slide_revert'
+                                | 'single_slide_keep'
+                                | 'entire_chapter'
+                            })
+                          }
+                          aria-pressed={active}
+                          className={cn(
+                            'rounded-sm px-2.5 py-2 text-left transition-colors',
+                            active
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <div className="text-xs font-medium">{opt.label}</div>
+                          <div className="mt-0.5 text-2xs leading-snug text-muted-foreground">{opt.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+
                 <FieldGroup
                   title="Online Bible search"
                   description="Adds online lookup alongside the offline library."

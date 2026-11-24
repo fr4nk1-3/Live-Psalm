@@ -9,12 +9,14 @@ import {
   TransitionSettings, 
   SectionTag,
   ItemType,
-  QuickPinnedItem
+  QuickPinnedItem,
+  ChurchProfile
 } from './types/presentation';
 import { StorageService } from './services/storage';
 import { BroadcastService } from './services/broadcast';
 import { ImporterService } from './services/importer';
 import { MediaVaultService } from './services/mediaVault';
+import { applyUiTheme } from './utils/uiTheme';
 
 import { Header } from './components/Header';
 import { PlaylistPanel } from './components/PlaylistPanel';
@@ -28,7 +30,7 @@ import { QuickPresentationModal } from './components/QuickPresentationModal';
 import { SermonModeModal } from './components/SermonModeModal';
 import { SlideDesignerModal } from './components/SlideDesignerModal';
 import { SettingsModal } from './components/SettingsModal';
-import { StreamingModal } from './components/StreamingModal';
+import { BroadcastDock } from './components/BroadcastDock';
 import { MediaPlayerBar } from './components/MediaPlayerBar';
 
 import { AudienceOutputWindow } from './components/AudienceOutputWindow';
@@ -86,6 +88,9 @@ export const App: React.FC = () => {
   } | null>(null);
 
   // Emergency States (Mutually Exclusive)
+  // Church profile, kept reactive so the broadcast dock and logo follow edits
+  const [churchProfile, setChurchProfile] = useState<ChurchProfile>(() => StorageService.getChurchProfile());
+
   const [emergency, setEmergency] = useState<EmergencyState>({
     isBlack: false,
     isClear: false,
@@ -105,6 +110,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const s = StorageService.getSettings();
+    applyUiTheme(s.uiTheme || 'system');
     if (s.autoLaunchAudience && !BroadcastService.isAudienceOpen()) {
       BroadcastService.openAudienceWindow();
       setIsAudienceActive(true);
@@ -117,10 +123,33 @@ export const App: React.FC = () => {
           durationMs: detail.transitionDurationMs ?? prev.durationMs
         }));
         setAudienceViewMode(detail.audienceViewMode || 'near');
+        if (detail.defaultProjectorLayout) {
+          setThemes(prev =>
+            prev.map(t =>
+              t.id === activeThemeId
+                ? {
+                    ...t,
+                    projectorLayout: detail.defaultProjectorLayout,
+                    lowerThirdStyle: detail.defaultProjectorLayout === 'lower_third'
+                  }
+                : t
+            )
+          );
+        }
+        applyUiTheme(detail.uiTheme || 'system');
       }
     };
+    const mediaQuery = window.matchMedia?.('(prefers-color-scheme: light)');
+    const handleSystemThemeChange = () => {
+      const current = StorageService.getSettings().uiTheme || 'system';
+      if (current === 'system') applyUiTheme('system');
+    };
     window.addEventListener('app-settings-updated', handleSettingsUpdate);
-    return () => window.removeEventListener('app-settings-updated', handleSettingsUpdate);
+    mediaQuery?.addEventListener?.('change', handleSystemThemeChange);
+    return () => {
+      window.removeEventListener('app-settings-updated', handleSettingsUpdate);
+      mediaQuery?.removeEventListener?.('change', handleSystemThemeChange);
+    };
   }, []);
 
   // Speaker / Stage Notes
@@ -129,6 +158,7 @@ export const App: React.FC = () => {
   // Countdown Ticker & Advanced Options State
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
   const [isCountdownRunning, setIsCountdownRunning] = useState<boolean>(false);
+  const countdownAnchorRef = React.useRef<{ baseEpochMs: number; baseSeconds: number } | null>(null);
   const [countUp, setCountUp] = useState<boolean>(false);
   const [isFullSlideCountdown, setIsFullSlideCountdown] = useState<boolean>(false);
   const [countdownTargetScreen, setCountdownTargetScreen] = useState<'audience' | 'stage' | 'both'>('both');
@@ -167,6 +197,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleProfileUpdated = (evt?: any) => {
       const profile = evt?.detail || StorageService.getChurchProfile();
+      setChurchProfile(profile);
       const logoName = StorageService.getLogoDisplayName(profile);
       setMedia(prev =>
         prev.map(m =>
@@ -265,7 +296,7 @@ export const App: React.FC = () => {
   const [isSermonModeOpen, setIsSermonModeOpen] = useState(false);
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStreamingOpen, setIsStreamingOpen] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const activeItem = playlist.find(i => i.id === activeItemId) || null;
@@ -404,34 +435,35 @@ export const App: React.FC = () => {
     }
   };
 
-  // Countdown Ticker Timer (supports both duration mode and system-clock-linked target timestamp)
+  // Countdown Ticker Timer (wall-clock anchored for 1-second-per-second accuracy in both duration & clock modes)
   useEffect(() => {
-    if (!isCountdownRunning) return;
+    if (!isCountdownRunning) {
+      countdownAnchorRef.current = null;
+      return;
+    }
 
-    const timer = setInterval(() => {
+    if (countdownTargetTimestamp === null && !countdownAnchorRef.current) {
+      countdownAnchorRef.current = { baseEpochMs: Date.now(), baseSeconds: countdownSeconds };
+    }
+
+    const syncTick = () => {
+      const now = Date.now();
       if (countdownTargetTimestamp !== null) {
-        const diff = Math.round((countdownTargetTimestamp - Date.now()) / 1000);
-        if (diff <= 0 && countdownEndAction !== 'none') {
-          setCountdownSeconds(0);
-        } else {
-          setCountdownSeconds(diff);
-        }
+        const diff = Math.ceil((countdownTargetTimestamp - now) / 1000);
+        const next = diff <= 0 && countdownEndAction !== 'none' ? 0 : diff;
+        setCountdownSeconds(prev => (prev === next ? prev : next));
         return;
       }
 
-      setCountdownSeconds(prev => {
-        if (countUp) {
-          return prev + 1;
-        }
-        // When an end action (play video, start playlist, go live) is selected,
-        // stop at 00:00 and display the intended content instead of counting into overtime
-        if (prev <= 1 && countdownEndAction !== 'none') {
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 500);
+      const anchor = countdownAnchorRef.current;
+      if (!anchor) return;
+      const elapsed = Math.floor((now - anchor.baseEpochMs) / 1000);
+      const raw = countUp ? anchor.baseSeconds + elapsed : anchor.baseSeconds - elapsed;
+      const next = !countUp && raw <= 0 && countdownEndAction !== 'none' ? 0 : raw;
+      setCountdownSeconds(prev => (prev === next ? prev : next));
+    };
 
+    const timer = setInterval(syncTick, 250);
     return () => clearInterval(timer);
   }, [isCountdownRunning, countUp, countdownEndAction, countdownTargetTimestamp]);
 
@@ -856,8 +888,20 @@ export const App: React.FC = () => {
     const processedSlides = type === 'bible' ? applyBibleBgToSlides(slides) : slides;
     const cleanTitle = title.replace(/^Scripture:\s*/i, '').trim();
     const targetBcKey = type === 'bible' ? getBookChapterKey(cleanTitle, bibleMeta || processedSlides[0]?.bibleMeta) : null;
+    const sameBibleScope = (
+      aMeta?: PlaylistItem['bibleMeta'],
+      aSlides?: Slide[],
+      bMeta?: PlaylistItem['bibleMeta'],
+      bSlides?: Slide[]
+    ) => {
+      const aStart = aMeta?.startVerse ?? aSlides?.[0]?.bibleMeta?.verse ?? 1;
+      const aEnd = aMeta?.endVerse ?? aSlides?.[Math.max(0, (aSlides?.length || 1) - 1)]?.bibleMeta?.verse ?? aSlides?.length ?? 1;
+      const bStart = bMeta?.startVerse ?? bSlides?.[0]?.bibleMeta?.verse ?? 1;
+      const bEnd = bMeta?.endVerse ?? bSlides?.[Math.max(0, (bSlides?.length || 1) - 1)]?.bibleMeta?.verse ?? bSlides?.length ?? 1;
+      return aStart === bStart && aEnd === bEnd;
+    };
 
-    // Check if item already exists in playlist (match by title, passageRef, or book/chapter key)
+    // Check if item already exists in playlist (match by title, passageRef, or book/chapter + verse range)
     const existingItem = playlist.find(i => {
       if (
         i.title.toLowerCase() === cleanTitle.toLowerCase() ||
@@ -868,7 +912,7 @@ export const App: React.FC = () => {
       }
       if (type === 'bible' && targetBcKey && i.type === 'bible') {
         const iBcKey = getBookChapterKey(i.title, i.bibleMeta || i.slides[0]?.bibleMeta);
-        return iBcKey === targetBcKey && (bibleMeta?.startVerse ?? 1) === (i.bibleMeta?.startVerse ?? 1);
+        return iBcKey === targetBcKey && sameBibleScope(bibleMeta, processedSlides, i.bibleMeta, i.slides);
       }
       return false;
     });
@@ -928,7 +972,7 @@ export const App: React.FC = () => {
         if (p.title.toLowerCase() === cleanTitle.toLowerCase() || p.id === itemId) return true;
         if (type === 'bible' && targetBcKey && p.type === 'bible') {
           const pBcKey = getBookChapterKey(p.title, p.bibleMeta || p.slides[0]?.bibleMeta);
-          return pBcKey === targetBcKey;
+          return pBcKey === targetBcKey && sameBibleScope(bibleMeta, processedSlides, p.bibleMeta, p.slides);
         }
         return false;
       });
@@ -940,7 +984,8 @@ export const App: React.FC = () => {
             (type === 'bible' &&
               targetBcKey &&
               p.type === 'bible' &&
-              getBookChapterKey(p.title, p.bibleMeta || p.slides[0]?.bibleMeta) === targetBcKey);
+              getBookChapterKey(p.title, p.bibleMeta || p.slides[0]?.bibleMeta) === targetBcKey &&
+              sameBibleScope(bibleMeta, processedSlides, p.bibleMeta, p.slides));
           return isMatch
             ? {
                 ...p,
@@ -1217,7 +1262,7 @@ export const App: React.FC = () => {
         isSermonModeOpen ||
         isDesignerOpen ||
         isSettingsOpen ||
-        isStreamingOpen ||
+        isBroadcastOpen ||
         isInspectorOpen
       ) {
         return;
@@ -1288,7 +1333,7 @@ export const App: React.FC = () => {
     isSermonModeOpen,
     isDesignerOpen,
     isSettingsOpen,
-    isStreamingOpen,
+    isBroadcastOpen,
     isInspectorOpen
   ]);
 
@@ -1478,28 +1523,7 @@ export const App: React.FC = () => {
     slides: Slide[],
     bibleMeta?: PlaylistItem['bibleMeta']
   ) => {
-    const processedSlides = applyBibleBgToSlides(slides);
-    const selectedSlide = resolveRememberedSlide(
-      processedSlides,
-      undefined,
-      passageRef,
-      undefined,
-      undefined,
-      bibleMeta
-    );
-    const newItem: PlaylistItem = {
-      id: `item-bible-${Math.random().toString(36).substring(2, 9)}`,
-      title: `Scripture: ${passageRef}`,
-      type: 'bible',
-      passageRef,
-      category: 'Scripture',
-      slides: processedSlides,
-      lastViewedSlideId: selectedSlide?.id,
-      bibleMeta
-    };
-    setPlaylist(prev => [...prev, newItem]);
-    setActiveItemId(newItem.id);
-    setPreviewSlide(selectedSlide || processedSlides[0]);
+    handlePinToQuickSection(passageRef, slides, 'bible', passageRef, undefined, bibleMeta);
   };
 
   const handleAddBiblePassageAndGoLive = (
@@ -1800,12 +1824,48 @@ export const App: React.FC = () => {
     }
   };
 
-  /** 1-Click "Translate" Action: switches active Bible chapter & live/preview slide between Primary and Parallel Translation */
+  /** Tracks a single temporarily-translated slide so it reverts when moving to another slide */
+  const tempTranslatedSlideRef = React.useRef<{ slideId: string; originalSlide: Slide } | null>(null);
+
+  const restoreTempTranslatedSlide = (entry: { slideId: string; originalSlide: Slide }) => {
+    const orig = entry.originalSlide;
+    setPlaylist(prev =>
+      prev.map(item =>
+        item.slides.some(s => s.id === entry.slideId)
+          ? { ...item, slides: item.slides.map(s => (s.id === entry.slideId ? orig : s)) }
+          : item
+      )
+    );
+    setQuickPinnedItems(prev =>
+      prev.map(pin =>
+        pin.slides.some(s => s.id === entry.slideId)
+          ? { ...pin, slides: pin.slides.map(s => (s.id === entry.slideId ? orig : s)) }
+          : pin
+      )
+    );
+  };
+
+  useEffect(() => {
+    const temp = tempTranslatedSlideRef.current;
+    if (!temp) return;
+    const behavior = StorageService.getSettings().slideTranslationBehavior || 'single_slide_revert';
+    if (behavior !== 'single_slide_revert') return;
+    if (previewSlide?.id !== temp.slideId && liveSlide?.id !== temp.slideId) {
+      tempTranslatedSlideRef.current = null;
+      restoreTempTranslatedSlide(temp);
+    }
+  }, [previewSlide?.id, liveSlide?.id]);
+
+  /** "Translate" Action: honors Settings -> Slide translation behavior */
   const handleTranslateActiveBible = async (targetVersionId?: string, specificSlide?: Slide) => {
     if (!targetParallelVersionId && !targetVersionId) return;
 
+    const behavior = StorageService.getSettings().slideTranslationBehavior || 'single_slide_revert';
+    const targetSlide = specificSlide || previewSlide || liveSlide;
+    if (!targetSlide) return;
+
     const currentTrans = StorageService.resolveTranslationId(
-      (specificSlide || previewSlide || liveSlide)?.bibleMeta?.translationId ||
+      targetSlide.bibleMeta?.translationId ||
         activeItem?.bibleMeta?.translationId ||
         activeItem?.slides[0]?.bibleMeta?.translationId ||
         activeBibleTranslation
@@ -1821,7 +1881,71 @@ export const App: React.FC = () => {
       ? resolvedParallel
       : primaryBibleTranslation;
 
-    await handleSwitchActiveBibleTranslation(resolvedTarget, null, specificSlide, true);
+    if (behavior === 'entire_chapter') {
+      await handleSwitchActiveBibleTranslation(resolvedTarget, null, specificSlide, true);
+      return;
+    }
+
+    // Single-slide translation ('single_slide_revert' or 'single_slide_keep')
+    if (behavior === 'single_slide_revert' && tempTranslatedSlideRef.current) {
+      const prevTemp = tempTranslatedSlideRef.current;
+      if (prevTemp.slideId !== targetSlide.id) {
+        tempTranslatedSlideRef.current = null;
+        restoreTempTranslatedSlide(prevTemp);
+      } else if (resolvedTarget === prevTemp.originalSlide.bibleMeta?.translationId) {
+        // User toggled back to the original translation
+        const orig = applyBibleBgToSlides([prevTemp.originalSlide])[0];
+        tempTranslatedSlideRef.current = null;
+        setPlaylist(prev =>
+          prev.map(item =>
+            item.slides.some(s => s.id === targetSlide.id)
+              ? { ...item, slides: item.slides.map(s => (s.id === targetSlide.id ? orig : s)) }
+              : item
+          )
+        );
+        setQuickPinnedItems(prev =>
+          prev.map(pin =>
+            pin.slides.some(s => s.id === targetSlide.id)
+              ? { ...pin, slides: pin.slides.map(s => (s.id === targetSlide.id ? orig : s)) }
+              : pin
+          )
+        );
+        if (previewSlide?.id === targetSlide.id) setPreviewSlide(orig);
+        if (liveSlide?.id === targetSlide.id) setLiveSlide(orig);
+        return;
+      }
+    }
+
+    const translatedRaw = await StorageService.translateSingleBibleSlideAsync(
+      targetSlide,
+      resolvedTarget,
+      null,
+      activeItem
+    );
+    if (!translatedRaw) return;
+
+    const translatedSlide = applyBibleBgToSlides([{ ...translatedRaw, id: targetSlide.id }])[0];
+
+    if (behavior === 'single_slide_revert' && !tempTranslatedSlideRef.current) {
+      tempTranslatedSlideRef.current = { slideId: targetSlide.id, originalSlide: targetSlide };
+    }
+
+    setPlaylist(prev =>
+      prev.map(item =>
+        item.slides.some(s => s.id === targetSlide.id)
+          ? { ...item, slides: item.slides.map(s => (s.id === targetSlide.id ? translatedSlide : s)) }
+          : item
+      )
+    );
+    setQuickPinnedItems(prev =>
+      prev.map(pin =>
+        pin.slides.some(s => s.id === targetSlide.id)
+          ? { ...pin, slides: pin.slides.map(s => (s.id === targetSlide.id ? translatedSlide : s)) }
+          : pin
+      )
+    );
+    if (previewSlide?.id === targetSlide.id) setPreviewSlide(translatedSlide);
+    if (liveSlide?.id === targetSlide.id) setLiveSlide(translatedSlide);
   };
 
   const handleAddMediaToCatalogOnly = (mediaAsset: MediaAsset) => {
@@ -2167,7 +2291,8 @@ export const App: React.FC = () => {
           const nextState = BroadcastService.toggleLedWindow();
           setIsLedActive(nextState);
         }}
-        onOpenStreaming={() => setIsStreamingOpen(true)}
+        onOpenStreaming={() => setIsBroadcastOpen(v => !v)}
+        isBroadcastOpen={isBroadcastOpen}
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
@@ -2175,6 +2300,27 @@ export const App: React.FC = () => {
         isLedActive={isLedActive}
         isSaved={isSaved}
         onOpenSlideDesigner={() => setIsDesignerOpen(true)}
+      />
+
+      {/* Integrated live broadcast and recording dock */}
+      <BroadcastDock
+        isOpen={isBroadcastOpen}
+        onClose={() => setIsBroadcastOpen(false)}
+        liveSlide={liveSlide}
+        activeTheme={activeTheme}
+        globalVideoBgUrl={globalVideoBgUrl}
+        itemVideoBgUrl={activeItem?.videoBackgroundUrl || null}
+        isFullSlideCountdown={isFullSlideCountdown}
+        isCountdownRunning={isCountdownRunning}
+        countdownTargetScreen={countdownTargetScreen}
+        countdownSeconds={countdownSeconds}
+        countdownTitle={countdownTitle}
+        lowerThird={activeLowerThirdText}
+        churchProfile={churchProfile}
+        mediaList={media}
+        isAudienceActive={isAudienceActive}
+        isStageActive={isStageActive}
+        isLedActive={isLedActive}
       />
 
       {/* Main Studio Body Workspace Layout */}
@@ -2274,7 +2420,7 @@ export const App: React.FC = () => {
           onApplyBackground={handleApplyBackgroundWithScope}
           onClearBackground={handleClearAllBackgrounds}
           onOpenInspector={() => setIsInspectorOpen(true)}
-          onOpenStreamSettings={() => setIsStreamingOpen(true)}
+          onOpenStreamSettings={() => setIsBroadcastOpen(true)}
           countdownSeconds={countdownSeconds}
         />
 
@@ -2369,13 +2515,16 @@ export const App: React.FC = () => {
         isCountdownRunning={isCountdownRunning}
         onStartCountdown={(secs) => {
           setCountdownTargetTimestamp(null);
+          countdownAnchorRef.current = { baseEpochMs: Date.now(), baseSeconds: secs };
           setCountdownSeconds(secs);
           setIsCountdownRunning(true);
         }}
         onPauseCountdown={() => {
+          countdownAnchorRef.current = null;
           setIsCountdownRunning(false);
         }}
         onStopCountdown={() => {
+          countdownAnchorRef.current = null;
           setIsCountdownRunning(false);
           setCountdownTargetTimestamp(null);
           setCountdownSeconds(0);
@@ -2411,7 +2560,7 @@ export const App: React.FC = () => {
         countdownEndVideoId={countdownEndVideoId}
         onChangeCountdownEndVideoId={setCountdownEndVideoId}
         mediaList={media}
-        onOpenStreamSettings={() => setIsStreamingOpen(true)}
+        onOpenStreamSettings={() => setIsBroadcastOpen(true)}
       />
 
       {/* Modals & Dialogs */}
@@ -2496,10 +2645,6 @@ export const App: React.FC = () => {
         }}
       />
 
-      <StreamingModal
-        isOpen={isStreamingOpen}
-        onClose={() => setIsStreamingOpen(false)}
-      />
     </div>
   );
 };

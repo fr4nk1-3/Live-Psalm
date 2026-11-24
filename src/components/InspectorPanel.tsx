@@ -1,5 +1,5 @@
 import React from 'react';
-import { Theme, Slide, MediaAsset, PlaylistItem } from '../types/presentation';
+import { Theme, Slide, MediaAsset, PlaylistItem, ProjectorLayout } from '../types/presentation';
 import { StorageService } from '../services/storage';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -30,6 +30,16 @@ interface InspectorPanelProps {
 }
 
 const FONT_STACK = ['Inter', 'Cinzel', 'Outfit', 'Montserrat', 'Playfair Display'];
+
+const PROJECTOR_LAYOUTS: { id: ProjectorLayout; label: string }[] = [
+  { id: 'centered', label: 'Centered' },
+  { id: 'lower_third', label: 'Lower third' },
+  { id: 'top_banner', label: 'Top banner' },
+  { id: 'split_left', label: 'Left split' },
+  { id: 'split_right', label: 'Right split' },
+  { id: 'boxed_card', label: 'Boxed card' },
+  { id: 'minimal', label: 'Minimal' }
+];
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   theme,
@@ -112,28 +122,52 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 </Field>
 
                 <Field
-                  label="Size"
+                  label="Audience Font Size"
                   action={
-                    <span className="tabular text-2xs text-muted-foreground">{theme.fontSize} px</span>
+                    <span className="tabular text-2xs text-muted-foreground">
+                      {Math.max(100, theme.fontSize)} px (min 100)
+                    </span>
                   }
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="outline"
+                      onClick={() => onUpdateTheme({ fontSize: Math.max(100, (theme.fontSize || 100) - 8) })}
+                      title="Decrease font size"
+                      aria-label="Decrease font size"
+                    >
+                      -
+                    </Button>
                     <Slider
-                      value={[theme.fontSize]}
-                      min={24}
-                      max={200}
-                      step={1}
-                      onValueChange={([value]) => onUpdateTheme({ fontSize: value })}
+                      value={[Math.max(100, theme.fontSize)]}
+                      min={100}
+                      max={260}
+                      step={2}
+                      onValueChange={([value]) => onUpdateTheme({ fontSize: Math.max(100, value) })}
                       aria-label="Font size"
                     />
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="outline"
+                      onClick={() => onUpdateTheme({ fontSize: Math.min(260, Math.max(100, theme.fontSize || 100) + 8) })}
+                      title="Increase font size"
+                      aria-label="Increase font size"
+                    >
+                      +
+                    </Button>
                     <Input
                       type="number"
-                      min={8}
+                      min={100}
                       max={300}
-                      value={theme.fontSize}
+                      value={Math.max(100, theme.fontSize)}
                       onChange={e => {
                         const value = parseInt(e.target.value, 10);
-                        if (!Number.isNaN(value) && value >= 8) onUpdateTheme({ fontSize: value });
+                        if (!Number.isNaN(value)) {
+                          onUpdateTheme({ fontSize: Math.max(100, Math.min(300, value)) });
+                        }
                       }}
                       className="tabular h-7 w-14 shrink-0 px-1 text-center text-xs"
                       aria-label="Font size in pixels"
@@ -161,6 +195,28 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     ))}
                   </div>
                 </Field>
+
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div>
+                    <Label htmlFor="inspector-bold-font">Bold output font</Label>
+                    <p className="text-2xs text-muted-foreground">
+                      Renders projected lyrics and scripture in bold weight.
+                    </p>
+                  </div>
+                  <Switch
+                    id="inspector-bold-font"
+                    checked={
+                      theme.fontWeight === 'bold' ||
+                      theme.fontWeight === '' ||
+                      !theme.fontWeight ||
+                      Number(theme.fontWeight) >= 600
+                    }
+                    onCheckedChange={(checked) =>
+                      onUpdateTheme({ fontWeight: checked ? '800' : '400' })
+                    }
+                    aria-label="Bold output font"
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Text colour">
@@ -246,19 +302,35 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   />
                 </Field>
 
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <Label>Lower-third layout</Label>
-                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
-                      Anchor text to the bottom of the screen.
-                    </p>
+                <Field label="Projector layout" hint="How slides and scripture are arranged on the audience screen.">
+                  <div className="grid grid-cols-2 gap-1">
+                    {PROJECTOR_LAYOUTS.map(layout => {
+                      const current = theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+                      const isActive = current === layout.id;
+                      return (
+                        <button
+                          key={layout.id}
+                          type="button"
+                          onClick={() =>
+                            onUpdateTheme({
+                              projectorLayout: layout.id,
+                              lowerThirdStyle: layout.id === 'lower_third'
+                            })
+                          }
+                          aria-pressed={isActive}
+                          className={cn(
+                            'h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors',
+                            isActive
+                              ? 'border-border bg-accent text-accent-foreground'
+                              : 'border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                          )}
+                        >
+                          {layout.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <Switch
-                    checked={theme.lowerThirdStyle}
-                    onCheckedChange={value => onUpdateTheme({ lowerThirdStyle: value })}
-                    aria-label="Lower-third layout"
-                  />
-                </div>
+                </Field>
               </FieldGroup>
 
               {(globalVideoBgUrl || activeItem?.videoBackgroundUrl) && (

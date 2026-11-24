@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
 
 const sseClients = new Set<any>();
 const cachedPayloads = new Map<string, any>();
@@ -284,6 +285,76 @@ export default defineConfig({
             serverObsConnected = false;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ connected: false }));
+            return;
+          }
+
+          if (url === '/api/system/displays' && req.method === 'GET') {
+            if (process.platform === 'linux') {
+              execFile('xrandr', ['--listactivemonitors'], { timeout: 2500 }, (err, stdout = '') => {
+                const parsed: any[] = [];
+                if (!err && stdout) {
+                  for (const line of stdout.split('\n')) {
+                    const m = line.match(/^\s*\d+:\s+(\+\*?|\*?)\S+\s+(\d+)(?:\/\d+)?x(\d+)(?:\/\d+)?\+(\-?\d+)\+(\-?\d+)\s+(.+)$/);
+                    if (!m) continue;
+                    const isPrim = m[1].includes('*');
+                    const w = parseInt(m[2], 10);
+                    const h = parseInt(m[3], 10);
+                    const x = parseInt(m[4], 10);
+                    const y = parseInt(m[5], 10);
+                    const name = m[6].trim();
+                    parsed.push({
+                      id: `xrandr-${parsed.length + 1}`,
+                      index: parsed.length + 1,
+                      label: `${name} (${isPrim ? 'Primary' : 'External'})`,
+                      isPrimary: isPrim,
+                      bounds: { x, y, width: w, height: h },
+                      resolution: `${w}x${h}`
+                    });
+                  }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ displays: parsed }));
+              });
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ displays: [] }));
+            return;
+          }
+
+          if (url === '/api/system/native-engine' && req.method === 'GET') {
+            const bin = path.resolve(__dirname, 'native', process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine');
+            if (!fs.existsSync(bin)) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ available: false, engine: 'ffmpeg-fallback' }));
+              return;
+            }
+            execFile(bin, ['--status'], { timeout: 2500 }, (err, stdout = '') => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              if (!err && stdout.trim()) {
+                res.end(stdout.trim());
+              } else {
+                res.end(JSON.stringify({ available: false, engine: 'ffmpeg-fallback' }));
+              }
+            });
+            return;
+          }
+
+          if (url === '/api/system/native-benchmark' && req.method === 'POST') {
+            const bin = path.resolve(__dirname, 'native', process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine');
+            if (!fs.existsSync(bin)) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Native C engine binary not built (run: npm run build:native)' }));
+              return;
+            }
+            execFile(bin, ['--benchmark', '1920', '1080', '60'], { timeout: 10000 }, (err, stdout = '') => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              if (!err && stdout.trim()) {
+                res.end(stdout.trim());
+              } else {
+                res.end(JSON.stringify({ ok: false, error: err?.message || 'Benchmark failed' }));
+              }
+            });
             return;
           }
 

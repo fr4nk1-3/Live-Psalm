@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "build:native": "make -C native",
     "build:win": "tsc && vite build && electron-builder --win",
     "build:deb": "tsc && vite build && electron-builder --linux deb",
     "release:all": "npm run build:win && npx electron-builder --linux deb && gh release upload v1.1.0 dist_electron/LivePsalms-Setup.exe dist_electron/LivePsalms-Windows-Portable.exe dist_electron/LivePsalms-Ubuntu-amd64.deb --clobber"
@@ -23,6 +24,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "native/**/*",
       "package.json"
     ],
     "win": {

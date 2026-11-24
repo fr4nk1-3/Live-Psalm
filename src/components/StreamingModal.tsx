@@ -5,54 +5,53 @@
  * Falls back gracefully if ffmpeg is not installed, showing setup instructions.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Field, FieldGroup } from './ui/field';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { Badge } from './ui/badge';
-import { ListHeader } from './ui/primitives';
-import { Switch } from './ui/switch';
-import { Slider } from './ui/slider';
-import { Label } from './ui/label';
-import { AudioMeterRow } from './AudioMeter';
-import { useAudioLevels, useAudioSettings } from '../hooks/useAudio';
-import { streamStatus } from '../services/streamStatus';
-import { audioMonitor, type AudioSource } from '../services/audioMonitor';
-import { getActiveScene, useSceneLibrary } from '../scene/store';
-import { getSceneAudioTracks } from '../scene/sceneAudio';
-import { WebCodecsStreamer } from '../services/webcodecsStreamer';
-import { audioOutputMonitor, loadMonitorSettings, saveMonitorSettings, MonitorSettings } from '../services/audioMonitorOut';
-import { getSceneCanvas } from '../services/sceneCanvas';
-import type { Slide, Theme } from '../types/presentation';
+import {
+  X, Radio, Youtube, Twitch, Facebook, Square,
+  CheckCircle2, AlertTriangle, Copy, ExternalLink,
+  Eye, EyeOff, RefreshCw, Video, Mic, Volume2
+} from 'lucide-react';
 
 // Platform configurations
 const PLATFORMS = {
   youtube: {
     id: 'youtube',
     name: 'YouTube Live',
+    icon: Youtube,
+    color: '#ff0000',
+    colorClass: 'text-red-500',
+    bgClass: 'bg-red-950/30 border-red-700/50',
+    activeClass: 'bg-red-600',
     rtmpBase: 'rtmp://a.rtmp.youtube.com/live2',
     keyPlaceholder: 'xxxx-xxxx-xxxx-xxxx-xxxx',
-    keyHelp: 'YouTube Studio → Go Live → Stream key',
+    keyHelp: 'Go to YouTube Studio → Go Live → Stream Key',
     docsUrl: 'https://support.google.com/youtube/answer/2907883',
     quality: '1080p' as const,
   },
   twitch: {
     id: 'twitch',
     name: 'Twitch',
+    icon: Twitch,
+    color: '#9146ff',
+    colorClass: 'text-purple-400',
+    bgClass: 'bg-purple-950/30 border-purple-700/50',
+    activeClass: 'bg-purple-600',
     rtmpBase: 'rtmp://live.twitch.tv/live',
     keyPlaceholder: 'live_xxxxxxxxxxxxxxxxxxxxxxxxxx',
-    keyHelp: 'Twitch Dashboard → Settings → Stream → Primary stream key',
+    keyHelp: 'Twitch Dashboard → Settings → Stream → Primary Stream Key',
     docsUrl: 'https://dashboard.twitch.tv/u/YOUR_USERNAME/settings/stream',
     quality: '720p60' as const,
   },
   facebook: {
     id: 'facebook',
     name: 'Facebook Live',
+    icon: Facebook,
+    color: '#1877f2',
+    colorClass: 'text-blue-400',
+    bgClass: 'bg-blue-950/30 border-blue-700/50',
+    activeClass: 'bg-blue-600',
     rtmpBase: 'rtmps://live-api-s.facebook.com:443/rtmp',
     keyPlaceholder: 'FB-xxxxxxxxxxxxxxxxxxxx-x-xxxxxxxxxx',
-    keyHelp: 'Facebook → Create a live video → Use stream key',
+    keyHelp: 'Facebook → Create a live video → Use Stream Key',
     docsUrl: 'https://www.facebook.com/live/producer',
     quality: '720p' as const,
   },
@@ -61,11 +60,11 @@ const PLATFORMS = {
 type PlatformId = keyof typeof PLATFORMS;
 
 const QUALITY_OPTIONS = [
-  { label: '1080p 60fps', value: '1080p60', bitrate: 9000, res: '1920x1080', fps: 60 },
-  { label: '1080p 30fps', value: '1080p', bitrate: 6000, res: '1920x1080', fps: 30 },
-  { label: '720p 60fps', value: '720p60', bitrate: 6000, res: '1280x720', fps: 60 },
-  { label: '720p 30fps', value: '720p', bitrate: 4000, res: '1280x720', fps: 30 },
-  { label: '480p 30fps', value: '480p', bitrate: 2500, res: '854x480', fps: 30 },
+  { label: '1080p 60fps', value: '1080p60', bitrate: 6000, res: '1920x1080', fps: 60 },
+  { label: '1080p 30fps', value: '1080p', bitrate: 4500, res: '1920x1080', fps: 30 },
+  { label: '720p 60fps', value: '720p60', bitrate: 3500, res: '1280x720', fps: 60 },
+  { label: '720p 30fps', value: '720p', bitrate: 2500, res: '1280x720', fps: 30 },
+  { label: '480p 30fps', value: '480p', bitrate: 1500, res: '854x480', fps: 30 },
 ];
 
 interface StreamKey {
@@ -77,9 +76,6 @@ interface StreamKey {
 interface StreamingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  liveSlide?: Slide | null;
-  theme?: Theme;
-  countdownSeconds?: number;
 }
 
 function getIpc() {
@@ -91,22 +87,7 @@ function getIpc() {
   return null;
 }
 
-/** Log lines carry their own level marker; colour is state, never decoration. */
-function logLineClass(line: string): string {
-  if (line.startsWith('✅')) return 'text-success';
-  if (line.startsWith('❌')) return 'text-destructive';
-  if (line.startsWith('⚠')) return 'text-warning';
-  if (line.startsWith('▶')) return 'text-foreground';
-  return 'text-muted-foreground';
-}
-
-export const StreamingModal: React.FC<StreamingModalProps> = ({
-  isOpen,
-  onClose,
-  liveSlide = null,
-  theme,
-  countdownSeconds = 0
-}) => {
+export const StreamingModal: React.FC<StreamingModalProps> = ({ isOpen, onClose }) => {
   const [activePlatform, setActivePlatform] = useState<PlatformId>('youtube');
   const [streamKeys, setStreamKeys] = useState<Record<PlatformId, StreamKey>>(() => {
     try {
@@ -117,136 +98,45 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const [streamingPlatform, setStreamingPlatform] = useState<PlatformId | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<Date | null>(null);
   const [elapsed, setElapsed] = useState('00:00:00');
-  const [ffmpegStatus, setFfmpegStatus] = useState<'checking' | 'available' | 'missing' | 'desktop'>('checking');
-  const [ffmpegInfo, setFfmpegInfo] = useState<{ path?: string | null; version?: string | null; error?: string | null } | null>(null);
+  const [ffmpegStatus, setFfmpegStatus] = useState<'checking' | 'available' | 'missing'>('checking');
   const [streamLog, setStreamLog] = useState<string[]>([]);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
-  const [showInstructions, setShowInstructions] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [audio, updateAudio] = useAudioSettings();
-
-  const audioLevels = useAudioLevels();
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [lutPath, setLutPath] = useState<string>(() => localStorage.getItem('live_psalms_stream_lut') || '');
-  const [encoder, setEncoder] = useState<string>(() => localStorage.getItem('live_psalms_stream_encoder') || 'libx264');
-  const [engine, setEngine] = useState<'stable' | 'copy' | 'webcodecs'>(() => {
-    const stored = localStorage.getItem('live_psalms_stream_engine');
-    return stored === 'copy' || stored === 'webcodecs' ? stored : 'stable';
-  });
-  const [audioDelayMs, setAudioDelayMs] = useState<number>(() => Number(localStorage.getItem('live_psalms_audio_delay_ms') || 0));
-  const [monitor, setMonitor] = useState<MonitorSettings>(() => loadMonitorSettings());
-  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
-  React.useEffect(() => {
-    if (!isOpen) return;
-    void audioOutputMonitor.apply(monitor, audio.deviceId);
-  }, [isOpen, monitor, audio.deviceId]);
-  React.useEffect(() => () => audioOutputMonitor.stop(), []);
-  const sceneLibrary = useSceneLibrary();
-  const activeScene = getActiveScene(sceneLibrary);
-
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const sceneStreamRef = useRef<MediaStream | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const streamerRef = useRef<WebCodecsStreamer | null>(null);
-  const framePumpRef = useRef<number | null>(null);
-  const reconnectAttemptRef = useRef(0);
-  const reconnectTimerRef = useRef<number | null>(null);
-  const manualStopRef = useRef(false);
-  const startStreamRef = useRef<((reconnecting?: boolean) => Promise<void>) | null>(null);
-
-
-  const stopCapture = () => {
-    if (framePumpRef.current !== null) {
-      window.clearInterval(framePumpRef.current);
-      framePumpRef.current = null;
-    }
-    if (streamerRef.current) {
-      streamerRef.current.stop();
-      streamerRef.current = null;
-    }
-    if (recorderRef.current) {
-      try {
-        recorderRef.current.stop();
-      } catch {
-        /* already stopped */
-      }
-      recorderRef.current = null;
-    }
-    sceneStreamRef.current?.getTracks().forEach(track => track.stop());
-    sceneStreamRef.current = null;
-    micStreamRef.current?.getTracks().forEach(track => track.stop());
-    micStreamRef.current = null;
-  };
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ipc = getIpc();
 
-  // Listen to the input only while this dialog is open, so nothing is captured
-  // in the background.
+  // ── Media Input Devices (Camera / Capture Card + Audio Mixer / Mic) ──
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState<string>(() => {
+    try { return JSON.parse(localStorage.getItem('live_psalms_stream_devices_v1') || '{}').videoId || ''; } catch { return ''; }
+  });
+  const [selectedAudioId, setSelectedAudioId] = useState<string>(() => {
+    try { return JSON.parse(localStorage.getItem('live_psalms_stream_devices_v1') || '{}').audioId || ''; } catch { return ''; }
+  });
+  const [studioAudioMode, setStudioAudioMode] = useState<boolean>(true);
+  const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [actualStreamStats, setActualStreamStats] = useState<string>('');
+  const [deviceError, setDeviceError] = useState<string>('');
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const activeMediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const levelRafRef = useRef<number | null>(null);
+
+  // Check ffmpeg availability on open
   useEffect(() => {
     if (!isOpen) return;
-    audioMonitor.retain();
-    return () => audioMonitor.release();
-  }, [isOpen]);
-
-  // Enumerate audio inputs on open, and follow device hot-plug
-  useEffect(() => {
-    if (!isOpen || !navigator.mediaDevices?.enumerateDevices) return;
-    let cancelled = false;
-    const loadDevices = () => {
-      navigator.mediaDevices
-        .enumerateDevices()
-        .then(devices => {
-          if (cancelled) return;
-          setAudioDevices(devices.filter(device => device.kind === 'audioinput'));
-          setVideoDevices(devices.filter(device => device.kind === 'videoinput'));
-        })
-        .catch(() => {});
-    };
-    loadDevices();
-    navigator.mediaDevices.addEventListener?.('devicechange', loadDevices);
-    return () => {
-      cancelled = true;
-      navigator.mediaDevices.removeEventListener?.('devicechange', loadDevices);
-    };
-  }, [isOpen]);
-
-  // Probe the encoder whenever the dialog opens. The main process reports the
-  // resolved binary so a stale PATH is visible instead of just "not found".
-  useEffect(() => {
-    if (!isOpen) return;
-    if (!ipc) {
-      // Browser preview: there is no main process to spawn ffmpeg from.
-      setFfmpegStatus('desktop');
-      return;
-    }
     setFfmpegStatus('checking');
-    ipc
-      .invoke('check-ffmpeg')
-      .then((info: any) => {
-        if (typeof info === 'boolean') {
-          setFfmpegStatus(info ? 'available' : 'missing');
-          return;
-        }
-        setFfmpegInfo(info || null);
-        setFfmpegStatus(info?.available ? 'available' : 'missing');
-      })
-      .catch(() => setFfmpegStatus('missing'));
-  }, [isOpen, ipc]);
-
-  const locateFfmpeg = async () => {
-    if (!ipc) return;
-    const result = await ipc.invoke('browse-ffmpeg').catch(() => null);
-    if (!result || result.canceled) return;
-    setFfmpegInfo(result);
-    if (result.available) {
-      setFfmpegStatus('available');
-      setStreamLog(prev => [...prev, `✅ ffmpeg ready: ${result.path}`]);
+    if (ipc) {
+      ipc.invoke('check-ffmpeg').then((ok: boolean) => {
+        setFfmpegStatus(ok ? 'available' : 'missing');
+      }).catch(() => setFfmpegStatus('missing'));
     } else {
+      // Browser preview — treat as unavailable
       setFfmpegStatus('missing');
-      setStreamLog(prev => [...prev, `❌ ${result.error || 'That file cannot be used as ffmpeg.'}`]);
     }
-  };
+  }, [isOpen]);
 
   // Elapsed timer
   useEffect(() => {
@@ -265,72 +155,197 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isStreaming, streamStartTime]);
 
+  // Enumerate connected video & audio input devices
+  const refreshDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    setDeviceError('');
+    try {
+      // Request permission briefly if labels are empty so device names appear
+      let devs = await navigator.mediaDevices.enumerateDevices();
+      if (devs.some(d => (d.kind === 'videoinput' || d.kind === 'audioinput') && !d.label)) {
+        try {
+          const temp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          temp.getTracks().forEach(t => t.stop());
+          devs = await navigator.mediaDevices.enumerateDevices();
+        } catch (e) {
+          // Try audio-only or video-only permission if one is missing
+          try {
+            const tempA = await navigator.mediaDevices.getUserMedia({ audio: true });
+            tempA.getTracks().forEach(t => t.stop());
+          } catch {}
+          try {
+            const tempV = await navigator.mediaDevices.getUserMedia({ video: true });
+            tempV.getTracks().forEach(t => t.stop());
+          } catch {}
+          devs = await navigator.mediaDevices.enumerateDevices();
+        }
+      }
+      const vids = devs.filter(d => d.kind === 'videoinput');
+      const auds = devs.filter(d => d.kind === 'audioinput');
+      setVideoDevices(vids);
+      setAudioDevices(auds);
+      if (!selectedVideoId && vids.length > 0) setSelectedVideoId(vids[0].deviceId);
+      if (!selectedAudioId && auds.length > 0) setSelectedAudioId(auds[0].deviceId);
+    } catch (e: any) {
+      setDeviceError(e?.message || 'Unable to list media devices');
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    refreshDevices();
+    navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', refreshDevices);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Persist selected devices
+  useEffect(() => {
+    try {
+      localStorage.setItem('live_psalms_stream_devices_v1', JSON.stringify({
+        videoId: selectedVideoId,
+        audioId: selectedAudioId
+      }));
+    } catch {}
+  }, [selectedVideoId, selectedAudioId]);
+
+  // Open live preview MediaStream & Audio VU meter whenever devices or quality change while modal is open
+  useEffect(() => {
+    if (!isOpen || isStreaming) return;
+    let cancelled = false;
+
+    const stopPreview = () => {
+      if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+      levelRafRef.current = null;
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
+      if (activeMediaStreamRef.current) {
+        activeMediaStreamRef.current.getTracks().forEach(t => t.stop());
+        activeMediaStreamRef.current = null;
+      }
+      setAudioLevel(0);
+      setActualStreamStats('');
+    };
+
+    const startPreview = async () => {
+      stopPreview();
+      if (!navigator.mediaDevices?.getUserMedia) return;
+      if (selectedVideoId === 'none' && selectedAudioId === 'none') return;
+
+      const keyCfg = streamKeys[activePlatform] || { quality: '1080p' };
+      const q = QUALITY_OPTIONS.find(o => o.value === (keyCfg.quality || '1080p')) || QUALITY_OPTIONS[1];
+      const [w, h] = q.res.split('x').map(Number);
+
+      const videoConstraint: boolean | MediaTrackConstraints =
+        selectedVideoId === 'none'
+          ? false
+          : {
+              ...(selectedVideoId ? { deviceId: { exact: selectedVideoId } } : {}),
+              width: { ideal: w || 1920 },
+              height: { ideal: h || 1080 },
+              frameRate: { ideal: q.fps || 30 }
+            };
+
+      const audioConstraint: boolean | MediaTrackConstraints =
+        selectedAudioId === 'none'
+          ? false
+          : {
+              ...(selectedAudioId ? { deviceId: { exact: selectedAudioId } } : {}),
+              echoCancellation: !studioAudioMode,
+              noiseSuppression: !studioAudioMode,
+              autoGainControl: !studioAudioMode,
+              sampleRate: { ideal: 48000 },
+              channelCount: { ideal: 2 }
+            };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraint,
+          audio: audioConstraint
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        activeMediaStreamRef.current = stream;
+        setDeviceError('');
+
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+          previewVideoRef.current.play().catch(() => {});
+        }
+
+        const vTrack = stream.getVideoTracks()[0];
+        const aTrack = stream.getAudioTracks()[0];
+        const parts: string[] = [];
+        if (vTrack) {
+          const s = vTrack.getSettings();
+          parts.push(`${s.width || '?'}×${s.height || '?'} @ ${Math.round(s.frameRate || q.fps)}fps`);
+        }
+        if (aTrack) {
+          const s = aTrack.getSettings();
+          parts.push(`${s.sampleRate ? Math.round(s.sampleRate / 1000) + 'kHz' : '48kHz'} ${s.channelCount === 2 ? 'Stereo' : 'Audio'}`);
+        }
+        setActualStreamStats(parts.join(' • '));
+
+        if (aTrack) {
+          const ctx = new AudioContext();
+          audioCtxRef.current = ctx;
+          const src = ctx.createMediaStreamSource(new MediaStream([aTrack]));
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const tick = () => {
+            if (cancelled) return;
+            analyser.getByteTimeDomainData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+              const v = (data[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / data.length);
+            setAudioLevel(Math.min(100, Math.round(rms * 280)));
+            levelRafRef.current = requestAnimationFrame(tick);
+          };
+          tick();
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setDeviceError(e?.message || 'Could not open selected media device');
+        }
+      }
+    };
+
+    startPreview();
+    return () => {
+      cancelled = true;
+      if (!isStreaming) stopPreview();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, selectedVideoId, selectedAudioId, studioAudioMode, activePlatform, streamKeys, isStreaming]);
+
   // Listen for stream status from main process
   useEffect(() => {
     if (!ipc) return;
     const onStreamLog = (_event: any, msg: string) => {
       setStreamLog(prev => [...prev.slice(-50), msg]);
     };
-    const stopLocal = () => {
+    const onStreamEnded = () => {
       setIsStreaming(false);
       setStreamingPlatform(null);
       setStreamStartTime(null);
-    };
-    const onStreamEnded = () => {
-      streamStatus.finish();
-      stopLocal();
       setStreamLog(prev => [...prev, '— Stream ended —']);
-    };
-    const onStreamState = (_event: any, payload: { state?: string; error?: string }) => {
-      if (!payload?.state) return;
-      if (payload.state === 'live') {
-        streamStatus.markLive();
-        setIsStreaming(true);
-      } else if (payload.state === 'ended' || payload.state === 'error') {
-        const reason = payload.error || 'Stream disconnected.';
-        if (manualStopRef.current) {
-          if (payload.state === 'error') {
-            streamStatus.finish(reason);
-            setStreamLog(prev => [...prev, `Stream error: ${reason}`]);
-          } else {
-            streamStatus.finish();
-          }
-          stopLocal();
-          return;
-        }
-        // Network drops are normal; retry like OBS instead of ending the service.
-        const MAX_ATTEMPTS = 5;
-        if (reconnectAttemptRef.current >= MAX_ATTEMPTS) {
-          streamStatus.finish(reason);
-          stopLocal();
-          setStreamLog(prev => [...prev, `${reason} Reconnect attempts exhausted.`]);
-          return;
-        }
-        reconnectAttemptRef.current += 1;
-        const attempt = reconnectAttemptRef.current;
-        const delayMs = Math.min(16000, 1000 * 2 ** (attempt - 1));
-        setStreamLog(prev => [...prev, `${reason} Reconnecting in 3 s (attempt ${attempt}/${MAX_ATTEMPTS})`]);
-        stopLocal();
-        stopCapture();
-        if (ipc) void ipc.invoke('stop-stream').catch(() => {});
-        if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = window.setTimeout(() => {
-          reconnectTimerRef.current = null;
-          void startStreamRef.current?.(true);
-        }, delayMs);
-      }    };
-    const onStreamStats = (_event: any, stats: Record<string, number>) => {
-      if (stats) streamStatus.applyStats(stats);
     };
     ipc.on('stream-log', onStreamLog);
     ipc.on('stream-ended', onStreamEnded);
-    ipc.on('stream-state', onStreamState);
-    ipc.on('stream-stats', onStreamStats);
     return () => {
       ipc.removeListener('stream-log', onStreamLog);
       ipc.removeListener('stream-ended', onStreamEnded);
-      ipc.removeListener('stream-state', onStreamState);
-      ipc.removeListener('stream-stats', onStreamStats);
     };
   }, [ipc]);
 
@@ -353,265 +368,90 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   const getRtmpUrl = (platform: PlatformId): string => {
     const p = PLATFORMS[platform];
     const k = getKey(platform);
-    const streamKey = String(k.key || '').trim();
-    const custom = String(k.customRtmp || '').trim().replace(/\/+$/, '');
-    if (custom) return `${custom}/${streamKey}`;
-    return `${p.rtmpBase}/${streamKey}`;
+    if (k.customRtmp) return `${k.customRtmp}/${k.key}`;
+    return `${p.rtmpBase}/${k.key}`;
   };
 
-  const startStream = async (reconnecting = false) => {
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    if (!reconnecting) {
-      manualStopRef.current = false;
-      reconnectAttemptRef.current = 0;
-    }
+  const startStream = async () => {
     const key = getKey(activePlatform);
     if (!key.key.trim()) {
       setStreamLog(['❌ Please enter a stream key first.']);
       return;
     }
-    const quality = QUALITY_OPTIONS.find(option => option.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
-    // Recording H.264 lets the encoder copy the video instead of re-encoding it.
-    const supportsH264 =
-      typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=h264');
-    // Stable: encode in ffmpeg with CBR filler. Copy: keep the renderer's H.264
-    // untouched. Copy gives more frames, stable gives a guaranteed bitrate.
-    // Both engines record H.264: Chromium's encoder is hardware accelerated.
-    // Copy publishes it untouched; stable re-encodes it with hardware CBR.
-    const preferredCodec: 'h264' | 'vp8' = supportsH264 ? 'h264' : 'vp8';
-    // Repeated failures usually mean the uplink cannot hold the preset; step down.
-    const adaptiveFactor = reconnecting ? Math.max(0.5, 1 - 0.2 * (reconnectAttemptRef.current - 1)) : 1;
-    const streamBitrate = Math.max(800, Math.round(quality.bitrate * adaptiveFactor));
-    if (adaptiveFactor < 1) {
-      setStreamLog(prev => [...prev, `Reducing bitrate to ${streamBitrate} kbps after repeated drops.`]);
-    }
+    const q = QUALITY_OPTIONS.find(q => q.value === (key.quality || '1080p')) || QUALITY_OPTIONS[1];
     const rtmpUrl = getRtmpUrl(activePlatform);
 
-    if (!ipc) {
-      streamStatus.finish('Streaming needs the desktop app.');
-      setStreamLog(['⚠ Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
-      return;
-    }
-
-    // Prefer the mounted broadcast canvas; a registry reference can outlive a remount.
-    const canvas =
-      document.querySelector<HTMLCanvasElement>('canvas[data-scene-role="broadcast"]') || getSceneCanvas();
-    if (!canvas) {
-      setStreamLog(['❌ The scene preview is not ready yet.']);
-      return;
-    }
-
-    if (engine === 'webcodecs') {
-      streamStatus.begin(PLATFORMS[activePlatform].name);
-      setStreamLog([`Starting WebCodecs stream to ${PLATFORMS[activePlatform].name}...`]);
-      let audioTrack: MediaStreamTrack | null = null;
-      const sceneAudioTracks = getSceneAudioTracks();
-      if (sceneAudioTracks.length > 0) {
-        audioTrack = sceneAudioTracks[0];
-      } else if (audio.source === 'device' && !audio.muted) {
-        try {
-          const mic = await navigator.mediaDevices.getUserMedia({
-            audio: audio.deviceId ? { deviceId: { exact: audio.deviceId } } : true
-          });
-          micStreamRef.current = mic;
-          audioTrack = mic.getAudioTracks()[0] || null;
-        } catch {
-          setStreamLog(prev => [...prev, 'Microphone unavailable; streaming video only.']);
-        }
-      }
-      const hasAudio = Boolean(audioTrack && typeof AudioEncoder !== 'undefined');
-      const result = await ipc.invoke('start-stream', {
-        rtmpUrl,
-        resolution: quality.res,
-        fps: quality.fps,
-        bitrate: streamBitrate,
-        platform: activePlatform,
-        mode: 'webcodecs',
-        audio: { hasAudio }
-      });
-      if (!result.success) {
-        streamStatus.finish(result.error || 'Could not start the encoder.');
-        setStreamLog(prev => [...prev, `Failed: ${result.error}`]);
-        return;
-      }
-      try {
-        const streamer = new WebCodecsStreamer();
-        streamerRef.current = streamer;
-        await streamer.start({
-          canvas,
-          targetWidth: Number(quality.res.split('x')[0]) || canvas.width,
-          targetHeight: Number(quality.res.split('x')[1]) || canvas.height,
-          fps: quality.fps,
-          bitrateKbps: streamBitrate,
-          audioTrack: hasAudio ? audioTrack : null,
-          sendVideo: (bytes, key) => ipc.send('stream-video-chunk', bytes, key),
-          sendAudio: bytes => ipc.send('stream-audio-chunk', bytes),
-          onError: message => setStreamLog(prev => [...prev, `WebCodecs: ${message}`]),
-          onInfo: message => setStreamLog(prev => [...prev, message])
-        });
-        setIsStreaming(true);
-        setStreamingPlatform(activePlatform);
-        setStreamStartTime(new Date());
-        setStreamLog(prev => [...prev, 'Stream started (WebCodecs engine).']);
-      } catch (error) {
-        await ipc.invoke('stop-stream').catch(() => {});
-        streamStatus.finish(error instanceof Error ? error.message : 'WebCodecs encoder failed.');
-        setStreamLog(prev => [...prev, `Failed: ${error instanceof Error ? error.message : 'unknown error'}`]);
-      }
-      return;
-    }
-    streamStatus.begin(PLATFORMS[activePlatform].name);
     setStreamLog([`▶ Starting stream to ${PLATFORMS[activePlatform].name}...`]);
 
-    try {
-      const result = await ipc.invoke('start-stream', {
-        rtmpUrl,
-        resolution: quality.res,
-        fps: quality.fps,
-        bitrate: streamBitrate,
-        platform: activePlatform,
-        mode: 'scene',
-        codec: preferredCodec,
-        reencode: engine === 'stable',
-        hardwareEncoder: engine === 'stable' ? encoder : 'libx264',
-        lut: lutPath,
-        encoder,
-        audio: {
-          source: audio.source,
-          device: audioDevices.find(device => device.deviceId === audio.deviceId)?.label || audio.deviceId,
-          gain: audio.gain,
-          muted: audio.muted,
-          delayMs: audioDelayMs
-        }
-      });
+    if (ipc) {
+      try {
+        const stream = activeMediaStreamRef.current;
+        const hasVideo = !!(stream && stream.getVideoTracks().length > 0);
+        const hasAudio = !!(stream && stream.getAudioTracks().length > 0);
+        const useMediaPipe = !!(stream && (hasVideo || hasAudio));
 
-      if (!result.success) {
-        streamStatus.finish(result.error || 'Could not start the encoder.');
-        setStreamLog(prev => [...prev, `❌ Failed: ${result.error}`]);
-        return;
-      }
-
-      void audioOutputMonitor.apply(monitor, audio.deviceId);
-      const sceneStream = canvas.captureStream(quality.fps);
-      sceneStreamRef.current = sceneStream;
-      const tracks: MediaStreamTrack[] = [...sceneStream.getVideoTracks()];
-
-      // Audio-input elements in the live scene take precedence over the mic.
-      const sceneAudio = getSceneAudioTracks();
-      if (sceneAudio.length > 0) {
-        tracks.push(...sceneAudio);
-      }
-
-      if (audio.source === 'device' && sceneAudio.length === 0) {
-        // Never let a permission prompt hold the stream hostage: ask, but start
-        // with video even if the microphone has not been granted yet.
-        const micRequest = navigator.mediaDevices
-          .getUserMedia({ audio: audio.deviceId ? { deviceId: { exact: audio.deviceId } } : true })
-          .catch(() => null);
-        const mic = await Promise.race([
-          micRequest,
-          new Promise<null>(resolve => setTimeout(() => resolve(null), 2500))
-        ]);
-        if (mic) {
-          micStreamRef.current = mic;
-          if (!audio.muted) tracks.push(...mic.getAudioTracks());
-        } else {
-          micRequest.then(late => late?.getTracks().forEach(track => track.stop())).catch(() => {});
-          setStreamLog(prev => [...prev, '⚠ Starting without microphone audio.']);
-        }
-      }
-
-      const liveTracks = tracks.filter(track => track.readyState === 'live');
-      setStreamLog(prev => [
-        ...prev,
-        `▶ Capture: ${liveTracks.filter(track => track.kind === 'video').length} video, ${liveTracks.filter(track => track.kind === 'audio').length} audio`
-      ]);
-      const combined = new MediaStream(liveTracks);
-      const hasAudio = liveTracks.some(track => track.kind === 'audio');
-      const candidates = hasAudio
-        ? preferredCodec === 'h264'
-          ? ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-          : ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm']
-        : preferredCodec === 'h264'
-          ? ['video/webm;codecs=h264', 'video/webm;codecs=vp8', 'video/webm']
-          : ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
-      const mimeType =
-        candidates.find(candidate => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(candidate)) ||
-        '';
-      const recorder = new MediaRecorder(combined, {
-        ...(mimeType ? { mimeType } : {}),
-        // The intermediate is re-encoded, so keep it well above the output
-        // bitrate; a lossy intermediate at the same rate produces a soft image
-        // and an encoder that keeps undershooting.
-        videoBitsPerSecond:
-          engine === 'stable' && preferredCodec === 'h264'
-            ? Math.min(10_000_000, Math.max(4_000_000, streamBitrate * 1000))
-            : streamBitrate * 1000,
-        ...(hasAudio ? { audioBitsPerSecond: 160000 } : {})
-      });
-      let sentFirstChunk = false;
-      recorder.ondataavailable = async event => {
-        if (!event.data || event.data.size === 0) return;
-        const bytes = new Uint8Array(await event.data.arrayBuffer());
-        ipc.send('stream-data', bytes);
-        if (!sentFirstChunk) {
-          sentFirstChunk = true;
-          setStreamLog(prev => [...prev, `▶ Capturing scene (${mimeType || 'default webm'})`]);
-        }
-      };
-      recorder.onerror = event => {
-        const message = (event as unknown as { error?: Error }).error?.message || 'recorder error';
-        setStreamLog(prev => [...prev, `❌ ${message}`]);
-      };
-      recorder.start(250);
-      recorderRef.current = recorder;
-
-      // Canvas capture timestamps frames nominally, so a slow paint loop makes
-      // media time lag wall-clock and the published bitrate collapse. Asking
-      // the track for a frame at the target rate keeps the stream real-time.
-      const canvasTrack = combined.getVideoTracks()[0] as
-        | (MediaStreamTrack & { requestFrame?: () => void })
-        | undefined;
-      if (canvasTrack && typeof canvasTrack.requestFrame === 'function') {
-        const period = Math.max(16, Math.round(1000 / quality.fps));
-        framePumpRef.current = window.setInterval(() => {
-          try {
-            canvasTrack.requestFrame?.();
-          } catch {
-            /* track ended */
+        const result = await ipc.invoke('start-stream', {
+          rtmpUrl,
+          resolution: q.res,
+          fps: q.fps,
+          bitrate: q.bitrate,
+          platform: activePlatform,
+          useMediaPipe,
+          hasVideo,
+          hasAudio
+        });
+        if (result.success) {
+          if (useMediaPipe && stream) {
+            const mimeCandidates = [
+              'video/webm;codecs=h264,opus',
+              'video/webm;codecs=vp9,opus',
+              'video/webm;codecs=vp8,opus',
+              'video/webm'
+            ];
+            const mimeType = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
+            const recorder = new MediaRecorder(stream, {
+              ...(mimeType ? { mimeType } : {}),
+              videoBitsPerSecond: Math.max(q.bitrate * 1000 * 1.5, 8000000),
+              audioBitsPerSecond: 256000
+            });
+            recorder.ondataavailable = async (ev) => {
+              if (ev.data && ev.data.size > 0) {
+                const buf = await ev.data.arrayBuffer();
+                ipc.send('stream-data', new Uint8Array(buf));
+              }
+            };
+            recorder.start(250);
+            mediaRecorderRef.current = recorder;
+            setStreamLog(prev => [...prev, `🎥 Capturing ${actualStreamStats || q.res} (${mimeType || 'webm'}) → RTMP`]);
           }
-        }, period);
+          setIsStreaming(true);
+          setStreamingPlatform(activePlatform);
+          setStreamStartTime(new Date());
+          setStreamLog(prev => [...prev, '✅ Stream started successfully']);
+        } else {
+          setStreamLog(prev => [...prev, `❌ Failed: ${result.error}`]);
+        }
+      } catch (e: any) {
+        setStreamLog(prev => [...prev, `❌ Error: ${e.message}`]);
       }
-
-      setIsStreaming(true);
-      setStreamingPlatform(activePlatform);
-      setStreamStartTime(new Date());
-      setStreamLog(prev => [...prev, '✅ Stream started successfully']);
-    } catch (error) {
-      stopCapture();
-      streamStatus.finish(error instanceof Error ? error.message : 'Could not start streaming.');
-      setStreamLog(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'unknown'}`]);
+    } else {
+      setStreamLog(['⚠ Streaming requires the Electron desktop app. Use the RTMP URL below with OBS.']);
     }
   };
-  startStreamRef.current = startStream;
 
   const stopStream = async () => {
-    manualStopRef.current = true;
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
     }
-    stopCapture();
     if (ipc) {
       await ipc.invoke('stop-stream').catch(() => {});
     }
     setIsStreaming(false);
     setStreamingPlatform(null);
     setStreamStartTime(null);
-    streamStatus.finish();
     setStreamLog(prev => [...prev, '⏹ Stream stopped by operator.']);
   };
 
@@ -625,566 +465,402 @@ export const StreamingModal: React.FC<StreamingModalProps> = ({
   if (!isOpen) return null;
 
   const platform = PLATFORMS[activePlatform];
+  const PlatformIcon = platform.icon;
   const keyConfig = getKey(activePlatform);
   const rtmpUrl = getRtmpUrl(activePlatform);
   const qualityObj = QUALITY_OPTIONS.find(q => q.value === (keyConfig.quality || '1080p')) || QUALITY_OPTIONS[1];
-  const keyVisible = Boolean(showKey[activePlatform]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={next => !next && onClose()}>
-      <DialogContent className="h-[min(88vh,40rem)] max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Streaming</DialogTitle>
-          <DialogDescription>Send the audience output to a live platform over RTMP.</DialogDescription>
-        </DialogHeader>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="bg-[#0a0f1e] border border-[#26334a] rounded-2xl shadow-2xl w-[820px] max-h-[90vh] flex flex-col overflow-hidden">
 
-        {/* Connection status */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-5 py-2">
-          <Badge variant={isStreaming ? 'live' : 'outline'}>{isStreaming ? 'Live' : 'Idle'}</Badge>
-          {isStreaming && streamingPlatform ? (
-            <>
-              <span className="text-2xs text-muted-foreground">{PLATFORMS[streamingPlatform].name}</span>
-              <span className="tabular font-mono text-2xs text-muted-foreground">{elapsed}</span>
-            </>
-          ) : (
-            <span className="text-2xs text-muted-foreground">No stream is running.</span>
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-[#26334a]">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-rose-700 to-pink-700 rounded-xl shadow-lg">
+              <Radio className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-white font-black text-lg">Live Streaming</h2>
+              <p className="text-slate-400 text-xs">Stream directly to YouTube, Twitch, or Facebook Live</p>
+            </div>
+          </div>
+
+          {/* Stream status indicator */}
+          {isStreaming && streamingPlatform && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/20 border border-rose-500/60 rounded-full">
+              <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse" />
+              <span className="text-rose-300 font-black text-sm uppercase tracking-wider">LIVE</span>
+              <span className="text-rose-300 font-mono text-sm">{elapsed}</span>
+              <span className="text-rose-400 text-xs">{PLATFORMS[streamingPlatform].name}</span>
+            </div>
           )}
-          <span className="ml-auto flex items-center gap-2">
-            <span className="text-2xs text-muted-foreground">ffmpeg</span>
-            <Badge
-              variant={
-                ffmpegStatus === 'available'
-                  ? 'success'
-                  : ffmpegStatus === 'missing'
-                  ? 'warning'
-                  : 'muted'
-              }
-            >
-              {ffmpegStatus === 'checking'
-                ? 'Checking'
-                : ffmpegStatus === 'available'
-                ? 'Ready'
-                : ffmpegStatus === 'desktop'
-                ? 'Desktop app'
-                : 'Not found'}
-            </Badge>
-          </span>
+
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white transition rounded-lg hover:bg-white/5">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          <FieldGroup
-            title="Look"
-            description="A 3D LUT (.cube) is applied by the encoder, so it lands in the stream feed."
-          >
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-                {lutPath ? lutPath : 'No LUT — colours pass through unchanged'}
-              </span>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={async () => {
-                  const selected = await ipc.invoke('browse-lut');
-                  if (selected) {
-                    setLutPath(selected);
-                    localStorage.setItem('live_psalms_stream_lut', selected);
-                  }
-                }}
-              >
-                Choose LUT…
-              </Button>
-              {lutPath && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => {
-                    setLutPath('');
-                    localStorage.removeItem('live_psalms_stream_lut');
-                  }}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Platform Sidebar */}
+          <div className="w-48 border-r border-[#26334a] flex flex-col p-3 gap-1 shrink-0">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 px-2">Platform</div>
+            {(Object.keys(PLATFORMS) as PlatformId[]).map(pid => {
+              const p = PLATFORMS[pid];
+              const Icon = p.icon;
+              const isActive = activePlatform === pid;
+              const isLive = isStreaming && streamingPlatform === pid;
+              return (
+                <button
+                  key={pid}
+                  onClick={() => setActivePlatform(pid)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition ${
+                    isActive
+                      ? `bg-white/10 border border-white/20 text-white`
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
                 >
-                  Clear
-                </Button>
-              )}
+                  <Icon className={`w-4 h-4 ${p.colorClass}`} />
+                  <span className="text-xs font-bold flex-1">{p.name}</span>
+                  {isLive && (
+                    <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+
+            <div className="mt-auto">
+              {/* ffmpeg status */}
+              <div className={`mt-3 p-2 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 ${
+                ffmpegStatus === 'available'
+                  ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-700/40'
+                  : ffmpegStatus === 'missing'
+                  ? 'bg-amber-950/60 text-amber-400 border border-amber-700/40'
+                  : 'bg-slate-800 text-slate-400'
+              }`}>
+                {ffmpegStatus === 'checking' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                {ffmpegStatus === 'available' && <CheckCircle2 className="w-3 h-3" />}
+                {ffmpegStatus === 'missing' && <AlertTriangle className="w-3 h-3" />}
+                <span>
+                  {ffmpegStatus === 'checking' ? 'Checking...' :
+                   ffmpegStatus === 'available' ? 'ffmpeg ready' : 'ffmpeg not found'}
+                </span>
+              </div>
             </div>
-          </FieldGroup>
-          <FieldGroup
-            title="Scene"
-            description="Scenes are prepared in the Scenes panel. The stream sends whatever is live."
-          >
-            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <div className="min-w-0">
-                <div className="truncate text-xs text-foreground">{activeScene?.name || 'No scene'}</div>
-                <div className="text-2xs text-muted-foreground">
-                  {activeScene
-                    ? `${activeScene.elements.length} element${activeScene.elements.length === 1 ? '' : 's'}`
-                    : 'Add a scene first'}
-                </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+            {/* Platform header */}
+            <div className={`flex items-center gap-3 p-4 rounded-xl border ${platform.bgClass}`}>
+              <PlatformIcon className={`w-8 h-8 ${platform.colorClass}`} />
+              <div>
+                <div className="text-white font-black text-base">{platform.name}</div>
+                <div className="text-slate-400 text-xs">{platform.keyHelp}</div>
               </div>
-              <Badge variant={isStreaming ? 'live' : 'outline'}>{isStreaming ? 'On air' : 'Ready'}</Badge>
-            </div>
-          </FieldGroup>
-          {/* Encoder status */}
-          {ffmpegStatus === 'desktop' && (
-            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-              <h3 className="text-xs font-medium text-foreground">Streaming runs from the desktop app</h3>
-              <p className="text-2xs leading-relaxed text-muted-foreground">
-                This browser preview can render the interface but cannot start the encoder. Open Live Psalms
-                from the desktop app to go live, or copy the RTMP endpoint into OBS.
-              </p>
-            </section>
-          )}
-
-          {ffmpegStatus === 'missing' && (
-            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs font-medium text-foreground">ffmpeg was not found</h3>
-                <Button variant="secondary" size="xs" onClick={locateFfmpeg}>
-                  Locate ffmpeg…
-                </Button>
-              </div>
-              <p className="text-2xs leading-relaxed text-muted-foreground">
-                {ffmpegInfo?.error
-                  ? ffmpegInfo.error
-                  : 'Live Psalms looks on PATH and in the usual install folders. If you just installed it, a packaged app can still hold the PATH it started with — point it at the executable once, or restart the app.'}
-              </p>
-              {ffmpegInfo?.path && (
-                <p className="break-all font-mono text-2xs text-muted-foreground/80">Tried: {ffmpegInfo.path}</p>
-              )}
-              <div className="space-y-1">
-                {[
-                  { os: 'Windows', cmd: 'winget install Gyan.FFmpeg' },
-                  { os: 'macOS', cmd: 'brew install ffmpeg' },
-                  { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
-                ].map(({ os, cmd }) => (
-                  <div key={os} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0 text-2xs text-muted-foreground">{os}</span>
-                    <code className="min-w-0 flex-1 truncate rounded-sm border border-border bg-background px-2 py-1 font-mono text-2xs text-foreground">
-                      {cmd}
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => copyToClipboard(cmd, `cmd-${os}`)}
-                      className="shrink-0"
-                    >
-                      {copied === `cmd-${os}` ? 'Copied' : 'Copy'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {ffmpegStatus === 'available' && ffmpegInfo?.path && (
-            <section className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <span className="text-2xs text-muted-foreground">Encoder</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-2xs text-foreground/80" title={ffmpegInfo.path}>
-                {ffmpegInfo.path}
-              </span>
-              <Button variant="ghost" size="xs" onClick={locateFfmpeg} className="shrink-0">
-                Change
-              </Button>
-            </section>
-          )}
-
-          <div className="grid gap-5 md:grid-cols-2">
-            {/* Destination */}
-            <FieldGroup title="Destination" description={platform.keyHelp}>
-              <Tabs value={activePlatform} onValueChange={value => setActivePlatform(value as PlatformId)}>
-                <TabsList className="w-full">
-                  {(Object.keys(PLATFORMS) as PlatformId[]).map(pid => (
-                    <TabsTrigger key={pid} value={pid}>
-                      {PLATFORMS[pid].name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-
-              <Field
-                label="Stream key"
-                htmlFor="stream-key"
-                action={
-                  <span className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() =>
-                        setShowKey(prev => ({ ...prev, [activePlatform]: !prev[activePlatform] }))
-                      }
-                    >
-                      {keyVisible ? 'Hide' : 'Show'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => copyToClipboard(keyConfig.key, `key-${activePlatform}`)}
-                    >
-                      {copied === `key-${activePlatform}` ? 'Copied' : 'Copy'}
-                    </Button>
-                  </span>
-                }
+              <a
+                href={platform.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-white transition"
               >
-                <Input
-                  id="stream-key"
-                  type={keyVisible ? 'text' : 'password'}
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Get Key</span>
+              </a>
+            </div>
+
+            {/* Stream Key */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
+                Stream Key *
+              </label>
+              <div className="relative flex items-center">
+                <input
+                  type={showKey[activePlatform] ? 'text' : 'password'}
                   value={keyConfig.key}
                   onChange={e => updateKey(activePlatform, 'key', e.target.value)}
                   placeholder={platform.keyPlaceholder}
+                  className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2.5 text-white font-mono text-sm outline-none pr-20"
                   autoComplete="off"
-                  className="font-mono text-xs"
                 />
-              </Field>
-
-              <Field
-                label="RTMP endpoint"
-                action={
-                  <Button variant="ghost" size="xs" onClick={() => copyToClipboard(rtmpUrl, 'rtmp')}>
-                    {copied === 'rtmp' ? 'Copied' : 'Copy'}
-                  </Button>
-                }
-                hint="Read-only. The stream key is appended to this address."
-              >
-                <div className="break-all rounded-md border border-border bg-muted/30 px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
-                  {rtmpUrl}
-                </div>
-              </Field>
-
-              <Field
-                label="Custom server"
-                htmlFor="stream-custom-rtmp"
-                hint={`Leave blank to use the ${platform.name} default.`}
-              >
-                <Input
-                  id="stream-custom-rtmp"
-                  type="text"
-                  value={keyConfig.customRtmp}
-                  onChange={e => updateKey(activePlatform, 'customRtmp', e.target.value)}
-                  placeholder="rtmp://your-server/live"
-                  className="font-mono text-xs"
-                />
-              </Field>
-
-              <Button variant="ghost" size="xs" asChild className="w-fit px-0">
-                <a href={platform.docsUrl} target="_blank" rel="noopener noreferrer">
-                  Where to find the stream key
-                </a>
-              </Button>
-            </FieldGroup>
-
-            <div className="space-y-5">
-            {/* Encoding */}
-            <FieldGroup title="Encoding">
-              <Field label="Quality" hint="Higher presets need more upload bandwidth.">
-                <Select
-                  value={keyConfig.quality || '1080p'}
-                  onValueChange={value => updateKey(activePlatform, 'quality', value)}
-                >
-                  <SelectTrigger aria-label="Stream quality">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUALITY_OPTIONS.map(q => (
-                      <SelectItem key={q.value} value={q.value}>
-                        {q.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field label="Output" hint="Captured from the audience output window.">
-                <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
-                  {qualityObj.res} · {qualityObj.fps} fps · {qualityObj.bitrate} kbps
-                </div>
-              </Field>
-
-              <Field
-                label="Engine"
-                hint="Stable re-encodes with CBR padding; copy keeps the renderer's H.264 but can dip on dark scenes; WebCodecs controls bitrate and keyframes directly."
-              >
-                <Select
-                  value={engine}
-                  onValueChange={value => {
-                    const next = value === 'copy' ? 'copy' : value === 'webcodecs' ? 'webcodecs' : 'stable';
-                    setEngine(next);
-                    localStorage.setItem('live_psalms_stream_engine', next);
-                  }}
-                >
-                  <SelectTrigger aria-label="Streaming engine">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="stable">Stable bitrate (recommended)</SelectItem>
-                    <SelectItem value="copy">Smoother motion (copy)</SelectItem>
-                    <SelectItem value="webcodecs">Experimental: WebCodecs (OBS-style)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Video encoder" hint="x264 pads CBR so the bitrate holds even on a dark slide; hardware encoders are faster but dip. Use hardware only if the CPU struggles.">
-                <Select
-                  value={encoder}
-                  onValueChange={value => {
-                    setEncoder(value);
-                    localStorage.setItem('live_psalms_stream_encoder', value);
-                  }}
-                >
-                  <SelectTrigger aria-label="Video encoder">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="libx264">x264 (CPU, safest)</SelectItem>
-                    <SelectItem value="h264_nvenc">NVIDIA NVENC</SelectItem>
-                    <SelectItem value="h264_qsv">Intel Quick Sync</SelectItem>
-                    <SelectItem value="h264_amf">AMD AMF</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </FieldGroup>
-          <FieldGroup
-            title="Audio"
-            description="What the stream sends. The meter shows the level after gain."
-          >
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-3">
-                <Field label="Source">
-                  <Select value={audio.source} onValueChange={value => updateAudio({ source: value as AudioSource })}>
-                    <SelectTrigger aria-label="Broadcast audio source">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="device">Microphone / line</SelectItem>
-                      <SelectItem value="program">Programme audio</SelectItem>
-                      <SelectItem value="silent">Silent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                {audio.source === 'device' && (
-                  <Field
-                    label="Input device"
-                    hint={
-                      audioDevices.length === 0
-                        ? 'Grant microphone access to list inputs.'
-                        : 'Device names come from the operating system.'
-                    }
+                <div className="absolute right-2 flex items-center gap-1">
+                  <button
+                    onClick={() => setShowKey(prev => ({ ...prev, [activePlatform]: !prev[activePlatform] }))}
+                    className="p-1.5 text-slate-500 hover:text-white transition"
                   >
-                    <Select
-                      value={audio.deviceId || 'default'}
-                      onValueChange={value => updateAudio({ deviceId: value === 'default' ? '' : value })}
-                    >
-                      <SelectTrigger aria-label="Audio input device">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">System default</SelectItem>
-                        {audioDevices.map(device => (
-                          <SelectItem key={device.deviceId} value={device.deviceId}>
-                            {device.label || 'Audio input'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-
-                <p className="text-2xs leading-relaxed text-muted-foreground">
-                  {audio.source === 'program'
-                    ? 'Meters the media player audio. Use a loopback device to send desktop audio to the stream.'
-                    : audio.source === 'silent'
-                    ? 'The stream carries no audio.'
-                    : 'Meters the selected input and sends it to the stream.'}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <Field
-                  label="Input gain"
-                  action={
-                    <span className="tabular text-2xs text-muted-foreground">{Math.round(audio.gain * 100)}%</span>
-                  }
-                >
-                  <Slider
-                    value={[audio.gain * 100]}
-                    min={0}
-                    max={200}
-                    step={5}
-                    onValueChange={([value]) => updateAudio({ gain: value / 100 })}
-                    aria-label="Broadcast audio gain"
-                  />
-                </Field>
-
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <Label>Mute</Label>
-                    <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
-                      Sends silence while the meter keeps running.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={audio.muted}
-                    onCheckedChange={muted => updateAudio({ muted })}
-                    aria-label="Mute the broadcast audio"
-                  />
+                    {showKey[activePlatform] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(keyConfig.key, `key-${activePlatform}`)}
+                    className="p-1.5 text-slate-500 hover:text-white transition"
+                    title="Copy stream key"
+                  >
+                    {copied === `key-${activePlatform}`
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      : <Copy className="w-4 h-4" />
+                    }
+                  </button>
                 </div>
-
-                <Field label="Output level" hint={audioLevels.error}>
-                  <AudioMeterRow levels={audioLevels} />
-                </Field>
-
-                <Field label="Sync offset" hint="Delays the streamed audio against the video, in milliseconds.">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5000}
-                    step={10}
-                    value={audioDelayMs}
-                    onChange={event => {
-                      const value = Math.max(0, Math.min(5000, Number(event.target.value) || 0));
-                      setAudioDelayMs(value);
-                      localStorage.setItem('live_psalms_audio_delay_ms', String(value));
-                    }}
-                    className="h-7 w-28 text-2xs"
-                  />
-                </Field>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <Label>Monitor audio</Label>
-                  <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
-                    Plays the selected input on an output device for confidence.
-                  </p>
+            {/* Media Input Devices (Camera / Capture Card + Audio Mixer / Mic) */}
+            <div className="bg-[#0d1320] border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                  <Video className="w-4 h-4 text-emerald-400" /> Media Input Devices (Broadcast Capture)
+                </span>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-300 cursor-pointer bg-[#080d16] px-2 py-1 rounded-lg border border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={studioAudioMode}
+                      onChange={e => setStudioAudioMode(e.target.checked)}
+                      disabled={isStreaming}
+                      className="accent-emerald-500 w-3 h-3 rounded"
+                    />
+                    <span>Studio Audio (Raw 48kHz, No DSP)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={refreshDevices}
+                    disabled={isStreaming}
+                    className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-lg text-[10px] font-bold text-slate-200 transition"
+                    title="Rescan connected cameras, capture cards, and audio interfaces"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                  </button>
                 </div>
-                <Switch
-                  checked={monitor.enabled}
-                  onCheckedChange={enabled => {
-                    const next = { ...monitor, enabled };
-                    setMonitor(next);
-                    saveMonitorSettings(next);
-                  }}
-                  aria-label="Monitor audio"
-                />
               </div>
 
-              {monitor.enabled && (
-                <>
-                  <Field label="Output device" hint="Where monitoring is played.">
-                    <Select
-                      value={monitor.outputDeviceId || 'default'}
-                      onValueChange={value => {
-                        const next = { ...monitor, outputDeviceId: value === 'default' ? '' : value };
-                        setMonitor(next);
-                        saveMonitorSettings(next);
-                      }}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Live Camera / Capture Card Preview */}
+                <div className="bg-black rounded-xl border border-slate-800 overflow-hidden relative aspect-video flex items-center justify-center">
+                  <video
+                    ref={previewVideoRef}
+                    muted
+                    playsInline
+                    className={`w-full h-full object-contain ${selectedVideoId === 'none' ? 'hidden' : ''}`}
+                  />
+                  {selectedVideoId === 'none' && (
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Video Disabled (Blank)</span>
+                  )}
+                  {actualStreamStats && (
+                    <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-black/80 border border-white/15 text-[9px] font-mono font-bold text-emerald-300">
+                      {actualStreamStats}
+                    </span>
+                  )}
+                </div>
+
+                {/* Selectors + Live Audio VU Meter */}
+                <div className="flex flex-col justify-between space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mb-1">
+                      <Video className="w-3 h-3 text-sky-400" /> Video Input (Camera / Capture Card)
+                    </label>
+                    <select
+                      value={selectedVideoId}
+                      onChange={e => setSelectedVideoId(e.target.value)}
+                      disabled={isStreaming}
+                      className="w-full bg-[#080d16] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none disabled:opacity-50"
                     >
-                      <SelectTrigger className="h-7 text-2xs" aria-label="Monitor output device">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">System default</SelectItem>
-                        {outputDevices.map(device => (
-                          <SelectItem key={device.deviceId} value={device.deviceId}>
-                            {device.label || 'Output'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field
-                    label="Monitor volume"
-                    action={<span className="tabular text-2xs text-muted-foreground">{Math.round(monitor.volume * 100)}%</span>}
-                  >
-                    <Slider
-                      value={[monitor.volume * 100]}
-                      min={0}
-                      max={100}
-                      step={5}
-                      onValueChange={([value]) => {
-                        const next = { ...monitor, volume: value / 100 };
-                        setMonitor(next);
-                        saveMonitorSettings(next);
-                      }}
-                      aria-label="Monitor volume"
-                    />
-                  </Field>
-                </>
+                      {videoDevices.map((d, idx) => (
+                        <option key={d.deviceId || idx} value={d.deviceId}>
+                          {d.label || `Camera ${idx + 1}`}
+                        </option>
+                      ))}
+                      <option value="none">None (Black Screen)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mb-1">
+                      <Mic className="w-3 h-3 text-amber-400" /> Audio Input (Mixer / USB Interface / Mic)
+                    </label>
+                    <select
+                      value={selectedAudioId}
+                      onChange={e => setSelectedAudioId(e.target.value)}
+                      disabled={isStreaming}
+                      className="w-full bg-[#080d16] border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold outline-none disabled:opacity-50"
+                    >
+                      {audioDevices.map((d, idx) => (
+                        <option key={d.deviceId || idx} value={d.deviceId}>
+                          {d.label || `Microphone ${idx + 1}`}
+                        </option>
+                      ))}
+                      <option value="none">None (Silent Audio)</option>
+                    </select>
+                  </div>
+
+                  {/* Live Audio Level Meter */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                      <span className="flex items-center gap-1"><Volume2 className="w-3 h-3 text-emerald-400" /> Audio Input Level</span>
+                      <span className="font-mono text-slate-300">{selectedAudioId === 'none' ? 'Muted' : `${audioLevel}%`}</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#080d16] rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className={`h-full transition-all duration-75 ${
+                          audioLevel > 85 ? 'bg-rose-500' : audioLevel > 55 ? 'bg-amber-400' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${selectedAudioId === 'none' ? 0 : audioLevel}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {deviceError && (
+                <div className="text-[11px] font-semibold text-rose-300 bg-rose-950/50 border border-rose-500/40 rounded-lg px-3 py-1.5">
+                  {deviceError}
+                </div>
               )}
             </div>
-          </FieldGroup>
-            </div>
-          </div>
 
-          {/* Stream log */}
-          {streamLog.length > 0 && (
-            <section className="space-y-2">
-              <ListHeader>Log</ListHeader>
-              <div className="h-28 overflow-y-auto rounded-md border border-border bg-background p-2 font-mono text-2xs">
-                {streamLog.map((line, i) => (
-                  <div key={i} className={logLineClass(line)}>
-                    {line}
-                  </div>
+            {/* Stream Quality */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
+                Stream Quality
+              </label>
+              <div className="grid grid-cols-5 gap-2">
+                {QUALITY_OPTIONS.map(q => (
+                  <button
+                    key={q.value}
+                    onClick={() => updateKey(activePlatform, 'quality', q.value)}
+                    className={`py-2 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
+                      (keyConfig.quality || '1080p') === q.value
+                        ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
+                        : 'bg-[#0d1320] border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    {q.label}
+                  </button>
                 ))}
               </div>
-            </section>
-          )}
-        </div>
+              <div className="text-[10px] text-slate-500 flex gap-4">
+                <span>Resolution: {qualityObj.res}</span>
+                <span>FPS: {qualityObj.fps}</span>
+                <span>Bitrate: {qualityObj.bitrate} kbps</span>
+              </div>
+            </div>
 
-        <DialogFooter className="justify-between gap-4">
-          <p className="max-w-sm text-2xs leading-relaxed text-muted-foreground">
-            {ffmpegStatus === 'available'
-              ? 'Captures the audience output window. Open it before you go live.'
-              : ffmpegStatus === 'desktop'
-              ? 'This preview cannot start the encoder. Use the desktop app, or copy the RTMP endpoint for OBS.'
-              : 'Install ffmpeg or locate the executable, then try again.'}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={ffmpegStatus !== 'available' || !keyConfig.key.trim()}
-              onClick={async () => {
-                const target = getRtmpUrl(activePlatform);
-                setStreamLog(prev => [...prev, `🧪 Testing ${target.replace(/\/[^/]*$/, '/…')}`]);
-                const result = await ipc.invoke('test-stream-target', { url: target });
-                setStreamLog(prev => [
-                  ...prev,
-                  result.ok
-                    ? '✅ Test succeeded: the server accepted the connection.'
-                    : `❌ Test failed: ${result.error || `ffmpeg exited with code ${result.code}`}`
-                ]);
-                if (!result.ok && /I\/O error|End of file|Connection refused|handshake/i.test(result.error || '')) {
-                  setStreamLog(prev => [
-                    ...prev,
-                    'ℹ This looks like the network blocking the connection: check the firewall and whether the ISP permits RTMP (port 1935) or RTMPS (443).'
-                  ]);
-                }
-              }}
-            >
-              Test connection
-            </Button>
-            {isStreaming && streamingPlatform === activePlatform ? (
-              <Button variant="secondary" size="sm" onClick={stopStream}>
-                Stop stream
-              </Button>
-            ) : (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => void startStream()}
-                disabled={
-                  !keyConfig.key.trim() ||
-                  ffmpegStatus !== 'available' ||
-                  (isStreaming && streamingPlatform !== activePlatform)
-                }
-              >
-                Go live
-              </Button>
+            {/* RTMP URL Preview */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  RTMP Endpoint (read-only)
+                </label>
+                <button
+                  onClick={() => copyToClipboard(rtmpUrl, 'rtmp')}
+                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white transition"
+                >
+                  {copied === 'rtmp' ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  Copy
+                </button>
+              </div>
+              <div className="bg-[#0a0f1e] border border-slate-800 rounded-lg px-3 py-2 font-mono text-[11px] text-slate-400 break-all">
+                {rtmpUrl}
+              </div>
+            </div>
+
+            {/* Custom RTMP override */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">
+                Custom RTMP Server (optional override)
+              </label>
+              <input
+                type="text"
+                value={keyConfig.customRtmp}
+                onChange={e => updateKey(activePlatform, 'customRtmp', e.target.value)}
+                placeholder={`Leave blank to use ${platform.name} default`}
+                className="w-full bg-[#0d1320] border border-slate-700 focus:border-indigo-500 rounded-lg px-3 py-2.5 text-white font-mono text-sm outline-none"
+              />
+            </div>
+
+            {/* ffmpeg missing instructions */}
+            {ffmpegStatus === 'missing' && (
+              <div className="bg-amber-950/40 border border-amber-700/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-amber-300 font-black text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  ffmpeg not detected — Manual OBS Setup Required
+                </div>
+                <p className="text-amber-200/80 text-xs leading-relaxed">
+                  Live Psalms uses <strong>ffmpeg</strong> to stream directly from the app. 
+                  Install it, or use OBS with the RTMP URL above.
+                </p>
+                <div className="space-y-1">
+                  {[
+                    { os: 'Windows', cmd: 'winget install ffmpeg' },
+                    { os: 'macOS', cmd: 'brew install ffmpeg' },
+                    { os: 'Ubuntu/Debian', cmd: 'sudo apt install ffmpeg' },
+                  ].map(({ os, cmd }) => (
+                    <div key={os} className="flex items-center gap-2">
+                      <span className="text-amber-400 text-[10px] font-black w-20 shrink-0">{os}</span>
+                      <code className="flex-1 bg-black/50 px-2 py-1 rounded text-[11px] text-amber-100 font-mono">{cmd}</code>
+                      <button onClick={() => copyToClipboard(cmd, `cmd-${os}`)} className="text-slate-500 hover:text-white transition">
+                        {copied === `cmd-${os}` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-amber-200/60 text-[10px]">After installing, restart Live Psalms for ffmpeg to be detected.</p>
+              </div>
+            )}
+
+            {/* Stream log */}
+            {streamLog.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">Stream Log</label>
+                <div className="bg-black/70 border border-slate-800 rounded-lg p-3 h-28 overflow-y-auto font-mono text-[10px] text-slate-300 space-y-0.5">
+                  {streamLog.map((line, i) => (
+                    <div key={i} className={
+                      line.startsWith('✅') ? 'text-emerald-400' :
+                      line.startsWith('❌') ? 'text-rose-400' :
+                      line.startsWith('⚠') ? 'text-amber-400' :
+                      line.startsWith('▶') ? 'text-sky-400' :
+                      line.startsWith('⏹') ? 'text-slate-500' : 'text-slate-400'
+                    }>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+
+        {/* Footer — Start/Stop Stream */}
+        <div className="border-t border-[#26334a] p-4 flex items-center justify-between gap-4">
+          <div className="text-[11px] text-slate-500 max-w-sm">
+            {ffmpegStatus === 'available'
+              ? 'Streaming captures the audience output window. Ensure it is open before going live.'
+              : 'Install ffmpeg to enable in-app streaming. Or copy the RTMP URL for OBS.'}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isStreaming && streamingPlatform === activePlatform ? (
+              <button
+                onClick={stopStream}
+                className="flex items-center gap-2 px-6 py-2.5 bg-rose-700 hover:bg-rose-600 text-white font-black rounded-xl transition shadow-lg"
+              >
+                <Square className="w-4 h-4 fill-white" />
+                Stop Stream
+              </button>
+            ) : (
+              <button
+                onClick={startStream}
+                disabled={!keyConfig.key.trim() || ffmpegStatus === 'missing' || (isStreaming && streamingPlatform !== activePlatform)}
+                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-xl transition shadow-lg"
+              >
+                <Radio className="w-4 h-4" />
+                Go Live on {platform.name}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
