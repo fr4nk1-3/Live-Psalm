@@ -15,6 +15,7 @@ import { loadBroadcastStudioData, saveBroadcastStudioData } from '../services/br
 import { renderBroadcastScene } from '../services/broadcastCompositor';
 import { BroadcastService } from '../services/broadcast';
 import { StorageService } from '../services/storage';
+import { streamStatus } from '../services/streamStatus';
 
 interface BroadcastDockProps {
   isOpen: boolean;
@@ -330,15 +331,30 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
     const onEnded = () => {
       setIsStreaming(false);
       setStreamStatusMsg('Stream ended');
+      streamStatus.finish();
+    };
+    const onState = (_: any, payload: { state?: string; error?: string }) => {
+      if (payload?.state === 'live') {
+        streamStatus.markLive();
+      } else if (payload?.state === 'error') {
+        streamStatus.finish(payload.error || 'Stream error');
+      }
+    };
+    const onStats = (_: any, stats: Record<string, number>) => {
+      if (stats) streamStatus.applyStats(stats);
     };
     const onRecEnded = (_: any, info: { filePath?: string }) => {
       setIsRecording(false);
       if (info?.filePath) setLastRecPath(info.filePath);
     };
     ipc.on('stream-ended', onEnded);
+    ipc.on('stream-state', onState);
+    ipc.on('stream-stats', onStats);
     ipc.on('recording-ended', onRecEnded);
     return () => {
       ipc.removeListener('stream-ended', onEnded);
+      ipc.removeListener('stream-state', onState);
+      ipc.removeListener('stream-stats', onStats);
       ipc.removeListener('recording-ended', onRecEnded);
     };
   }, [ipc]);
@@ -602,17 +618,23 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
       setStreamStatusMsg('Live RTMP streaming requires the Electron desktop app.');
       return;
     }
+    streamStatus.begin(dest.name);
     const rtmpUrl = dest.serverUrl.endsWith('/') ? `${dest.serverUrl}${dest.streamKey}` : `${dest.serverUrl}/${dest.streamKey}`;
     const res = await ipc.invoke('start-stream', {
       rtmpUrl,
       resolution: `${resW}x${resH}`,
       fps: studio.outputConfig.fps,
       bitrate: studio.outputConfig.videoBitrateKbps,
+      mode: 'native-c',
+      reencode: true,
+      hardwareEncoder: studio.outputConfig.encoder || 'libx264',
+      encoder: studio.outputConfig.encoder || 'libx264',
       useMediaPipe: true,
       hasVideo: true,
       hasAudio: true
     });
     if (!res?.success) {
+      streamStatus.finish(res?.error || 'Failed to start stream');
       setStreamStatusMsg(res?.error || 'Failed to start stream');
       return;
     }
@@ -632,7 +654,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
       streamRecorderRef.current = rec;
     }
     setIsStreaming(true);
-    setStreamStatusMsg(`Streaming LIVE to ${dest.name}`);
+    setStreamStatusMsg(`Streaming LIVE to ${dest.name} (${res.engine || 'Native C Engine'})`);
   };
 
   const stopBroadcast = async () => {
@@ -642,6 +664,7 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
       streamRecorderRef.current = null;
     }
     if (ipc) await ipc.invoke('stop-stream').catch(() => {});
+    streamStatus.finish();
     setIsStreaming(false);
     setStreamStatusMsg('Broadcast stopped');
   };

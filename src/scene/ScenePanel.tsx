@@ -15,7 +15,17 @@ import { defaultScenes } from './presets';
 import { getActiveScene, sceneLibrary, useSceneLibrary } from './store';
 import { SceneDocument } from './types';
 import { SceneEditor } from './SceneEditor';
-import type { MediaAsset, Slide, Theme } from '../types/presentation';
+import type { MediaAsset, ProjectorLayout, Slide, Theme } from '../types/presentation';
+
+const AUDIENCE_LAYOUT_OPTIONS: { id: ProjectorLayout; label: string }[] = [
+  { id: 'centered', label: 'Centered' },
+  { id: 'lower_third', label: 'Lower third' },
+  { id: 'top_banner', label: 'Top banner' },
+  { id: 'split_left', label: 'Left split' },
+  { id: 'split_right', label: 'Right split' },
+  { id: 'boxed_card', label: 'Boxed card' },
+  { id: 'minimal', label: 'Minimal' }
+];
 
 interface ScenePanelProps {
   className?: string;
@@ -24,13 +34,22 @@ interface ScenePanelProps {
   mediaList?: MediaAsset[];
   /** Switches the preview monitor to scene mode. */
   onPreviewScene?: () => void;
+  /** Updates the active Audience Layout across Audience, Program, and Broadcast Scenes. */
+  onChangeProjectorLayout?: (layout: ProjectorLayout) => void;
 }
 
 /**
  * Scene library as a grid. Click a card to prepare it on the preview monitor;
  * send it to programme with the Take button, a double click, or the row menu.
  */
-export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme, mediaList = [], onPreviewScene }) => {
+export const ScenePanel: React.FC<ScenePanelProps> = ({
+  className,
+  slide,
+  theme,
+  mediaList = [],
+  onPreviewScene,
+  onChangeProjectorLayout
+}) => {
   const library = useSceneLibrary();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const [draftName, setDraftName] = React.useState('');
@@ -38,6 +57,8 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme,
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const activeScene = getActiveScene(library);
   const previewScene = library.scenes.find(scene => scene.id === library.previewSceneId) || library.scenes[0];
+  const currentLayout: ProjectorLayout =
+    theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
 
   const beginRename = (scene: SceneDocument) => {
     setRenamingId(scene.id);
@@ -53,13 +74,40 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({ className, slide, theme,
 
   return (
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs text-muted-foreground">
-          {library.scenes.length} scenes · programme:{' '}
-          <span className="text-emerald-400">{activeScene?.name || 'none'}</span>
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-2xs text-muted-foreground">
+            {library.scenes.length} scenes · broadcast:{' '}
+            <span className="text-emerald-400">{activeScene?.name || 'none'}</span>
+          </span>
+          {onChangeProjectorLayout && (
+            <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border bg-background/70 px-1.5 py-0.5">
+              <span className="text-[10px] font-medium text-muted-foreground">Audience layout:</span>
+              {AUDIENCE_LAYOUT_OPTIONS.map(opt => {
+                const active = currentLayout === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onChangeProjectorLayout(opt.id)}
+                    aria-pressed={active}
+                    className={cn(
+                      'rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                      active
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    title={`Set Audience & Broadcast Scene layout to ${opt.label}`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1">
-          <Button size="xs" variant="secondary" onClick={takePreview} title="Send the preview scene to programme">
+          <Button size="xs" variant="secondary" onClick={takePreview} title="Send the preview scene to broadcast">
             Take {previewScene ? `“${previewScene.name}”` : ''}
           </Button>
           <DropdownMenu>

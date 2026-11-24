@@ -1,4 +1,4 @@
-import { Slide, Theme } from '../types/presentation';
+import { ProjectorLayout, Slide, Theme } from '../types/presentation';
 import { resolveSource } from './assetUrls';
 import {
   BrowserElement,
@@ -30,6 +30,10 @@ function getImage(src: string): HTMLImageElement | null {
 export interface SceneRenderContext {
   slide: Slide | null;
   theme: Theme;
+  globalVideoBgUrl?: string | null;
+  itemVideoBgUrl?: string | null;
+  /** Looping background / foreground slide videos keyed by URL. */
+  bgVideos?: Record<string, HTMLVideoElement | null>;
   videos?: Record<string, HTMLVideoElement | null>;
   /** Media and capture videos, keyed by element id. */
   media?: Record<string, HTMLVideoElement | null>;
@@ -41,6 +45,14 @@ export interface SceneRenderContext {
   depth?: number;
   /** Media library asset id to object URL. */
   assets?: Record<string, string>;
+}
+
+export function resolveAudienceLayout(
+  theme: Theme,
+  override?: 'theme' | ProjectorLayout | null
+): ProjectorLayout {
+  if (override && override !== 'theme') return override;
+  return theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
 }
 
 export function resolveText(element: TextElement, context: SceneRenderContext): string {
@@ -290,10 +302,310 @@ function drawBrowserElement(ctx: CanvasRenderingContext2D, element: BrowserEleme
   ctx.restore();
 }
 
+function isVideoMediaUrl(url?: string | null, bgType?: Slide['backgroundType']): boolean {
+  if (!url) return false;
+  if (bgType === 'video') return true;
+  if (bgType === 'image') return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.endsWith('.mp4') ||
+    lower.endsWith('.webm') ||
+    lower.endsWith('.mov') ||
+    lower.endsWith('.mkv') ||
+    lower.endsWith('.m4v') ||
+    lower.startsWith('data:video') ||
+    lower.startsWith('blob:')
+  );
+}
+
+/**
+ * Renders the live slide into `frame` using the active Audience Layout
+ * ('centered' | 'lower_third' | 'top_banner' | 'split_left' | 'split_right' | 'boxed_card' | 'minimal'),
+ * so Broadcast Scenes match the Audience Output and Program Monitor.
+ */
+function drawAudienceLayoutPresentation(
+  ctx: CanvasRenderingContext2D,
+  frame: { x: number; y: number; width: number; height: number },
+  context: SceneRenderContext,
+  layout: ProjectorLayout,
+  showBackground: boolean
+) {
+  const slide = context.slide;
+  const theme = context.theme;
+  const slideBgUrl = slide?.backgroundUrl ?? null;
+  const isSlideVideo = isVideoMediaUrl(slideBgUrl, slide?.backgroundType);
+  const isPureMediaSlide = Boolean(slide && slideBgUrl && !slide.content?.trim());
+  const activeMotionUrl = isPureMediaSlide
+    ? (isSlideVideo ? slideBgUrl : null)
+    : (isSlideVideo ? slideBgUrl : (context.itemVideoBgUrl || context.globalVideoBgUrl || null));
+  const bgUrl = isPureMediaSlide ? slideBgUrl : (activeMotionUrl || slideBgUrl || theme.backgroundUrl || null);
+  const isVideoBg = isPureMediaSlide ? isSlideVideo : Boolean(activeMotionUrl || isVideoMediaUrl(bgUrl));
+
+  if (showBackground || isPureMediaSlide) {
+    let drewMedia = false;
+    if (bgUrl && isVideoBg) {
+      const vid = context.bgVideos?.[bgUrl];
+      if (vid && vid.readyState >= 2 && vid.videoWidth > 0) {
+        const scale = isPureMediaSlide
+          ? Math.min(frame.width / vid.videoWidth, frame.height / vid.videoHeight)
+          : Math.max(frame.width / vid.videoWidth, frame.height / vid.videoHeight);
+        const w = vid.videoWidth * scale;
+        const h = vid.videoHeight * scale;
+        if (isPureMediaSlide) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+        }
+        ctx.drawImage(vid, frame.x + (frame.width - w) / 2, frame.y + (frame.height - h) / 2, w, h);
+        drewMedia = true;
+      }
+    } else if (bgUrl) {
+      const image = getImage(bgUrl);
+      if (image) {
+        const scale = isPureMediaSlide
+          ? Math.min(frame.width / image.naturalWidth, frame.height / image.naturalHeight)
+          : Math.max(frame.width / image.naturalWidth, frame.height / image.naturalHeight);
+        const w = image.naturalWidth * scale;
+        const h = image.naturalHeight * scale;
+        if (isPureMediaSlide) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+        }
+        ctx.drawImage(image, frame.x + (frame.width - w) / 2, frame.y + (frame.height - h) / 2, w, h);
+        drewMedia = true;
+      }
+    }
+
+    if (drewMedia && !isPureMediaSlide) {
+      ctx.fillStyle = `rgba(0,0,0,${theme.scrimOpacity ?? 0.45})`;
+      ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
+    }
+  }
+
+  if (!slide) {
+    return;
+  }
+
+  if (isPureMediaSlide) {
+    return;
+  }
+
+  const labelText = (slide.title || slide.sectionLabel || '').trim();
+  const refText = (
+    slide.subtitle ||
+    (slide.bibleMeta ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}` : '')
+  ).trim();
+  const baseFontPx = Math.max(36, Math.round((Math.max(72, theme.fontSize || 92) / 1080) * frame.height * 0.85));
+
+  // 1. LOWER-THIRD or TOP BANNER LAYOUT
+  if (layout === 'lower_third' || layout === 'top_banner') {
+    const bx = frame.x + Math.round(frame.width * 0.04);
+    const bw = Math.round(frame.width * 0.92);
+    const bh = Math.round(frame.height * 0.33);
+    const by =
+      layout === 'top_banner'
+        ? frame.y + Math.round(frame.height * 0.05)
+        : frame.y + frame.height - bh - Math.round(frame.height * 0.05);
+    const barW = Math.max(8, Math.round(frame.width * 0.006));
+    const rad = Math.max(10, Math.round(frame.width * 0.01));
+
+    ctx.save();
+    roundedPath(ctx, bx, by, bw, bh, rad);
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+    ctx.fill();
+    ctx.clip();
+    ctx.fillStyle = theme.accentColor || '#10b981';
+    ctx.fillRect(bx, by, barW, bh);
+    ctx.restore();
+
+    const innerX = bx + barW + Math.round(frame.width * 0.025);
+    const innerW = bw - barW - Math.round(frame.width * 0.05);
+    const topLabelH = labelText ? Math.round(bh * 0.18) : 0;
+    const bottomRefH = refText ? Math.round(bh * 0.18) : 0;
+
+    if (labelText) {
+      ctx.save();
+      ctx.font = `800 ${Math.max(16, Math.round(frame.height * 0.021))}px "${theme.fontFamily || 'Inter'}", system-ui, sans-serif`;
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labelText.toUpperCase(), innerX, by + Math.round(bh * 0.14));
+      ctx.restore();
+    }
+
+    drawTextElement(
+      ctx,
+      {
+        type: 'text',
+        id: 'pres-banner-body',
+        name: 'Banner content',
+        visible: true,
+        locked: true,
+        zIndex: 0,
+        frame: {
+          x: innerX,
+          y: by + topLabelH + Math.round(bh * 0.04),
+          width: innerW,
+          height: Math.max(40, bh - topLabelH - bottomRefH - Math.round(bh * 0.08))
+        },
+        content: slide.content || '',
+        binding: 'slide.content',
+        fontFamily: theme.fontFamily || 'Inter',
+        fontSize: Math.max(24, Math.round(frame.height * 0.052)),
+        fontWeight: theme.fontWeight || '700',
+        color: theme.textColor || '#ffffff',
+        align: 'left',
+        lineHeight: 1.24,
+        letterSpacing: 0,
+        shadow: true,
+        backgroundOpacity: 0,
+        padding: 4,
+        radius: 0
+      },
+      context
+    );
+
+    if (refText) {
+      ctx.save();
+      ctx.font = `600 ${Math.max(15, Math.round(frame.height * 0.02))}px "${theme.fontFamily || 'Inter'}", system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.92)';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(refText, innerX, by + bh - Math.round(bh * 0.13));
+      ctx.restore();
+    }
+    return;
+  }
+
+  // 2. SPLIT LEFT / SPLIT RIGHT / BOXED CARD / MINIMAL / CENTERED
+  const isSplitLeft = layout === 'split_left';
+  const isSplitRight = layout === 'split_right';
+  const isSplit = isSplitLeft || isSplitRight;
+  const isBoxed = layout === 'boxed_card';
+  const isMinimal = layout === 'minimal';
+
+  const cardW = isSplit
+    ? Math.round(frame.width * 0.54)
+    : isBoxed
+    ? Math.round(frame.width * 0.84)
+    : Math.round(frame.width * 0.90);
+  const cardH = isSplit || isBoxed ? Math.round(frame.height * 0.82) : Math.round(frame.height * 0.86);
+  const cardX = isSplitLeft
+    ? frame.x + Math.round(frame.width * 0.04)
+    : isSplitRight
+    ? frame.x + frame.width - cardW - Math.round(frame.width * 0.04)
+    : frame.x + Math.round((frame.width - cardW) / 2);
+  const cardY = frame.y + Math.round((frame.height - cardH) / 2);
+
+  if (isSplit || isBoxed) {
+    const rad = Math.max(16, Math.round(frame.width * 0.02));
+    ctx.save();
+    roundedPath(ctx, cardX, cardY, cardW, cardH, rad);
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+    ctx.fill();
+    ctx.lineWidth = isBoxed ? 2 : 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const align: 'left' | 'center' | 'right' = isSplitLeft
+    ? 'left'
+    : isSplitRight
+    ? 'right'
+    : (theme.align as 'left' | 'center' | 'right') || 'center';
+
+  const padX = Math.round(cardW * 0.05);
+  const topBadgeH = !isMinimal && labelText ? Math.round(cardH * 0.12) : 0;
+  const bottomRefH = !isMinimal && refText ? Math.round(cardH * 0.12) : 0;
+
+  // Section / title pill badge
+  if (!isMinimal && labelText) {
+    ctx.save();
+    const badgeFontPx = Math.max(15, Math.round(frame.height * 0.02));
+    ctx.font = `800 ${badgeFontPx}px "${theme.fontFamily || 'Inter'}", system-ui, sans-serif`;
+    const upper = labelText.toUpperCase();
+    const textW = ctx.measureText(upper).width;
+    const pillW = Math.min(cardW - padX * 2, Math.round(textW + badgeFontPx * 2.8));
+    const pillH = Math.round(badgeFontPx * 1.9);
+    const pillY = cardY + Math.round(cardH * 0.04);
+    const pillX =
+      align === 'left'
+        ? cardX + padX
+        : align === 'right'
+        ? cardX + cardW - padX - pillW
+        : cardX + Math.round((cardW - pillW) / 2);
+
+    roundedPath(ctx, pillX, pillY, pillW, pillH, Math.round(pillH / 2));
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.70)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(upper, pillX + pillW / 2, pillY + pillH / 2, pillW - 16);
+    ctx.restore();
+  }
+
+  // Main slide content
+  drawTextElement(
+    ctx,
+    {
+      type: 'text',
+      id: 'pres-main-content',
+      name: 'Live content',
+      visible: true,
+      locked: true,
+      zIndex: 0,
+      frame: {
+        x: cardX + padX,
+        y: cardY + topBadgeH + Math.round(cardH * 0.03),
+        width: cardW - padX * 2,
+        height: Math.max(60, cardH - topBadgeH - bottomRefH - Math.round(cardH * 0.06))
+      },
+      content: slide.content || '',
+      binding: 'slide.content',
+      fontFamily: theme.fontFamily || 'Inter',
+      fontSize: baseFontPx,
+      fontWeight: theme.fontWeight || '800',
+      color: theme.textColor || '#ffffff',
+      align,
+      lineHeight: 1.24,
+      letterSpacing: 0,
+      shadow: true,
+      backgroundOpacity: 0,
+      padding: 8,
+      radius: 0
+    },
+    context
+  );
+
+  // Bottom subtitle / Scripture reference
+  if (!isMinimal && refText) {
+    ctx.save();
+    const refFontPx = Math.max(16, Math.round(frame.height * 0.024));
+    ctx.font = `700 ${refFontPx}px "${theme.fontFamily || 'Inter'}", system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    const refX =
+      align === 'left'
+        ? cardX + padX
+        : align === 'right'
+        ? cardX + cardW - padX
+        : cardX + cardW / 2;
+    ctx.fillText(refText.toUpperCase(), refX, cardY + cardH - Math.round(cardH * 0.06), cardW - padX * 2);
+    ctx.restore();
+  }
+}
+
 function drawPresentationElement(
   ctx: CanvasRenderingContext2D,
   element: PresentationElement,
-  context: SceneRenderContext
+  context: SceneRenderContext,
+  sceneLayoutOverride?: 'theme' | ProjectorLayout
 ) {
   const frame = element.frame;
   const slide = context.slide;
@@ -301,80 +613,22 @@ function drawPresentationElement(
   roundedPath(ctx, frame.x, frame.y, frame.width, frame.height, element.radius);
   ctx.clip();
 
-  if (element.showBackground) {
-    const background = slide?.backgroundUrl;
-    const image = background ? getImage(background) : null;
-    if (image) {
-      const scale = Math.max(frame.width / image.naturalWidth, frame.height / image.naturalHeight);
-      const width = image.naturalWidth * scale;
-      const height = image.naturalHeight * scale;
-      ctx.drawImage(image, frame.x + (frame.width - width) / 2, frame.y + (frame.height - height) / 2, width, height);
-    } else {
+  if (!slide) {
+    if (element.showBackground) {
       ctx.fillStyle = '#0e0e10';
       ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
     }
-  }
-
-  if (!slide) {
     placeholder(ctx, frame, 'Live presentation');
     ctx.restore();
     return;
   }
 
-  // Reuse the text painter with bindings, so the scene shows the live slide.
-  const padding = Math.round(frame.height * 0.06);
-  const referenceHeight = slide.bibleMeta ? Math.round(frame.height * 0.12) : 0;
-  const content: TextElement = {
-    type: 'text',
-    id: `${element.id}-content`,
-    name: 'Live content',
-    visible: true,
-    locked: true,
-    zIndex: 0,
-    frame: {
-      x: frame.x,
-      y: frame.y,
-      width: frame.width,
-      height: frame.height - referenceHeight
-    },
-    content: slide.content || '',
-    binding: 'slide.content',
-    fontFamily: context.theme.fontFamily || 'Inter',
-    fontSize: Math.max(24, Math.round(frame.height * 0.11)),
-    fontWeight: context.theme.fontWeight || '600',
-    color: context.theme.textColor || '#ffffff',
-    align: context.theme.align || 'center',
-    lineHeight: 1.25,
-    letterSpacing: 0,
-    shadow: true,
-    backgroundOpacity: 0,
-    padding,
-    radius: 0
-  };
-  drawTextElement(ctx, content, context);
+  const effectiveLayout =
+    element.layout && element.layout !== 'theme'
+      ? element.layout
+      : resolveAudienceLayout(context.theme, sceneLayoutOverride);
 
-  if (slide.bibleMeta) {
-    const reference: TextElement = {
-      ...content,
-      id: `${element.id}-reference`,
-      name: 'Reference',
-      zIndex: 0,
-      frame: {
-        x: frame.x,
-        y: frame.y + frame.height - referenceHeight,
-        width: frame.width,
-        height: referenceHeight
-      },
-      content: '',
-      binding: 'slide.reference',
-      fontSize: Math.max(16, Math.round(frame.height * 0.055)),
-      color: 'rgba(255,255,255,0.75)',
-      shadow: true,
-      lineHeight: 1.2
-    };
-    drawTextElement(ctx, reference, context);
-  }
-
+  drawAudienceLayoutPresentation(ctx, frame, context, effectiveLayout, element.showBackground);
   ctx.restore();
 }
 
@@ -454,7 +708,38 @@ export function drawScene(
   drawBackground(ctx, scene, scene.canvas.width, scene.canvas.height);
 
   const ordered = [...scene.elements].filter(element => element.visible).sort((a, b) => a.zIndex - b.zIndex);
+  const activeAudienceLayout = resolveAudienceLayout(context.theme, scene.layoutOverride);
+  const hasPresentationEl = ordered.some(element => element.type === 'presentation');
+  const hasSlideContentText = ordered.some(
+    element => element.type === 'text' && element.binding === 'slide.content'
+  );
+  const hasLiveSourceLayer = ordered.some(
+    element =>
+      element.type === 'camera' ||
+      element.type === 'videoDevice' ||
+      element.type === 'display' ||
+      element.type === 'window' ||
+      element.type === 'media'
+  );
+  const hasCustomShapeStrap = ordered.some(element => element.type === 'shape');
+  const useAudienceLayoutForBoundText =
+    !hasPresentationEl &&
+    hasSlideContentText &&
+    scene.followAudienceLayout !== false &&
+    Boolean(context.slide) &&
+    (activeAudienceLayout !== 'centered' || !hasCustomShapeStrap);
+
   for (const element of ordered) {
+    if (
+      useAudienceLayoutForBoundText &&
+      element.type === 'text' &&
+      (element.binding === 'slide.content' ||
+        element.binding === 'slide.reference' ||
+        element.binding === 'slide.title' ||
+        element.binding === 'slide.subtitle')
+    ) {
+      continue;
+    }
     ctx.save();
     const opacity = element.frame.opacity ?? 1;
     ctx.globalAlpha = opacity;
@@ -477,9 +762,19 @@ export function drawScene(
     else if (element.type === 'videoDevice') drawVideoDeviceElement(ctx, element, context);
     else if (element.type === 'media') drawMediaElement(ctx, element, context);
     else if (element.type === 'scene') drawSceneSourceElement(ctx, element, context);
-    else if (element.type === 'presentation') drawPresentationElement(ctx, element, context);
+    else if (element.type === 'presentation') drawPresentationElement(ctx, element, context, scene.layoutOverride);
     else if (element.type === 'browser') drawBrowserElement(ctx, element, context);
     ctx.restore();
+  }
+
+  if (useAudienceLayoutForBoundText) {
+    drawAudienceLayoutPresentation(
+      ctx,
+      { x: 0, y: 0, width: scene.canvas.width, height: scene.canvas.height },
+      context,
+      activeAudienceLayout,
+      !hasLiveSourceLayer
+    );
   }
 
   ctx.restore();

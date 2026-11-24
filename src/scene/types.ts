@@ -9,6 +9,8 @@
  * fills defaults for anything missing.
  */
 
+import type { ProjectorLayout } from '../types/presentation';
+
 export const SCENE_VERSION = 1 as const;
 export const SCENE_WIDTH = 1920;
 export const SCENE_HEIGHT = 1080;
@@ -139,6 +141,8 @@ export type PresentationElement = BaseElement & {
   fit: 'contain' | 'cover';
   radius: number;
   showBackground: boolean;
+  /** 'theme' follows the active Audience Layout (theme.projectorLayout), or override for this element. */
+  layout?: 'theme' | ProjectorLayout;
 };
 
 export type SceneElement =
@@ -167,6 +171,10 @@ export interface SceneDocument {
   canvas: { width: number; height: number; background: SceneBackground };
   elements: SceneElement[];
   transition: TransitionSettings;
+  /** When true (default), slide presentation elements in this scene adapt to the active Audience Layout. */
+  followAudienceLayout?: boolean;
+  /** Optional scene-level Audience Layout override ('theme' = follow active Audience Layout). */
+  layoutOverride?: 'theme' | ProjectorLayout;
   createdAt: number;
   updatedAt: number;
 }
@@ -357,12 +365,13 @@ export function createPresentationElement(patch: Partial<PresentationElement> = 
   return {
     type: 'presentation',
     fit: 'contain',
-    radius: 10,
-    showBackground: false,
+    radius: 0,
+    showBackground: true,
+    layout: 'theme',
     id: createId('el'),
     name: 'Live presentation',
     zIndex: 2,
-    frame: { x: 560, y: 260, width: 800, height: 560 },
+    frame: { x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT },
     visible: true,
     locked: false,
     ...patch
@@ -378,6 +387,8 @@ export function createScene(name: string, patch: Partial<SceneDocument> = {}): S
     canvas: { width: SCENE_WIDTH, height: SCENE_HEIGHT, background: { type: 'solid', color: '#0e0e10' } },
     elements: [],
     transition: { ...DEFAULT_TRANSITION },
+    followAudienceLayout: true,
+    layoutOverride: 'theme',
     createdAt: now,
     updatedAt: now,
     ...patch

@@ -250,36 +250,89 @@ export function renderBroadcastScene(
       }
 
       if (slide && slide.content?.trim()) {
-        const padX = w * 0.06;
-        const baseFont = Math.round((src.fontSize || (src.type === 'live_slide' ? 52 : 42)) * scaleFactor);
+        const projLayout =
+          src.type === 'live_slide'
+            ? (theme?.projectorLayout || (theme?.lowerThirdStyle ? 'lower_third' : 'centered'))
+            : 'centered';
+        const isBanner = src.type === 'live_slide' && (projLayout === 'lower_third' || projLayout === 'top_banner');
+        const isSplitLeft = src.type === 'live_slide' && projLayout === 'split_left';
+        const isSplitRight = src.type === 'live_slide' && projLayout === 'split_right';
+        const isBoxed = src.type === 'live_slide' && projLayout === 'boxed_card';
+        const isMinimal = src.type === 'live_slide' && projLayout === 'minimal';
+
+        let boxX = x;
+        let boxY = y;
+        let boxW = w;
+        let boxH = h;
+
+        if (isBanner) {
+          boxX = x + w * 0.04;
+          boxW = w * 0.92;
+          boxH = h * 0.34;
+          boxY = projLayout === 'top_banner' ? y + h * 0.05 : y + h - boxH - h * 0.05;
+          ctx.save();
+          drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 14 * scaleFactor);
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+          ctx.fill();
+          ctx.fillStyle = theme?.accentColor || '#10b981';
+          ctx.fillRect(boxX, boxY, Math.max(8, w * 0.006), boxH);
+          ctx.restore();
+        } else if (isSplitLeft || isSplitRight || isBoxed) {
+          boxW = isBoxed ? w * 0.84 : w * 0.54;
+          boxH = h * 0.82;
+          boxX = isSplitLeft ? x + w * 0.04 : isSplitRight ? x + w - boxW - w * 0.04 : x + (w - boxW) / 2;
+          boxY = y + (h - boxH) / 2;
+          ctx.save();
+          drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 24 * scaleFactor);
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const padX = boxW * 0.06;
+        const baseFont = Math.round(
+          (src.fontSize || (isBanner ? 38 : src.type === 'live_slide' ? 52 : 42)) * scaleFactor
+        );
         const fontFam = (src.type === 'live_slide' ? theme?.fontFamily : src.fontFamily) || 'Inter, sans-serif';
+        const alignVal: CanvasTextAlign =
+          isBanner || isSplitLeft
+            ? 'left'
+            : isSplitRight
+            ? 'right'
+            : ((src.type === 'live_slide' ? theme?.align : src.align) || 'center');
         ctx.fillStyle = (src.type === 'live_slide' ? theme?.textColor : src.textColor) || '#ffffff';
         ctx.font = `800 ${baseFont}px ${fontFam}`;
-        ctx.textAlign = (src.type === 'live_slide' ? theme?.align : src.align) || 'center';
+        ctx.textAlign = alignVal;
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0,0,0,0.95)';
         ctx.shadowBlur = 12 * scaleFactor;
 
-        let lines = wrapTextLines(ctx, slide.content.trim(), w - padX * 2);
+        let lines = wrapTextLines(ctx, slide.content.trim(), boxW - padX * 2);
         let fontPx = baseFont;
-        while (lines.length * fontPx * 1.28 > h * 0.65 && fontPx > 14 * scaleFactor) {
+        while (lines.length * fontPx * 1.28 > boxH * 0.65 && fontPx > 14 * scaleFactor) {
           fontPx = Math.max(14 * scaleFactor, Math.floor(fontPx * 0.88));
           ctx.font = `800 ${fontPx}px ${fontFam}`;
-          lines = wrapTextLines(ctx, slide.content.trim(), w - padX * 2);
+          lines = wrapTextLines(ctx, slide.content.trim(), boxW - padX * 2);
         }
 
         const lineH = fontPx * 1.28;
         const totalTextH = lines.length * lineH;
-        const alignVal = (src.type === 'live_slide' ? theme?.align : src.align) || 'center';
-        const textX = alignVal === 'left' ? x + padX : alignVal === 'right' ? x + w - padX : x + w / 2;
-        let startY = y + (h - totalTextH) / 2 + lineH / 2;
+        const textX = alignVal === 'left' ? boxX + padX : alignVal === 'right' ? boxX + boxW - padX : boxX + boxW / 2;
+        let startY = boxY + (boxH - totalTextH) / 2 + lineH / 2;
 
         // Title / Section pill for Audience-style live_slide
-        if (src.type === 'live_slide' && (slide.title || slide.sectionLabel)) {
+        if (src.type === 'live_slide' && !isMinimal && (slide.title || slide.sectionLabel)) {
           ctx.save();
           ctx.font = `900 ${Math.round(20 * scaleFactor)}px Inter, sans-serif`;
-          ctx.fillStyle = '#c7d2fe';
-          ctx.fillText((slide.title || slide.sectionLabel || '').toUpperCase(), textX, Math.max(y + 36 * scaleFactor, startY - lineH * 0.9));
+          ctx.fillStyle = isBanner ? '#34d399' : '#c7d2fe';
+          ctx.fillText(
+            (slide.title || slide.sectionLabel || '').toUpperCase(),
+            textX,
+            Math.max(boxY + 26 * scaleFactor, startY - lineH * 0.9)
+          );
           ctx.restore();
         }
 
@@ -291,7 +344,7 @@ export function renderBroadcastScene(
           ctx.save();
           ctx.font = `800 ${Math.round(22 * scaleFactor)}px Inter, sans-serif`;
           ctx.fillStyle = '#fcd34d';
-          ctx.fillText(refLabel, textX, y + Math.round(22 * scaleFactor));
+          ctx.fillText(refLabel, textX, boxY + Math.round(22 * scaleFactor));
           ctx.restore();
           startY += Math.round(14 * scaleFactor);
         }
@@ -301,11 +354,18 @@ export function renderBroadcastScene(
         }
 
         // Scripture reference / subtitle at bottom of live_slide
-        if (src.type === 'live_slide' && slide.subtitle) {
+        if (src.type === 'live_slide' && !isMinimal && (slide.subtitle || slide.bibleMeta)) {
+          const subText =
+            slide.subtitle ||
+            (slide.bibleMeta ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}` : '');
           ctx.save();
           ctx.font = `700 ${Math.round(22 * scaleFactor)}px Inter, sans-serif`;
           ctx.fillStyle = '#e0e7ff';
-          ctx.fillText(slide.subtitle.toUpperCase(), textX, Math.min(y + h - 32 * scaleFactor, startY + lines.length * lineH + 12 * scaleFactor));
+          ctx.fillText(
+            subText.toUpperCase(),
+            textX,
+            Math.min(boxY + boxH - 24 * scaleFactor, startY + lines.length * lineH + 12 * scaleFactor)
+          );
           ctx.restore();
         }
       }

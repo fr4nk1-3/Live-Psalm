@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlaylistItem, Slide, SectionTag, Theme, QuickPinnedItem, AudienceAlert, MediaAsset } from '../types/presentation';
+import { PlaylistItem, Slide, SectionTag, Theme, QuickPinnedItem, AudienceAlert, MediaAsset, ProjectorLayout } from '../types/presentation';
 import { BroadcastService } from '../services/broadcast';
 import {
   Eye,
@@ -95,6 +95,8 @@ interface CenterWorkspaceProps {
   onOpenInspector?: () => void;
   /** Opens the stream setup dialog from the broadcast monitor. */
   onOpenStreamSettings?: () => void;
+  /** Updates the active Audience Layout across Audience, Program, and Broadcast Scenes. */
+  onChangeProjectorLayout?: (layout: ProjectorLayout) => void;
   /** Countdown seconds, mirrored into the broadcast scene. */
   countdownSeconds?: number;
 }
@@ -211,11 +213,18 @@ const SlideCanvas: React.FC<{
   const designFontPx = (parseFloat(outputSizing.fontSize) / 100) * 1920;
   const designContainerRef = React.useRef<HTMLDivElement>(null);
   const designTextRef = React.useRef<HTMLDivElement>(null);
+  const layout: ProjectorLayout =
+    theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+  const isBanner = layout === 'lower_third' || layout === 'top_banner';
+  const isSplit = layout === 'split_left' || layout === 'split_right';
+  const isBoxed = layout === 'boxed_card';
+  const isMinimal = layout === 'minimal';
+
   const fittedDesignPx = useAutoFitFontSize(
     designContainerRef,
     designTextRef,
-    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, audienceViewMode, frameSize.width],
-    { minPx: 16, maxPx: 160, startVw: 6.5 }
+    [slide?.content, slide?.title, theme.fontFamily, theme.fontSize, layout, audienceViewMode, frameSize.width],
+    { minPx: 16, maxPx: isBanner ? 84 : 160, startVw: isBanner ? 3.8 : 6.5 }
   );
 
   const slideBgUrl = slide?.backgroundUrl ?? null;
@@ -330,17 +339,63 @@ const SlideCanvas: React.FC<{
         </div>
       )}
 
-      {/* Slide text — laid out at 1920x1080 and scaled, matching the audience */}
+      {/* Slide text — laid out at 1920x1080 and scaled, matching the audience layout */}
       <div ref={textContainerRef} className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{ width: 1920, height: 1080, transform: `scale(${designScale || 1})` }}
         >
-          <div className="flex h-full w-full flex-col items-center justify-center text-center">
+          <div className="flex h-full w-full flex-col px-[86px] py-[44px]">
             {slide ? (
-              isPureMediaSlide ? null : (
-                <>
-                  {(slide.title || slide.sectionLabel) && (
+              isPureMediaSlide ? null : isBanner ? (
+                <div
+                  className={`${layout === 'top_banner' ? 'mb-auto' : 'mt-auto'} flex max-h-[410px] w-full flex-col rounded-r-[18px] border-l-[12px] border-emerald-500 bg-slate-950/90 py-[24px] pl-[56px] pr-[64px] text-left shadow-2xl`}
+                >
+                  {(slide.sectionLabel || slide.title) && (
+                    <span
+                      className="mb-[8px] block shrink-0 font-black uppercase tracking-widest text-emerald-400"
+                      style={{ fontSize: '22px' }}
+                    >
+                      {slide.sectionLabel || slide.title}
+                    </span>
+                  )}
+                  <div ref={designContainerRef} className="min-h-0 flex-1 overflow-hidden">
+                    <div
+                      ref={designTextRef}
+                      className="whitespace-pre-line font-extrabold leading-snug text-white"
+                      style={{
+                        fontFamily: theme.fontFamily,
+                        fontWeight: theme.fontWeight || '800',
+                        fontSize: `${fittedDesignPx ?? Math.min(64, designFontPx)}px`,
+                        color: theme.textColor
+                      }}
+                    >
+                      {slide.content}
+                    </div>
+                  </div>
+                  {(slide.subtitle || slide.bibleMeta) && (
+                    <div className="mt-[10px] shrink-0 font-semibold text-slate-400" style={{ fontSize: '21px' }}>
+                      {slide.subtitle ||
+                        (slide.bibleMeta
+                          ? `${slide.bibleMeta.book} ${slide.bibleMeta.chapter}:${slide.bibleMeta.verse}`
+                          : '')}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className={`flex h-full max-h-full flex-col justify-center ${
+                    layout === 'split_left'
+                      ? 'mr-auto items-start rounded-[36px] border border-white/10 bg-slate-950/75 px-[72px] py-[44px] text-left'
+                      : layout === 'split_right'
+                      ? 'ml-auto items-end rounded-[36px] border border-white/10 bg-slate-950/75 px-[72px] py-[44px] text-right'
+                      : isBoxed
+                      ? 'm-auto items-center rounded-[40px] border-2 border-white/15 bg-slate-950/75 px-[80px] py-[48px] text-center shadow-2xl'
+                      : 'm-auto items-center text-center'
+                  }`}
+                  style={{ maxWidth: isSplit ? '56%' : `${designMaxWidthPct}%`, width: '100%' }}
+                >
+                  {!isMinimal && (slide.title || slide.sectionLabel) && (
                     <div
                       className="mb-[28px] shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-black/80 px-[38px] py-[7px] font-black uppercase tracking-[0.25em] text-white/60"
                       style={{ fontSize: '21px' }}
@@ -350,17 +405,22 @@ const SlideCanvas: React.FC<{
                   )}
                   <div
                     ref={designContainerRef}
-                    className="flex w-full items-center justify-center overflow-hidden"
-                    style={{ maxWidth: `${designMaxWidthPct}%`, height: '72%' }}
+                    className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden"
                   >
                     <div
                       ref={designTextRef}
                       className="w-full whitespace-pre-line font-extrabold text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
                       style={{
                         fontFamily: theme.fontFamily,
+                        fontWeight: theme.fontWeight || '800',
                         fontSize: `${fittedDesignPx ?? designFontPx}px`,
                         lineHeight: outputSizing.lineHeight,
-                        textAlign: theme.align,
+                        textAlign:
+                          layout === 'split_left'
+                            ? 'left'
+                            : layout === 'split_right'
+                            ? 'right'
+                            : theme.align,
                         color: theme.textColor,
                         letterSpacing: theme.letterSpacing || 'normal',
                         textTransform: theme.textTransform || 'none'
@@ -369,7 +429,7 @@ const SlideCanvas: React.FC<{
                       {slide.content}
                     </div>
                   </div>
-                  {(slide.subtitle || slide.bibleMeta) && (
+                  {!isMinimal && (slide.subtitle || slide.bibleMeta) && (
                     <div
                       className="mt-[24px] shrink-0 whitespace-nowrap uppercase tracking-[0.18em] text-white/55"
                       style={{ fontSize: '26px' }}
@@ -380,10 +440,12 @@ const SlideCanvas: React.FC<{
                           : '')}
                     </div>
                   )}
-                </>
+                </div>
               )
             ) : (
-              <span className="text-[40px] text-white/25">{isLive ? 'Output clear' : 'No slide selected'}</span>
+              <div className="flex h-full w-full items-center justify-center">
+                <span className="text-[40px] text-white/25">{isLive ? 'Output clear' : 'No slide selected'}</span>
+              </div>
             )}
           </div>
         </div>
@@ -449,6 +511,8 @@ const BroadcastMonitor: React.FC<{
             scene={activeScene}
             slide={liveSlide}
             theme={theme}
+            globalVideoBgUrl={globalVideoBgUrl}
+            itemVideoBgUrl={itemVideoBgUrl}
             enableAudio
             sceneRole="broadcast"
             mediaList={mediaList}
@@ -535,6 +599,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   onClearBackground,
   onOpenInspector,
   onOpenStreamSettings,
+  onChangeProjectorLayout,
   countdownSeconds = 0
 }) => {
   const slideGridContainerRef = useRef<HTMLDivElement | null>(null);
@@ -873,6 +938,8 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
                   scene={previewScene}
                   slide={previewSlide}
                   theme={activeTheme}
+                  globalVideoBgUrl={globalVideoBgUrl}
+                  itemVideoBgUrl={activeItem?.videoBackgroundUrl}
                   sceneRole="preview-scene"
                   mediaList={mediaList}
                   className="absolute inset-0"
@@ -1085,6 +1152,29 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onChangeProjectorLayout && (
+            <label className="flex items-center gap-1.5">
+              <span className="field-label">Layout</span>
+              <Select
+                value={activeTheme.projectorLayout || (activeTheme.lowerThirdStyle ? 'lower_third' : 'centered')}
+                onValueChange={value => onChangeProjectorLayout(value as ProjectorLayout)}
+              >
+                <SelectTrigger className="h-7 w-[116px] text-2xs" aria-label="Audience and broadcast layout">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="centered">Centered</SelectItem>
+                  <SelectItem value="lower_third">Lower third</SelectItem>
+                  <SelectItem value="top_banner">Top banner</SelectItem>
+                  <SelectItem value="split_left">Left split</SelectItem>
+                  <SelectItem value="split_right">Right split</SelectItem>
+                  <SelectItem value="boxed_card">Boxed card</SelectItem>
+                  <SelectItem value="minimal">Minimal</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+          )}
+
           <label className="flex items-center gap-1.5">
             <span className="field-label">Auto-advance</span>
             <Select value={String(autoAdvanceSec)} onValueChange={value => setAutoAdvanceSec(Number(value))}>
@@ -1135,7 +1225,14 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
       {/* Operator drawers */}
       {activeDockTab === 'scenes' && (
         <div className="max-h-[300px] shrink-0 overflow-hidden border-b border-border bg-card/60 px-3 py-2">
-          <ScenePanel className="h-[268px]" slide={liveSlide} theme={activeTheme} mediaList={mediaList} onPreviewScene={() => setPreviewKind('scene')} />
+          <ScenePanel
+            className="h-[268px]"
+            slide={liveSlide}
+            theme={activeTheme}
+            mediaList={mediaList}
+            onPreviewScene={() => setPreviewKind('scene')}
+            onChangeProjectorLayout={onChangeProjectorLayout}
+          />
         </div>
       )}
 

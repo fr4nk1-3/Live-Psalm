@@ -578,7 +578,54 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
             {/* Properties */}
             <div className="flex w-64 shrink-0 flex-col gap-2 overflow-y-auto rounded-md border border-border bg-card/60 p-2">
               <span className="field-label">Properties</span>
-              {!selected && <p className="text-2xs text-muted-foreground">Select an element on the canvas.</p>}
+              {!selected && (
+                <div className="space-y-3">
+                  <p className="text-2xs text-muted-foreground">
+                    Select an element on the canvas, or configure how this scene adapts to the Audience Layout.
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-2xs">Follow audience layout</Label>
+                    <Switch
+                      checked={draft.followAudienceLayout !== false}
+                      onCheckedChange={checked =>
+                        apply({ ...draft, followAudienceLayout: checked }, false)
+                      }
+                      aria-label="Follow audience layout"
+                    />
+                  </div>
+                  <Field
+                    label="Scene layout"
+                    hint="Use the active Audience Layout or pin this scene to a specific slide layout."
+                  >
+                    <Select
+                      value={draft.layoutOverride || 'theme'}
+                      onValueChange={value =>
+                        apply(
+                          {
+                            ...draft,
+                            layoutOverride: value as SceneDocument['layoutOverride']
+                          },
+                          false
+                        )
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-2xs" aria-label="Scene audience layout">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="theme">Follow audience layout</SelectItem>
+                        <SelectItem value="centered">Centered</SelectItem>
+                        <SelectItem value="lower_third">Lower third</SelectItem>
+                        <SelectItem value="top_banner">Top banner</SelectItem>
+                        <SelectItem value="split_left">Left split</SelectItem>
+                        <SelectItem value="split_right">Right split</SelectItem>
+                        <SelectItem value="boxed_card">Boxed card</SelectItem>
+                        <SelectItem value="minimal">Minimal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
               {selected && (
                 <>
                   <Field label="Name">
@@ -892,6 +939,26 @@ const PresentationProperties: React.FC<{
   onChange: (patch: Partial<PresentationElement>) => void;
 }> = ({ element, onChange }) => (
   <>
+    <Field label="Audience layout" hint="How the live slide is formatted inside this scene frame.">
+      <Select
+        value={element.layout || 'theme'}
+        onValueChange={value => onChange({ layout: value as PresentationElement['layout'] })}
+      >
+        <SelectTrigger className="h-7 text-2xs" aria-label="Presentation layout">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="theme">Follow audience layout</SelectItem>
+          <SelectItem value="centered">Centered</SelectItem>
+          <SelectItem value="lower_third">Lower third</SelectItem>
+          <SelectItem value="top_banner">Top banner</SelectItem>
+          <SelectItem value="split_left">Left split</SelectItem>
+          <SelectItem value="split_right">Right split</SelectItem>
+          <SelectItem value="boxed_card">Boxed card</SelectItem>
+          <SelectItem value="minimal">Minimal</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>
     <Field label="Fit">
       <Select value={element.fit} onValueChange={value => onChange({ fit: value as PresentationElement['fit'] })}>
         <SelectTrigger className="h-7 text-2xs" aria-label="Presentation fit">

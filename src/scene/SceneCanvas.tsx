@@ -13,6 +13,8 @@ interface SceneCanvasProps {
   scene: SceneDocument;
   slide: Slide | null;
   theme: Theme;
+  globalVideoBgUrl?: string | null;
+  itemVideoBgUrl?: string | null;
   className?: string;
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
   /** Preview surfaces can run without requesting capture access. */
@@ -36,6 +38,8 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   scene,
   slide,
   theme,
+  globalVideoBgUrl = null,
+  itemVideoBgUrl = null,
   className,
   onCanvasReady,
   enableCamera = true,
@@ -45,6 +49,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
 }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videosRef = React.useRef<Record<string, HTMLVideoElement>>({});
+  const bgVideosRef = React.useRef<Record<string, HTMLVideoElement>>({});
   const mediaRef = React.useRef<Record<string, HTMLVideoElement>>({});
   const browsersRef = React.useRef<Record<string, HTMLImageElement>>({});
   const streamsRef = React.useRef<Record<string, MediaStream>>({});
@@ -311,6 +316,40 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browserKey, enableCamera]);
 
+  // Manage looping background / foreground slide videos for presentation elements
+  React.useEffect(() => {
+    const isVid = (url?: string | null, bgType?: Slide['backgroundType']) => {
+      if (!url) return false;
+      if (bgType === 'video') return true;
+      if (bgType === 'image') return false;
+      const lower = url.toLowerCase();
+      return (
+        lower.endsWith('.mp4') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.m4v') ||
+        lower.startsWith('data:video') ||
+        lower.startsWith('blob:')
+      );
+    };
+    const ensureVideo = (url?: string | null, bgType?: Slide['backgroundType']) => {
+      if (!url || !isVid(url, bgType) || bgVideosRef.current[url]) return;
+      const vid = document.createElement('video');
+      vid.src = url;
+      vid.loop = true;
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.preload = 'auto';
+      void vid.play().catch(() => {});
+      bgVideosRef.current[url] = vid;
+    };
+    ensureVideo(slide?.backgroundUrl, slide?.backgroundType);
+    ensureVideo(itemVideoBgUrl, 'video');
+    ensureVideo(globalVideoBgUrl, 'video');
+    ensureVideo(theme.backgroundUrl);
+  }, [slide?.backgroundUrl, slide?.backgroundType, itemVideoBgUrl, globalVideoBgUrl, theme.backgroundUrl]);
+
   React.useEffect(() => {
     let frame = 0;
     let running = true;
@@ -326,6 +365,9 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
           {
             slide,
             theme,
+            globalVideoBgUrl,
+            itemVideoBgUrl,
+            bgVideos: bgVideosRef.current,
             videos: videosRef.current,
             media: mediaRef.current,
             browsers: browsersRef.current,
@@ -344,7 +386,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       running = false;
       cancelAnimationFrame(frame);
     };
-  }, [scene, slide, theme, scenesById, assets]);
+  }, [scene, slide, theme, globalVideoBgUrl, itemVideoBgUrl, scenesById, assets]);
 
   return (
     <div className={className}>

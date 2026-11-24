@@ -443,7 +443,7 @@ ipcMain.on('open-audience-window', (_event, opts) => {
   audienceWindow = createOutputDisplayWindow({
     existingWin: audienceWindow,
     outputType: 'audience',
-    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Audience Presentation Output',
+    title: 'Live Psalms — Audience Presentation Output',
     bgColor: '#000000',
     externalIndex: 0,
     displayId: opts?.displayId
@@ -462,7 +462,7 @@ ipcMain.on('open-stage-window', (_event, opts) => {
   stageWindow = createOutputDisplayWindow({
     existingWin: stageWindow,
     outputType: 'stage',
-    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Stage Confidence Monitor',
+    title: 'Live Psalms — Stage Confidence Monitor',
     bgColor: '#070b12',
     externalIndex: 1,
     displayId: opts?.displayId
@@ -481,7 +481,7 @@ ipcMain.on('open-led-window', (_event, opts) => {
   ledWindow = createOutputDisplayWindow({
     existingWin: ledWindow,
     outputType: 'led',
-    title: 'Live Psalms ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â LED Wall & Motion Display Output',
+    title: 'Live Psalms — LED Wall & Motion Display Output',
     bgColor: '#000000',
     externalIndex: 2,
     displayId: opts?.displayId
@@ -920,13 +920,92 @@ function videoCodecArgs(encoder, bitrate, fps) {
         '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1:sliced-threads=0', '-pix_fmt', 'yuv420p', '-g', String(fps * 2), '-r', String(fps)];
   }
 }
+/** Parses structured JSON telemetry lines emitted on stdout by native/live_psalms_engine.c */
+function attachNativeEngineLogging() {
+  const proc = activeStreamProcess;
+  if (!proc) return;
+  if (proc.stdin) proc.stdin.on('error', () => {});
+  proc.on('error', () => {});
+
+  let outBuf = '';
+  if (proc.stdout) {
+    proc.stdout.on('data', (chunk) => {
+      outBuf += chunk.toString();
+      const lines = outBuf.split(/\r?\n/);
+      outBuf = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const evt = JSON.parse(trimmed);
+          if (evt.event === 'state') {
+            sendStreamEvent('stream-state', { state: evt.state, error: evt.error, engine: evt.engine });
+          } else if (evt.event === 'stats') {
+            sendStreamEvent('stream-stats', {
+              frames: evt.frames,
+              fps: evt.fps,
+              bitrateKbps: evt.bitrateKbps,
+              dropped: evt.dropped,
+              speed: evt.speed,
+              timeSeconds: evt.timeSeconds
+            });
+          } else if (evt.event === 'log' && evt.message) {
+            sendStreamEvent('stream-log', `[C Engine] ${evt.message}`);
+          }
+        } catch {
+          sendStreamEvent('stream-log', trimmed);
+        }
+      }
+    });
+  }
+
+  proc.on('close', (code) => {
+    activeStreamProcess = null;
+    const failed = typeof code === 'number' && code !== 0 && !streamStopRequested;
+    if (failed) {
+      sendStreamEvent('stream-state', {
+        state: 'error',
+        error: `Native C broadcast engine exited with code ${code}`
+      });
+    } else {
+      sendStreamEvent('stream-state', { state: 'ended' });
+    }
+    sendStreamEvent('stream-ended');
+  });
+}
+
 ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080', fps = 30, bitrate = 4500, audio = {}, mode, lut = '', encoder = 'libx264', codec = 'vp8', reencode = false, hardwareEncoder = 'auto', useMediaPipe = false, hasVideo = true, hasAudio = true }) => {
   if (activeStreamProcess) {
     return { success: false, error: 'A stream is already running.' };
   }
   try {
+    const nativeBin = getNativeEnginePath();
+    const ffmpegPath = resolveFfmpegBinary();
+
+    // Route Native C mode or Scene/Broadcast Studio media pipe through native/live_psalms_engine.c when available
+    if ((mode === 'native-c' || mode === 'scene' || (!mode && useMediaPipe)) && nativeBin && ffmpegPath) {
+      const delayMs = audio && typeof audio.delayMs === 'number' ? Math.max(0, Math.min(5000, Math.round(audio.delayMs))) : 0;
+      const copyVideo = mode === 'scene' && String(codec).toLowerCase() === 'h264' && (!lut || !String(lut).trim()) && !reencode;
+      const targetEnc = mode === 'native-c' || reencode ? (hardwareEncoder || encoder || 'libx264') : 'libx264';
+      const cArgs = [
+        '--stream-scene',
+        ffmpegPath,
+        rtmpUrl,
+        String(resolution),
+        String(fps),
+        String(bitrate),
+        String(targetEnc),
+        copyVideo ? '1' : '0',
+        String(delayMs),
+        typeof lut === 'string' ? lut.trim() : ''
+      ];
+      activeStreamProcess = spawn(nativeBin, cArgs, { windowsHide: true });
+      streamStopRequested = false;
+      attachNativeEngineLogging();
+      return { success: true, engine: 'live_psalms_engine.c' };
+    }
+
     if (!mode) {
-      const ffmpegPath = resolveFfmpegBinary();
       if (!ffmpegPath) {
         return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
       }
@@ -986,23 +1065,12 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
         }
 
         activeStreamProcess = spawn(ffmpegPath, args, { windowsHide: true });
-        activeStreamProcess.stdin.on('error', () => {});
-        activeStreamProcess.stderr.on('data', (chunk) => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('stream-log', chunk.toString().trim());
-          }
-        });
-        activeStreamProcess.on('close', () => {
-          activeStreamProcess = null;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('stream-ended');
-          }
-        });
+        streamStopRequested = false;
+        attachStreamLogging();
       return { success: true };
     }
 
     if (mode === 'webcodecs') {
-      const ffmpegPath = resolveFfmpegBinary();
       if (!ffmpegPath) {
         return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
       }
@@ -1067,8 +1135,7 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       audioInputArgs.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
 
-    if (mode === 'scene') {
-      const ffmpegPath = resolveFfmpegBinary();
+    if (mode === 'scene' || mode === 'native-c') {
       if (!ffmpegPath) {
         return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
       }
@@ -1231,9 +1298,14 @@ ipcMain.handle('get-default-recording-dir', () => {
   return getDefaultRecordingDir();
 });
 
-ipcMain.handle('detect-encoders', () => {
+ipcMain.handle('detect-encoders', async () => {
+  const ffmpegPath = resolveFfmpegBinary() || 'ffmpeg';
+  const cRes = await runNativeEngine(['--detect-encoders', ffmpegPath], 12000);
+  if (cRes && Array.isArray(cRes.encoders) && cRes.encoders.length > 0) {
+    return cRes.encoders;
+  }
   return new Promise((resolve) => {
-    execFile('ffmpeg', ['-hide_banner', '-encoders'], (err, stdout = '') => {
+    execFile(ffmpegPath, ['-hide_banner', '-encoders'], (err, stdout = '') => {
       if (err) {
         resolve(['libx264']);
         return;
@@ -1261,15 +1333,19 @@ ipcMain.handle('get-system-stats', () => {
   };
 });
 
-ipcMain.handle('test-rtmp-connection', ({ }, { rtmpUrl }) => {
+ipcMain.handle('test-rtmp-connection', async (_event, { rtmpUrl }) => {
+  if (!rtmpUrl) {
+    return { success: false, error: 'Missing server URL or stream key.' };
+  }
+  const cRes = await runNativeEngine(['--test-rtmp', rtmpUrl], 5000);
+  if (cRes && typeof cRes.ok === 'boolean') {
+    return cRes.ok
+      ? { success: true, message: cRes.message || `Connected to ${cRes.host}:${cRes.port}` }
+      : { success: false, error: cRes.error || 'Connection failed' };
+  }
   return new Promise((resolve) => {
-    if (!rtmpUrl) {
-      resolve({ success: false, error: 'Missing server URL or stream key.' });
-      return;
-    }
     try {
       const url = new URL(rtmpUrl.replace(/^rtmps:/, 'https:').replace(/^rtmp:/, 'http:').replace(/^srt:/, 'http:'));
-      const net = require('net');
       const port = Number(url.port) || (rtmpUrl.startsWith('rtmps:') ? 443 : rtmpUrl.startsWith('rtmp:') ? 1935 : 9000);
       const sock = new net.Socket();
       let settled = false;
@@ -1314,30 +1390,46 @@ ipcMain.handle('start-recording', async (_event, { recordingDir, format = 'mp4',
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const ext = ['mp4', 'mkv', 'flv'].includes(format) ? format : 'mp4';
     const filePath = path.join(targetDir, `LivePsalms_${stamp}.${ext}`);
-    const [w, h] = String(resolution).split('x');
-    const vfScale = w && h
-      ? `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,fps=${fps}`
-      : `fps=${fps}`;
+    const nativeBin = getNativeEnginePath();
+    const ffmpegPath = resolveFfmpegBinary() || 'ffmpeg';
 
-    const args = [
-      '-fflags', '+genpts',
-      '-i', 'pipe:0',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-b:v', `${bitrate}k`,
-      '-pix_fmt', 'yuv420p',
-      '-vf', vfScale,
-      '-g', String(fps * 2),
-      '-c:a', 'aac',
-      '-b:a', `${audioBitrate}k`,
-      '-ar', '48000',
-      '-ac', '2',
-      ...(ext === 'mp4' ? ['-movflags', 'frag_keyframe+empty_moov'] : []),
-      '-y',
-      filePath
-    ];
+    if (nativeBin) {
+      activeRecordProcess = spawn(nativeBin, [
+        '--record',
+        ffmpegPath,
+        filePath,
+        String(resolution),
+        String(fps),
+        String(bitrate),
+        String(audioBitrate),
+        ext
+      ], { windowsHide: true });
+    } else {
+      const [w, h] = String(resolution).split('x');
+      const vfScale = w && h
+        ? `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,fps=${fps}`
+        : `fps=${fps}`;
 
-    activeRecordProcess = spawn('ffmpeg', args);
+      const args = [
+        '-fflags', '+genpts',
+        '-i', 'pipe:0',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-b:v', `${bitrate}k`,
+        '-pix_fmt', 'yuv420p',
+        '-vf', vfScale,
+        '-g', String(fps * 2),
+        '-c:a', 'aac',
+        '-b:a', `${audioBitrate}k`,
+        '-ar', '48000',
+        '-ac', '2',
+        ...(ext === 'mp4' ? ['-movflags', 'frag_keyframe+empty_moov'] : []),
+        '-y',
+        filePath
+      ];
+
+      activeRecordProcess = spawn(ffmpegPath, args, { windowsHide: true });
+    }
     activeRecordProcess.stdin.on('error', () => {});
     activeRecordProcess.on('close', () => {
       activeRecordProcess = null;
@@ -1345,7 +1437,7 @@ ipcMain.handle('start-recording', async (_event, { recordingDir, format = 'mp4',
         mainWindow.webContents.send('recording-ended', { filePath });
       }
     });
-    return { success: true, filePath };
+    return { success: true, filePath, engine: nativeBin ? 'live_psalms_engine.c' : 'ffmpeg' };
   } catch (err) {
     activeRecordProcess = null;
     return { success: false, error: err.message };

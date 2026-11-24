@@ -10,7 +10,8 @@ import {
   SectionTag,
   ItemType,
   QuickPinnedItem,
-  ChurchProfile
+  ChurchProfile,
+  ProjectorLayout
 } from './types/presentation';
 import { StorageService } from './services/storage';
 import { BroadcastService } from './services/broadcast';
@@ -30,6 +31,7 @@ import { QuickPresentationModal } from './components/QuickPresentationModal';
 import { SermonModeModal } from './components/SermonModeModal';
 import { SlideDesignerModal } from './components/SlideDesignerModal';
 import { SettingsModal } from './components/SettingsModal';
+import { StreamingModal } from './components/StreamingModal';
 import { BroadcastDock } from './components/BroadcastDock';
 import { MediaPlayerBar } from './components/MediaPlayerBar';
 
@@ -108,9 +110,43 @@ export const App: React.FC = () => {
     };
   });
 
+  const activeThemeIdRef = React.useRef<string>(activeThemeId);
+  activeThemeIdRef.current = activeThemeId;
+
+  const handleProjectorLayoutChange = React.useCallback((layout: ProjectorLayout) => {
+    setThemes(prev =>
+      prev.map(t =>
+        t.id === activeThemeIdRef.current
+          ? {
+              ...t,
+              projectorLayout: layout,
+              lowerThirdStyle: layout === 'lower_third'
+            }
+          : t
+      )
+    );
+    const currentSettings = StorageService.getSettings();
+    if (currentSettings.defaultProjectorLayout !== layout) {
+      StorageService.saveSettings({ ...currentSettings, defaultProjectorLayout: layout });
+    }
+  }, []);
+
   useEffect(() => {
     const s = StorageService.getSettings();
     applyUiTheme(s.uiTheme || 'system');
+    if (s.defaultProjectorLayout) {
+      setThemes(prev =>
+        prev.map(t =>
+          t.id === activeThemeIdRef.current && !t.projectorLayout
+            ? {
+                ...t,
+                projectorLayout: s.defaultProjectorLayout,
+                lowerThirdStyle: s.defaultProjectorLayout === 'lower_third'
+              }
+            : t
+        )
+      );
+    }
     if (s.autoLaunchAudience && !BroadcastService.isAudienceOpen()) {
       BroadcastService.openAudienceWindow();
       setIsAudienceActive(true);
@@ -126,7 +162,7 @@ export const App: React.FC = () => {
         if (detail.defaultProjectorLayout) {
           setThemes(prev =>
             prev.map(t =>
-              t.id === activeThemeId
+              t.id === activeThemeIdRef.current
                 ? {
                     ...t,
                     projectorLayout: detail.defaultProjectorLayout,
@@ -296,6 +332,7 @@ export const App: React.FC = () => {
   const [isSermonModeOpen, setIsSermonModeOpen] = useState(false);
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isStreamingOpen, setIsStreamingOpen] = useState(false);
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
@@ -2420,7 +2457,8 @@ export const App: React.FC = () => {
           onApplyBackground={handleApplyBackgroundWithScope}
           onClearBackground={handleClearAllBackgrounds}
           onOpenInspector={() => setIsInspectorOpen(true)}
-          onOpenStreamSettings={() => setIsBroadcastOpen(true)}
+          onOpenStreamSettings={() => setIsStreamingOpen(true)}
+          onChangeProjectorLayout={handleProjectorLayoutChange}
           countdownSeconds={countdownSeconds}
         />
 
@@ -2560,10 +2598,18 @@ export const App: React.FC = () => {
         countdownEndVideoId={countdownEndVideoId}
         onChangeCountdownEndVideoId={setCountdownEndVideoId}
         mediaList={media}
-        onOpenStreamSettings={() => setIsBroadcastOpen(true)}
+        onOpenStreamSettings={() => setIsStreamingOpen(true)}
       />
 
       {/* Modals & Dialogs */}
+      <StreamingModal
+        isOpen={isStreamingOpen}
+        onClose={() => setIsStreamingOpen(false)}
+        liveSlide={liveSlide}
+        theme={activeTheme}
+        countdownSeconds={countdownSeconds}
+        onOpenBroadcastDock={() => setIsBroadcastOpen(true)}
+      />
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
