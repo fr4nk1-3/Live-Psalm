@@ -205,12 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
             {onOpenStreaming && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onOpenStreaming}>
-                  {isBroadcastOpen ? 'Close broadcast studio' : 'Broadcast studio'}
-                  <span className="ml-auto pl-2 text-2xs text-muted-foreground">
-                    {isBroadcastOpen ? 'On' : 'Stream and record'}
-                  </span>
-                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onOpenStreaming}>Streaming setup…</DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>

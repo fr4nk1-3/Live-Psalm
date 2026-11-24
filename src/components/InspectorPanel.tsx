@@ -1,6 +1,8 @@
 import React from 'react';
 import { Theme, Slide, MediaAsset, PlaylistItem, ProjectorLayout } from '../types/presentation';
 import { StorageService } from '../services/storage';
+import { applyLayoutToScene } from '../scene/presets';
+import { getActiveScene, sceneLibrary, useSceneLibrary } from '../scene/store';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -59,6 +61,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const images = mediaList.filter(m => m.type !== 'video');
   const videos = mediaList.filter(m => m.type === 'video');
   const isScripture = activeSlide?.sectionLabel === 'Scripture';
+  const sceneState = useSceneLibrary();
+  const activeBroadcastScene = getActiveScene(sceneState);
 
   const backgroundValue = activeSlide?.backgroundUrl || '__default__';
 
@@ -89,13 +93,18 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     <button
                       key={layout.id}
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
                         onUpdateTheme({
                           projectorLayout: layout.id,
                           lowerThirdStyle: layout.id === 'lower_third',
                           ...(theme.linkLayoutToBroadcast ? { broadcastLayout: layout.id } : {})
-                        })
-                      }
+                        });
+                        if (theme.linkLayoutToBroadcast && activeBroadcastScene) {
+                          sceneLibrary.updateScene(activeBroadcastScene.id, current =>
+                            applyLayoutToScene(current, layout.id)
+                          );
+                        }
+                      }}
                       aria-pressed={isActive}
                       className={cn(
                         'h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors',
@@ -123,17 +132,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <Switch
                 id="inspector-link-broadcast-layout"
                 checked={Boolean(theme.linkLayoutToBroadcast)}
-                onCheckedChange={checked =>
+                onCheckedChange={checked => {
+                  const currentAudience =
+                    theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
                   onUpdateTheme({
                     linkLayoutToBroadcast: checked,
-                    ...(checked
-                      ? {
-                          broadcastLayout:
-                            theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered')
-                        }
-                      : {})
-                  })
-                }
+                    ...(checked ? { broadcastLayout: currentAudience } : {})
+                  });
+                  if (checked && activeBroadcastScene) {
+                    sceneLibrary.updateScene(activeBroadcastScene.id, current =>
+                      applyLayoutToScene(current, currentAudience)
+                    );
+                  }
+                }}
                 aria-label="Link Audience layout to Broadcast"
               />
             </div>
@@ -141,21 +152,28 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {!theme.linkLayoutToBroadcast && (
               <Field
                 label="Broadcast scene layout"
-                hint="Applies only to Broadcast scenes, leaving the Audience screen untouched."
+                hint={`Applies only to Broadcast scene${activeBroadcastScene ? ` “${activeBroadcastScene.name}”` : ''}, leaving the Audience screen untouched.`}
               >
                 <div className="grid grid-cols-2 gap-1">
                   {PROJECTOR_LAYOUTS.map(layout => {
-                    const current = theme.broadcastLayout || 'centered';
+                    const current = activeBroadcastScene?.layoutOverride && activeBroadcastScene.layoutOverride !== 'theme'
+                      ? activeBroadcastScene.layoutOverride
+                      : (theme.broadcastLayout || 'centered');
                     const isActive = current === layout.id;
                     return (
                       <button
                         key={layout.id}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
                           onUpdateTheme({
                             broadcastLayout: layout.id
-                          })
-                        }
+                          });
+                          if (activeBroadcastScene) {
+                            sceneLibrary.updateScene(activeBroadcastScene.id, current =>
+                              applyLayoutToScene(current, layout.id)
+                            );
+                          }
+                        }}
                         aria-pressed={isActive}
                         className={cn(
                           'h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors',

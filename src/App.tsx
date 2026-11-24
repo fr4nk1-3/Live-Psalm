@@ -32,7 +32,6 @@ import { SermonModeModal } from './components/SermonModeModal';
 import { SlideDesignerModal } from './components/SlideDesignerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { StreamingModal } from './components/StreamingModal';
-import { BroadcastDock } from './components/BroadcastDock';
 import { MediaPlayerBar } from './components/MediaPlayerBar';
 
 import { AudienceOutputWindow } from './components/AudienceOutputWindow';
@@ -2328,8 +2327,7 @@ export const App: React.FC = () => {
           const nextState = BroadcastService.toggleLedWindow();
           setIsLedActive(nextState);
         }}
-        onOpenStreaming={() => setIsBroadcastOpen(v => !v)}
-        isBroadcastOpen={isBroadcastOpen}
+        onOpenStreaming={() => setIsStreamingOpen(true)}
         onExportPackage={handleExportPackage}
         onImportPackage={handleImportPackage}
         isAudienceActive={isAudienceActive}
@@ -2337,27 +2335,6 @@ export const App: React.FC = () => {
         isLedActive={isLedActive}
         isSaved={isSaved}
         onOpenSlideDesigner={() => setIsDesignerOpen(true)}
-      />
-
-      {/* Integrated live broadcast and recording dock */}
-      <BroadcastDock
-        isOpen={isBroadcastOpen}
-        onClose={() => setIsBroadcastOpen(false)}
-        liveSlide={liveSlide}
-        activeTheme={activeTheme}
-        globalVideoBgUrl={globalVideoBgUrl}
-        itemVideoBgUrl={activeItem?.videoBackgroundUrl || null}
-        isFullSlideCountdown={isFullSlideCountdown}
-        isCountdownRunning={isCountdownRunning}
-        countdownTargetScreen={countdownTargetScreen}
-        countdownSeconds={countdownSeconds}
-        countdownTitle={countdownTitle}
-        lowerThird={activeLowerThirdText}
-        churchProfile={churchProfile}
-        mediaList={media}
-        isAudienceActive={isAudienceActive}
-        isStageActive={isStageActive}
-        isLedActive={isLedActive}
       />
 
       {/* Main Studio Body Workspace Layout */}
@@ -2622,7 +2599,6 @@ export const App: React.FC = () => {
         liveSlide={liveSlide}
         theme={activeTheme}
         countdownSeconds={countdownSeconds}
-        onOpenBroadcastDock={() => setIsBroadcastOpen(true)}
       />
       <GlobalSearchModal
         isOpen={isSearchOpen}

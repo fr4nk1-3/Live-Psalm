@@ -3,6 +3,7 @@ import { cn } from '../lib/utils';
 import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -11,21 +12,11 @@ import {
 } from '../components/ui/dropdown-menu';
 import { Input } from '../components/ui/input';
 import { sceneThumbnail } from './render';
-import { defaultScenes } from './presets';
+import { applyLayoutToScene, defaultScenes, layoutScenes, SCENE_LAYOUT_OPTIONS } from './presets';
 import { getActiveScene, sceneLibrary, useSceneLibrary } from './store';
 import { SceneDocument } from './types';
 import { SceneEditor } from './SceneEditor';
 import type { MediaAsset, ProjectorLayout, Slide, Theme } from '../types/presentation';
-
-const AUDIENCE_LAYOUT_OPTIONS: { id: ProjectorLayout; label: string }[] = [
-  { id: 'centered', label: 'Centered' },
-  { id: 'lower_third', label: 'Lower third' },
-  { id: 'top_banner', label: 'Top banner' },
-  { id: 'split_left', label: 'Left split' },
-  { id: 'split_right', label: 'Right split' },
-  { id: 'boxed_card', label: 'Boxed card' },
-  { id: 'minimal', label: 'Minimal' }
-];
 
 interface ScenePanelProps {
   className?: string;
@@ -60,9 +51,6 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
   const isLinked = Boolean(theme.linkLayoutToBroadcast);
   const audienceLayout: ProjectorLayout =
     theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
-  const currentBroadcastLayout: ProjectorLayout = isLinked
-    ? audienceLayout
-    : (theme.broadcastLayout || 'centered');
 
   const beginRename = (scene: SceneDocument) => {
     setRenamingId(scene.id);
@@ -76,91 +64,85 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
 
   const takePreview = () => sceneLibrary.setActiveScene(library.previewSceneId);
 
+  const applyLayout = (scene: SceneDocument | undefined, layout: ProjectorLayout) => {
+    if (!scene) return;
+    sceneLibrary.updateScene(scene.id, current => applyLayoutToScene(current, layout));
+    if (onUpdateTheme) {
+      if (isLinked) {
+        onUpdateTheme({
+          projectorLayout: layout,
+          lowerThirdStyle: layout === 'lower_third',
+          broadcastLayout: layout
+        });
+      } else {
+        onUpdateTheme({ broadcastLayout: layout });
+      }
+    }
+  };
+
   return (
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-2xs text-muted-foreground">
-            {library.scenes.length} scenes · broadcast:{' '}
-            <span className="text-emerald-400">{activeScene?.name || 'none'}</span>
-          </span>
-          {onUpdateTheme && (
-            <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border bg-background/70 px-1.5 py-0.5">
-              <span className="text-[10px] font-medium text-muted-foreground">Broadcast layout:</span>
-              {AUDIENCE_LAYOUT_OPTIONS.map(opt => {
-                const active = currentBroadcastLayout === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      if (isLinked) {
-                        onUpdateTheme({
-                          projectorLayout: opt.id,
-                          lowerThirdStyle: opt.id === 'lower_third',
-                          broadcastLayout: opt.id
-                        });
-                      } else {
-                        onUpdateTheme({ broadcastLayout: opt.id });
-                      }
-                    }}
-                    aria-pressed={active}
-                    className={cn(
-                      'rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                      active
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title={
-                      isLinked
-                        ? `Linked: set both Audience & Broadcast layout to ${opt.label}`
-                        : `Independent: set Broadcast scene layout to ${opt.label} (Audience screen stays ${audienceLayout})`
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-              <span className="mx-0.5 text-border" aria-hidden>
-                |
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateTheme({
-                    linkLayoutToBroadcast: !isLinked,
-                    ...(!isLinked ? { broadcastLayout: audienceLayout } : {})
-                  })
-                }
-                aria-pressed={isLinked}
-                className={cn(
-                  'rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                  isLinked
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                title={
-                  isLinked
-                    ? 'Broadcast layout is linked to Audience screen layout. Click to unlink and control Broadcast independently.'
-                    : 'Broadcast layout is independent of the Audience screen. Click to link to Audience screen layout.'
-                }
-              >
-                {isLinked ? 'Linked to Audience' : 'Link to Audience'}
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-2xs text-muted-foreground">
+          {library.scenes.length} scenes · programme:{' '}
+          <span className="text-emerald-400">{activeScene?.name || 'none'}</span>
+        </span>
         <div className="flex items-center gap-1">
-          <Button size="xs" variant="secondary" onClick={takePreview} title="Send the preview scene to broadcast">
+          <Button size="xs" variant="secondary" onClick={takePreview} title="Send the preview scene to programme">
             Take {previewScene ? `“${previewScene.name}”` : ''}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="xs" variant="ghost">
+                Layout
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuLabel>
+                Apply layout to {activeScene ? `“${activeScene.name}”` : 'scene'}
+              </DropdownMenuLabel>
+              {SCENE_LAYOUT_OPTIONS.map(opt => (
+                <DropdownMenuItem
+                  key={opt.id}
+                  onSelect={() => applyLayout(activeScene || previewScene, opt.id)}
+                >
+                  {opt.label}
+                  {activeScene?.layoutOverride === opt.id && (
+                    <span className="ml-auto text-2xs text-emerald-400">Active</span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+              {onUpdateTheme && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={isLinked}
+                    onSelect={() => {
+                      const nextLinked = !isLinked;
+                      onUpdateTheme({
+                        linkLayoutToBroadcast: nextLinked,
+                        ...(nextLinked ? { broadcastLayout: audienceLayout } : {})
+                      });
+                      if (nextLinked && activeScene) {
+                        sceneLibrary.updateScene(activeScene.id, current =>
+                          applyLayoutToScene(current, audienceLayout)
+                        );
+                      }
+                    }}
+                  >
+                    Link to Audience layout
+                  </DropdownMenuCheckboxItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="xs" variant="ghost">
                 Add scene
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">
               <DropdownMenuLabel>Start from</DropdownMenuLabel>
               {defaultScenes().map(preset => (
                 <DropdownMenuItem
@@ -176,6 +158,24 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                   }
                 >
                   {preset.name}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Slide layouts</DropdownMenuLabel>
+              {layoutScenes().map(({ id, label, scene: preset }) => (
+                <DropdownMenuItem
+                  key={id}
+                  onSelect={() =>
+                    sceneLibrary.addScene({
+                      ...preset,
+                      id: `scene-${Math.random().toString(36).slice(2, 10)}`,
+                      name: `${label} layout`,
+                      createdAt: Date.now(),
+                      updatedAt: Date.now()
+                    })
+                  }
+                >
+                  {label}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
@@ -283,10 +283,23 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         …
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48" onClick={event => event.stopPropagation()}>
+                    <DropdownMenuContent align="end" className="w-52 max-h-80 overflow-y-auto" onClick={event => event.stopPropagation()}>
                       <DropdownMenuItem onSelect={() => sceneLibrary.setActiveScene(scene.id)}>Take to programme</DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => sceneLibrary.setPreviewScene(scene.id)}>Preview</DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => setEditingId(scene.id)}>Edit in editor</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Apply slide layout</DropdownMenuLabel>
+                      {SCENE_LAYOUT_OPTIONS.map(opt => (
+                        <DropdownMenuItem
+                          key={opt.id}
+                          onSelect={() => applyLayout(scene, opt.id)}
+                        >
+                          {opt.label}
+                          {scene.layoutOverride === opt.id && (
+                            <span className="ml-auto text-2xs text-emerald-400">Active</span>
+                          )}
+                        </DropdownMenuItem>
+                      ))}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => beginRename(scene)}>Rename</DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => sceneLibrary.duplicateScene(scene.id)}>Duplicate</DropdownMenuItem>

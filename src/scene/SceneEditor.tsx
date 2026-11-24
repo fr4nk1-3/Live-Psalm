@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { SceneCanvas } from './SceneCanvas';
+import { applyLayoutToScene } from './presets';
 import { sceneLibrary, useSceneLibrary } from './store';
 import { listAudioDevices, listDesktopSources, listVideoDevices } from './sources';
 import { SYSTEM_FONTS, useFontLibrary } from '../services/fontLibrary';
@@ -581,39 +582,27 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ scene, onClose, slide,
               {!selected && (
                 <div className="space-y-3">
                   <p className="text-2xs text-muted-foreground">
-                    Select an element on the canvas, or configure how this scene adapts to the Audience Layout.
+                    Select an element on the canvas, or apply a slide layout preset to this scene.
                   </p>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-2xs">Follow audience layout</Label>
-                    <Switch
-                      checked={draft.followAudienceLayout !== false}
-                      onCheckedChange={checked =>
-                        apply({ ...draft, followAudienceLayout: checked }, false)
-                      }
-                      aria-label="Follow audience layout"
-                    />
-                  </div>
                   <Field
-                    label="Scene layout"
-                    hint="Use the active Audience Layout or pin this scene to a specific slide layout."
+                    label="Apply slide layout"
+                    hint="Arranges the live slide title, content and reference elements in this scene."
                   >
                     <Select
                       value={draft.layoutOverride || 'theme'}
-                      onValueChange={value =>
-                        apply(
-                          {
-                            ...draft,
-                            layoutOverride: value as SceneDocument['layoutOverride']
-                          },
-                          false
-                        )
-                      }
+                      onValueChange={value => {
+                        if (value === 'theme') {
+                          apply({ ...draft, layoutOverride: 'theme' }, false);
+                        } else {
+                          apply(applyLayoutToScene(draft, value as Exclude<SceneDocument['layoutOverride'], 'theme' | undefined>), false);
+                        }
+                      }}
                     >
                       <SelectTrigger className="h-7 text-2xs" aria-label="Scene audience layout">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="theme">Follow audience layout</SelectItem>
+                        <SelectItem value="theme">Custom scene elements</SelectItem>
                         <SelectItem value="centered">Centered</SelectItem>
                         <SelectItem value="lower_third">Lower third</SelectItem>
                         <SelectItem value="top_banner">Top banner</SelectItem>

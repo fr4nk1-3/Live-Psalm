@@ -711,38 +711,7 @@ export function drawScene(
   drawBackground(ctx, scene, scene.canvas.width, scene.canvas.height);
 
   const ordered = [...scene.elements].filter(element => element.visible).sort((a, b) => a.zIndex - b.zIndex);
-  const activeAudienceLayout = resolveAudienceLayout(context.theme, scene.layoutOverride);
-  const hasPresentationEl = ordered.some(element => element.type === 'presentation');
-  const hasSlideContentText = ordered.some(
-    element => element.type === 'text' && element.binding === 'slide.content'
-  );
-  const hasLiveSourceLayer = ordered.some(
-    element =>
-      element.type === 'camera' ||
-      element.type === 'videoDevice' ||
-      element.type === 'display' ||
-      element.type === 'window' ||
-      element.type === 'media'
-  );
-  const hasCustomShapeStrap = ordered.some(element => element.type === 'shape');
-  const useAudienceLayoutForBoundText =
-    !hasPresentationEl &&
-    hasSlideContentText &&
-    scene.followAudienceLayout !== false &&
-    Boolean(context.slide) &&
-    (activeAudienceLayout !== 'centered' || !hasCustomShapeStrap);
-
   for (const element of ordered) {
-    if (
-      useAudienceLayoutForBoundText &&
-      element.type === 'text' &&
-      (element.binding === 'slide.content' ||
-        element.binding === 'slide.reference' ||
-        element.binding === 'slide.title' ||
-        element.binding === 'slide.subtitle')
-    ) {
-      continue;
-    }
     ctx.save();
     const opacity = element.frame.opacity ?? 1;
     ctx.globalAlpha = opacity;
@@ -768,16 +737,6 @@ export function drawScene(
     else if (element.type === 'presentation') drawPresentationElement(ctx, element, context, scene.layoutOverride);
     else if (element.type === 'browser') drawBrowserElement(ctx, element, context);
     ctx.restore();
-  }
-
-  if (useAudienceLayoutForBoundText) {
-    drawAudienceLayoutPresentation(
-      ctx,
-      { x: 0, y: 0, width: scene.canvas.width, height: scene.canvas.height },
-      context,
-      activeAudienceLayout,
-      !hasLiveSourceLayer
-    );
   }
 
   ctx.restore();

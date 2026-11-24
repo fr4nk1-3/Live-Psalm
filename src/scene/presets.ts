@@ -1,3 +1,4 @@
+import type { ProjectorLayout } from '../types/presentation';
 import {
   createCameraElement,
   createScene,
@@ -5,7 +6,8 @@ import {
   createTextElement,
   SCENE_HEIGHT,
   SCENE_WIDTH,
-  SceneDocument
+  SceneDocument,
+  SceneElement
 } from './types';
 
 const fullText = (binding: 'slide.content' | 'slide.title', size = 84, colour = '#ffffff') =>
@@ -221,4 +223,356 @@ export function defaultScenes(): SceneDocument[] {
   );
 
   return scenes;
+}
+
+export const SCENE_LAYOUT_OPTIONS: { id: ProjectorLayout; label: string; description: string }[] = [
+  { id: 'centered', label: 'Centered', description: 'Centered slide text with section badge and reference.' },
+  { id: 'lower_third', label: 'Lower third', description: 'Bottom broadcast banner with accent bar and live text.' },
+  { id: 'top_banner', label: 'Top banner', description: 'Top broadcast banner with accent bar and live text.' },
+  { id: 'split_left', label: 'Left split', description: 'Left-hand presentation card leaving the right side open.' },
+  { id: 'split_right', label: 'Right split', description: 'Right-hand presentation card leaving the left side open.' },
+  { id: 'boxed_card', label: 'Boxed card', description: 'Centered cinema boxed card with section badge and reference.' },
+  { id: 'minimal', label: 'Minimal', description: 'Distraction-free centered lyrics or verse text only.' }
+];
+
+const LAYOUT_SHAPE_NAMES = new Set([
+  'Lower third backdrop',
+  'Lower third accent bar',
+  'Top banner backdrop',
+  'Top banner accent bar',
+  'Left split card',
+  'Right split card',
+  'Boxed card'
+]);
+
+/** Builds Chris-style SceneElements (shapes + bound text elements) for any of the 7 slide layouts. */
+export function buildLayoutElements(layout: ProjectorLayout): SceneElement[] {
+  switch (layout) {
+    case 'lower_third':
+      return [
+        createShapeElement({
+          name: 'Lower third backdrop',
+          fill: 'rgba(2, 6, 23, 0.90)',
+          radius: 14,
+          frame: { x: 80, y: 710, width: 1760, height: 310 },
+          zIndex: 10
+        }),
+        createShapeElement({
+          name: 'Lower third accent bar',
+          fill: '#10b981',
+          radius: 4,
+          frame: { x: 80, y: 710, width: 14, height: 310 },
+          zIndex: 11
+        }),
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 24,
+          fontWeight: '700',
+          color: '#34d399',
+          align: 'left',
+          uppercase: true,
+          frame: { x: 124, y: 724, width: 1660, height: 44 },
+          zIndex: 12
+        }),
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 54,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'left',
+          frame: { x: 124, y: 772, width: 1660, height: 180 },
+          zIndex: 13
+        }),
+        createTextElement({
+          name: 'Reference',
+          binding: 'slide.reference',
+          content: '',
+          fontSize: 24,
+          color: 'rgba(148, 163, 184, 0.92)',
+          align: 'left',
+          frame: { x: 124, y: 958, width: 1660, height: 44 },
+          zIndex: 14
+        })
+      ];
+
+    case 'top_banner':
+      return [
+        createShapeElement({
+          name: 'Top banner backdrop',
+          fill: 'rgba(2, 6, 23, 0.90)',
+          radius: 14,
+          frame: { x: 80, y: 60, width: 1760, height: 310 },
+          zIndex: 10
+        }),
+        createShapeElement({
+          name: 'Top banner accent bar',
+          fill: '#10b981',
+          radius: 4,
+          frame: { x: 80, y: 60, width: 14, height: 310 },
+          zIndex: 11
+        }),
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 24,
+          fontWeight: '700',
+          color: '#34d399',
+          align: 'left',
+          uppercase: true,
+          frame: { x: 124, y: 74, width: 1660, height: 44 },
+          zIndex: 12
+        }),
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 54,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'left',
+          frame: { x: 124, y: 122, width: 1660, height: 180 },
+          zIndex: 13
+        }),
+        createTextElement({
+          name: 'Reference',
+          binding: 'slide.reference',
+          content: '',
+          fontSize: 24,
+          color: 'rgba(148, 163, 184, 0.92)',
+          align: 'left',
+          frame: { x: 124, y: 308, width: 1660, height: 44 },
+          zIndex: 14
+        })
+      ];
+
+    case 'split_left':
+      return [
+        createShapeElement({
+          name: 'Left split card',
+          fill: 'rgba(2, 6, 23, 0.80)',
+          radius: 28,
+          frame: { x: 80, y: 96, width: 1020, height: 888 },
+          zIndex: 10
+        }),
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 26,
+          fontWeight: '700',
+          color: 'rgba(255,255,255,0.68)',
+          align: 'left',
+          uppercase: true,
+          frame: { x: 136, y: 140, width: 908, height: 52 },
+          zIndex: 11
+        }),
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 72,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'left',
+          frame: { x: 136, y: 210, width: 908, height: 660 },
+          zIndex: 12
+        }),
+        createTextElement({
+          name: 'Reference',
+          binding: 'slide.reference',
+          content: '',
+          fontSize: 28,
+          color: 'rgba(255,255,255,0.72)',
+          align: 'left',
+          frame: { x: 136, y: 890, width: 908, height: 60 },
+          zIndex: 13
+        })
+      ];
+
+    case 'split_right':
+      return [
+        createShapeElement({
+          name: 'Right split card',
+          fill: 'rgba(2, 6, 23, 0.80)',
+          radius: 28,
+          frame: { x: 820, y: 96, width: 1020, height: 888 },
+          zIndex: 10
+        }),
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 26,
+          fontWeight: '700',
+          color: 'rgba(255,255,255,0.68)',
+          align: 'right',
+          uppercase: true,
+          frame: { x: 876, y: 140, width: 908, height: 52 },
+          zIndex: 11
+        }),
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 72,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'right',
+          frame: { x: 876, y: 210, width: 908, height: 660 },
+          zIndex: 12
+        }),
+        createTextElement({
+          name: 'Reference',
+          binding: 'slide.reference',
+          content: '',
+          fontSize: 28,
+          color: 'rgba(255,255,255,0.72)',
+          align: 'right',
+          frame: { x: 876, y: 890, width: 908, height: 60 },
+          zIndex: 13
+        })
+      ];
+
+    case 'boxed_card':
+      return [
+        createShapeElement({
+          name: 'Boxed card',
+          fill: 'rgba(2, 6, 23, 0.82)',
+          radius: 32,
+          frame: { x: 160, y: 100, width: 1600, height: 880 },
+          zIndex: 10
+        }),
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 26,
+          fontWeight: '700',
+          color: 'rgba(255,255,255,0.68)',
+          align: 'center',
+          uppercase: true,
+          frame: { x: 240, y: 148, width: 1440, height: 52 },
+          zIndex: 11
+        }),
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 80,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'center',
+          frame: { x: 240, y: 220, width: 1440, height: 640 },
+          zIndex: 12
+        }),
+        createTextElement({
+          name: 'Reference',
+          binding: 'slide.reference',
+          content: '',
+          fontSize: 30,
+          color: 'rgba(255,255,255,0.72)',
+          align: 'center',
+          frame: { x: 240, y: 884, width: 1440, height: 60 },
+          zIndex: 13
+        })
+      ];
+
+    case 'minimal':
+      return [
+        createTextElement({
+          name: 'Presentation text',
+          binding: 'slide.content',
+          content: 'Slide text',
+          fontSize: 96,
+          fontWeight: '700',
+          color: '#ffffff',
+          align: 'center',
+          frame: { x: 180, y: 240, width: 1560, height: 600 },
+          zIndex: 10
+        })
+      ];
+
+    case 'centered':
+    default:
+      return [
+        createTextElement({
+          name: 'Slide title',
+          binding: 'slide.title',
+          content: '',
+          fontSize: 28,
+          fontWeight: '700',
+          color: 'rgba(255,255,255,0.68)',
+          align: 'center',
+          uppercase: true,
+          frame: { x: 460, y: 170, width: 1000, height: 56 },
+          zIndex: 10
+        }),
+        fullText('slide.content', 88),
+        reference()
+      ];
+  }
+}
+
+/**
+ * Applies one of the 7 slide layouts to an existing SceneDocument, preserving
+ * any cameras, media, captures, images, or non-slide static elements.
+ */
+export function applyLayoutToScene(scene: SceneDocument, layout: ProjectorLayout): SceneDocument {
+  const hasPresentationEl = scene.elements.some(el => el.type === 'presentation');
+  if (hasPresentationEl) {
+    return {
+      ...scene,
+      layoutOverride: layout,
+      updatedAt: Date.now(),
+      elements: scene.elements.map(el =>
+        el.type === 'presentation' ? { ...el, layout } : el
+      )
+    };
+  }
+
+  const kept = scene.elements.filter(el => {
+    if (
+      el.type === 'text' &&
+      (el.binding === 'slide.content' ||
+        el.binding === 'slide.title' ||
+        el.binding === 'slide.reference' ||
+        el.binding === 'slide.subtitle')
+    ) {
+      return false;
+    }
+    if (el.type === 'shape' && LAYOUT_SHAPE_NAMES.has(el.name)) {
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    ...scene,
+    layoutOverride: layout,
+    updatedAt: Date.now(),
+    elements: [...kept, ...buildLayoutElements(layout)]
+  };
+}
+
+/** Standalone scene presets for each of the 7 slide layouts. */
+export function layoutScenes(): { id: ProjectorLayout; label: string; scene: SceneDocument }[] {
+  return SCENE_LAYOUT_OPTIONS.map(opt => ({
+    id: opt.id,
+    label: opt.label,
+    scene: createScene(`${opt.label} layout`, {
+      description: opt.description,
+      layoutOverride: opt.id,
+      canvas: {
+        width: SCENE_WIDTH,
+        height: SCENE_HEIGHT,
+        background: { type: 'gradient', from: '#111827', to: '#020617', angle: 160 }
+      },
+      elements: buildLayoutElements(opt.id)
+    })
+  }));
 }
