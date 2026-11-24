@@ -1161,22 +1161,46 @@ const ImageProperties: React.FC<{
 const CameraProperties: React.FC<{ element: CameraElement; onChange: (patch: Partial<CameraElement>) => void }> = ({
   element,
   onChange
-}) => (
-  <>
-    <Field label="Fit">
-      <Select value={element.fit} onValueChange={value => onChange({ fit: value as CameraElement['fit'] })}>
-        <SelectTrigger className="h-7 text-2xs" aria-label="Camera fit">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="cover">Cover</SelectItem>
-          <SelectItem value="contain">Contain</SelectItem>
-        </SelectContent>
-      </Select>
-    </Field>
-    <div className="flex items-center justify-between">
-      <Label className="text-2xs">Mirror</Label>
-      <Switch checked={element.mirror} onCheckedChange={mirror => onChange({ mirror })} aria-label="Mirror camera" />
-    </div>
-  </>
-);
+}) => {
+  const [devices, setDevices] = React.useState<MediaDeviceInfo[]>([]);
+  React.useEffect(() => {
+    void listVideoDevices().then(setDevices);
+  }, []);
+  return (
+    <>
+      <Field label="Device">
+        <Select
+          value={element.deviceId || 'default'}
+          onValueChange={value => onChange({ deviceId: value === 'default' ? '' : value })}
+        >
+          <SelectTrigger className="h-7 text-2xs" aria-label="Camera device">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">System default</SelectItem>
+            {devices.map(device => (
+              <SelectItem key={device.deviceId} value={device.deviceId}>
+                {device.label || 'Camera'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Fit">
+        <Select value={element.fit} onValueChange={value => onChange({ fit: value as CameraElement['fit'] })}>
+          <SelectTrigger className="h-7 text-2xs" aria-label="Camera fit">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cover">Cover</SelectItem>
+            <SelectItem value="contain">Contain</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <div className="flex items-center justify-between">
+        <Label className="text-2xs">Mirror</Label>
+        <Switch checked={element.mirror} onCheckedChange={mirror => onChange({ mirror })} aria-label="Mirror camera" />
+      </div>
+    </>
+  );
+};

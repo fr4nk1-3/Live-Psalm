@@ -268,7 +268,14 @@ function drawCameraElement(
   element: Extract<SceneElement, { type: 'camera' }>,
   context: SceneRenderContext
 ) {
-  drawVideoSource(ctx, element, context.videos?.[element.deviceId || 'default'], 'Camera');
+  const devKey = element.deviceId || 'default';
+  const video =
+    context.videos?.[devKey] ||
+    context.videos?.[`camera:${devKey}`] ||
+    context.videos?.[element.id] ||
+    context.videos?.['default'] ||
+    context.videos?.['camera:default'];
+  drawVideoSource(ctx, element, video, 'Camera');
 }
 
 function drawCaptureElement(ctx: CanvasRenderingContext2D, element: CaptureElement, context: SceneRenderContext) {
@@ -277,7 +284,13 @@ function drawCaptureElement(ctx: CanvasRenderingContext2D, element: CaptureEleme
 }
 
 function drawVideoDeviceElement(ctx: CanvasRenderingContext2D, element: VideoDeviceElement, context: SceneRenderContext) {
-  drawVideoSource(ctx, element, context.media?.[element.id], 'Video capture device');
+  const devKey = element.deviceId || 'default';
+  const video =
+    context.media?.[element.id] ||
+    context.videos?.[devKey] ||
+    context.videos?.[`video:${devKey}`] ||
+    context.videos?.['default'];
+  drawVideoSource(ctx, element, video, 'Video capture device');
 }
 
 function drawMediaElement(ctx: CanvasRenderingContext2D, element: MediaElement, context: SceneRenderContext) {

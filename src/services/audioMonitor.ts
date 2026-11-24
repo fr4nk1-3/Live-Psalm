@@ -69,6 +69,7 @@ class AudioMonitor {
   private elementSources = new WeakMap<HTMLMediaElement, MediaElementAudioSourceNode>();
   private programElement: HTMLMediaElement | null = null;
   private micStream: MediaStream | null = null;
+  private sceneStream: MediaStream | null = null;
 
   private retainCount = 0;
   private frame = 0;
@@ -122,6 +123,13 @@ class AudioMonitor {
     if (this.programElement === element) return;
     this.programElement = element;
     if (this.levelListeners.size > 0 && this.settings.source === 'program') void this.rebuild();
+  }
+
+  /** Allows the active Broadcast Scene's audio input stream to feed the meter directly. */
+  setSceneStream(stream: MediaStream | null) {
+    if (this.sceneStream === stream) return;
+    this.sceneStream = stream;
+    if (this.retainCount > 0) void this.rebuild();
   }
 
   // ------------------------------------------------------------------ levels
@@ -181,6 +189,9 @@ class AudioMonitor {
 
   private sample() {
     if (this.retainCount === 0) return;
+    if (this.context && this.context.state === 'suspended') {
+      void this.context.resume().catch(() => {});
+    }
     if (!this.analyserLeft || !this.analyserRight) {
       this.peak *= 0.94;
       this.broadcast({
@@ -205,8 +216,12 @@ class AudioMonitor {
       return Math.sqrt(sum / data.length);
     };
 
-    const left = rmsToNormalised(rms(leftData));
-    const right = rmsToNormalised(rms(rightData));
+    const rawLeft = rms(leftData);
+    const rawRight = rms(rightData);
+    const left = rmsToNormalised(rawLeft);
+    // Most microphones are mono (1 channel), so channel 1 of a 2-channel splitter is 0;
+    // mirror channel 0 when channel 1 is empty so both stereo meter bars animate.
+    const right = rawRight <= 0.0001 && rawLeft > 0.0001 ? left : rmsToNormalised(rawRight);
     const instant = Math.max(left, right);
     this.peak = Math.max(instant, this.peak * 0.92);
 
@@ -270,11 +285,22 @@ class AudioMonitor {
     context.resume().catch(() => {});
 
     try {
-      if (this.settings.source === 'device') {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: this.settings.deviceId ? { deviceId: { exact: this.settings.deviceId } } : true,
-          video: false
-        });
+      if (this.sceneStream && this.sceneStream.getAudioTracks().some(t => t.readyState === 'live')) {
+        this.sourceNode = context.createMediaStreamSource(this.sceneStream);
+      } else if (this.settings.source === 'device') {
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: this.settings.deviceId ? { deviceId: { exact: this.settings.deviceId } } : true,
+            video: false
+          });
+        } catch (err) {
+          if (this.settings.deviceId) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          } else {
+            throw err;
+          }
+        }
         if (token !== this.rebuildToken) {
           stream.getTracks().forEach(track => track.stop());
           return;

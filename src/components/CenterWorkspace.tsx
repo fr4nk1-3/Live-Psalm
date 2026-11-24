@@ -479,12 +479,12 @@ const BroadcastMonitor: React.FC<{
     setSceneCanvas(canvas);
   }, []);
 
-  // Keep the meter running while a stream is actually live.
+  // Keep the meter running on the Broadcast monitor whenever audio input is enabled.
   React.useEffect(() => {
-    if (!status.live) return;
+    if (audio.source === 'silent' && !status.live) return;
     audioMonitor.retain();
     return () => audioMonitor.release();
-  }, [status.live]);
+  }, [audio.source, status.live]);
 
   const sourceLabel =
     audio.source === 'program' ? 'Programme audio' : audio.source === 'silent' ? 'Silent' : 'Microphone';

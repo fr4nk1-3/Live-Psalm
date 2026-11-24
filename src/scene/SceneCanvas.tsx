@@ -8,6 +8,7 @@ import { acquireStream, releaseStream } from './sourceStreams';
 import { useSceneLibrary } from './store';
 import { setSceneAudioTracks } from './sceneAudio';
 import { loadAssetUrls, resolveSource } from './assetUrls';
+import { audioMonitor } from '../services/audioMonitor';
 
 interface SceneCanvasProps {
   scene: SceneDocument;
@@ -135,15 +136,43 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   React.useEffect(() => {
     if (!enableCamera) return;
     let cancelled = false;
+    const acquiredKeys: string[] = [];
+    const mountedVideos: HTMLVideoElement[] = [];
 
     const videoFor = (stream: MediaStream) => {
       const video = document.createElement('video');
       video.playsInline = true;
       video.muted = true;
       video.autoplay = true;
+      video.style.cssText =
+        'position:absolute;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;';
       video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        void video.play().catch(() => {});
+      };
+      if (hostRef.current) {
+        hostRef.current.appendChild(video);
+        mountedVideos.push(video);
+      }
       void video.play().catch(() => {});
       return video;
+    };
+
+    const openCameraOrVideoDevice = async (deviceId?: string) => {
+      if (deviceId) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId } },
+            audio: false
+          });
+        } catch {
+          /* fall back to system default camera if stored deviceId is no longer valid */
+        }
+      }
+      return navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
+      });
     };
 
     const start = async () => {
@@ -151,35 +180,42 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
         if (cancelled) return;
         try {
           if (element.type === 'camera') {
-            const key = `camera:${element.deviceId || 'default'}`;
-            if (streamsRef.current[key]) continue;
-            const stream = await acquireStream(key, () =>
-              navigator.mediaDevices.getUserMedia({
-                video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
-                audio: false
-              })
-            );
-            if (cancelled) {
-              releaseStream(key);
-              continue;
+            const devKey = element.deviceId || 'default';
+            const key = `camera:${devKey}`;
+            if (!streamsRef.current[key]) {
+              const stream = await acquireStream(key, () => openCameraOrVideoDevice(element.deviceId));
+              if (cancelled) {
+                releaseStream(key);
+                continue;
+              }
+              acquiredKeys.push(key);
+              streamsRef.current[key] = stream;
+              const vid = videoFor(stream);
+              videosRef.current[key] = vid;
+              videosRef.current[devKey] = vid;
+              videosRef.current[element.id] = vid;
+            } else {
+              const vid = videosRef.current[key];
+              if (vid) {
+                videosRef.current[devKey] = vid;
+                videosRef.current[element.id] = vid;
+              }
             }
-            streamsRef.current[key] = stream;
-            videosRef.current[key] = videoFor(stream);
           } else if (element.type === 'videoDevice') {
-            const key = `video:${element.deviceId || 'default'}`;
+            const devKey = element.deviceId || 'default';
+            const key = `video:${devKey}`;
             if (streamsRef.current[element.id]) continue;
-            const stream = await acquireStream(key, () =>
-              navigator.mediaDevices.getUserMedia({
-                video: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
-                audio: false
-              })
-            );
+            const stream = await acquireStream(key, () => openCameraOrVideoDevice(element.deviceId));
             if (cancelled) {
               releaseStream(key);
               continue;
             }
+            acquiredKeys.push(key);
             streamsRef.current[element.id] = stream;
-            mediaRef.current[element.id] = videoFor(stream);
+            const vid = videoFor(stream);
+            mediaRef.current[element.id] = vid;
+            videosRef.current[devKey] = vid;
+            videosRef.current[key] = vid;
           } else if (element.type === 'display' || element.type === 'window') {
             if (!element.sourceId || streamsRef.current[element.id]) continue;
             const key = `desktop:${element.sourceId}`;
@@ -188,6 +224,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
               releaseStream(key);
               continue;
             }
+            acquiredKeys.push(key);
             streamsRef.current[element.id] = stream;
             mediaRef.current[element.id] = videoFor(stream);
           } else if (element.type === 'media') {
@@ -213,7 +250,12 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
 
     return () => {
       cancelled = true;
-      Object.keys(streamsRef.current).forEach(key => releaseStream(key));
+      acquiredKeys.forEach(key => releaseStream(key));
+      mountedVideos.forEach(video => {
+        video.pause();
+        video.srcObject = null;
+        video.remove();
+      });
       Object.values(mediaRef.current).forEach(video => {
         video.pause();
         video.srcObject = null;
@@ -227,7 +269,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   }, [sourceKey, enableCamera, assets]);
 
 
-  // Scene audio inputs contribute tracks to the stream.
+  // Scene audio inputs contribute tracks to the stream and feed the Broadcast audio meter.
   React.useEffect(() => {
     if (!enableAudio) return;
     let cancelled = false;
@@ -237,10 +279,15 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       for (const element of audioElements) {
         if (element.type !== 'audioInput') continue;
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
-            video: false
-          });
+          let stream: MediaStream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: element.deviceId ? { deviceId: { exact: element.deviceId } } : true,
+              video: false
+            });
+          } catch {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          }
           if (cancelled) {
             stream.getTracks().forEach(track => track.stop());
             continue;
@@ -251,7 +298,10 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
           setSourceError(error instanceof Error ? error.message : 'Audio input unavailable');
         }
       }
-      if (!cancelled) setSceneAudioTracks(tracks);
+      if (!cancelled) {
+        setSceneAudioTracks(tracks);
+        audioMonitor.setSceneStream(tracks.length > 0 ? new MediaStream(tracks) : null);
+      }
     };
 
     void start();
@@ -261,6 +311,7 @@ export const SceneCanvas: React.FC<SceneCanvasProps> = ({
       Object.values(audioStreamsRef.current).forEach(stream => stream.getTracks().forEach(track => track.stop()));
       audioStreamsRef.current = {};
       setSceneAudioTracks([]);
+      audioMonitor.setSceneStream(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioKey, enableAudio]);
