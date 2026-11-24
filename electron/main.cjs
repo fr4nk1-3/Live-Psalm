@@ -1255,7 +1255,6 @@ ipcMain.handle('start-stream', async (_event, { rtmpUrl, resolution = '1920x1080
       '-f', 'flv',
       rtmpUrl
     ];
-    const ffmpegPath = resolveFfmpegBinary();
     if (!ffmpegPath) {
       return { success: false, error: 'ffmpeg was not found. Use Locate ffmpeg in stream setup.' };
     }

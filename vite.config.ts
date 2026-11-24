@@ -340,7 +340,7 @@ export default defineConfig({
             return;
           }
 
-          if (url === '/api/system/native-benchmark' && req.method === 'POST') {
+          if (url === '/api/system/native-benchmark' && (req.method === 'POST' || req.method === 'GET')) {
             const bin = path.resolve(__dirname, 'native', process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine');
             if (!fs.existsSync(bin)) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
