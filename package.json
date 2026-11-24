@@ -27,6 +27,9 @@
       "native/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "native/**/*"
+    ],
     "win": {
       "icon": "public/icon.ico",
       "target": [

@@ -42,6 +42,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: make -C native
       - run: npx tsc && npx vite build && npx electron-builder --linux deb --publish never
       - name: Upload Ubuntu .deb Asset to v1.1.0 Release
         uses: softprops/action-gh-release@v2
