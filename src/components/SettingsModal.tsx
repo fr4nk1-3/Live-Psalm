@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { StorageService, CustomBibleTranslation } from '../services/storage';
 import { BroadcastService } from '../services/broadcast';
-import { AppSettings, ChurchProfile } from '../types/presentation';
+import { AppSettings, ChurchProfile, ProjectorLayout } from '../types/presentation';
 import { ImporterService } from '../services/importer';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -677,6 +677,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </div>
+                </FieldGroup>
+
+                <Separator />
+
+                <FieldGroup
+                  title="Audience display"
+                  description="Match the layout and distance to your sanctuary projector."
+                >
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ audienceViewMode: 'near' })}
+                      aria-pressed={(settings.audienceViewMode || 'near') === 'near'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        (settings.audienceViewMode || 'near') === 'near'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Near audience</span>
+                        {(settings.audienceViewMode || 'near') === 'near' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        Balanced sanctuary framing with theme accents and layout cards.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ audienceViewMode: 'far' })}
+                      aria-pressed={settings.audienceViewMode === 'far'}
+                      className={cn(
+                        'rounded-md border border-border px-3 py-2.5 text-left transition-colors',
+                        settings.audienceViewMode === 'far'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-background/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">Far audience</span>
+                        {settings.audienceViewMode === 'far' && (
+                          <span className="text-2xs text-muted-foreground">Selected</span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-2xs leading-relaxed">
+                        High-contrast enlarged typography for large halls and bright rooms.
+                      </span>
+                    </button>
+                  </div>
+
+                  <Field
+                    label="Audience projector layout"
+                    hint="How slides and scripture are arranged on the audience screen."
+                    className="pt-2"
+                  >
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      {[
+                        { id: 'centered', label: 'Centered' },
+                        { id: 'boxed_card', label: 'Boxed card' },
+                        { id: 'lower_third', label: 'Lower third' },
+                        { id: 'top_banner', label: 'Top banner' },
+                        { id: 'split_left', label: 'Split left' },
+                        { id: 'split_right', label: 'Split right' },
+                        { id: 'minimal', label: 'Minimal' }
+                      ].map(layout => {
+                        const active = (settings.defaultProjectorLayout || 'centered') === layout.id;
+                        return (
+                          <button
+                            key={layout.id}
+                            type="button"
+                            onClick={() =>
+                              updateSettings({ defaultProjectorLayout: layout.id as ProjectorLayout })
+                            }
+                            aria-pressed={active}
+                            className={cn(
+                              'h-7 truncate rounded-sm border px-2 text-left text-2xs transition-colors',
+                              active
+                                ? 'border-border bg-accent text-accent-foreground'
+                                : 'border-transparent bg-background/40 text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                            )}
+                          >
+                            {layout.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
                 </FieldGroup>
 
                 <Separator />

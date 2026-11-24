@@ -322,6 +322,42 @@ export default defineConfig({
             return;
           }
 
+          if (url === '/api/system/native-engine' && req.method === 'GET') {
+            const bin = path.resolve(__dirname, 'native', process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine');
+            if (!fs.existsSync(bin)) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ available: false, engine: 'ffmpeg-fallback' }));
+              return;
+            }
+            execFile(bin, ['--status'], { timeout: 2500 }, (err, stdout = '') => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              if (!err && stdout.trim()) {
+                res.end(stdout.trim());
+              } else {
+                res.end(JSON.stringify({ available: false, engine: 'ffmpeg-fallback' }));
+              }
+            });
+            return;
+          }
+
+          if (url === '/api/system/native-benchmark' && req.method === 'POST') {
+            const bin = path.resolve(__dirname, 'native', process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine');
+            if (!fs.existsSync(bin)) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Native C engine binary not built (run: npm run build:native)' }));
+              return;
+            }
+            execFile(bin, ['--benchmark', '1920', '1080', '60'], { timeout: 10000 }, (err, stdout = '') => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              if (!err && stdout.trim()) {
+                res.end(stdout.trim());
+              } else {
+                res.end(JSON.stringify({ ok: false, error: err?.message || 'Benchmark failed' }));
+              }
+            });
+            return;
+          }
+
           if (url === '/api/events' && req.method === 'GET') {
             res.writeHead(200, {
               'Content-Type': 'text/event-stream',

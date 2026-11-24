@@ -751,9 +751,60 @@ ipcMain.handle('stop-recording', async () => {
   return { success: true };
 });
 
+function getNativeEnginePath() {
+  const binName = process.platform === 'win32' ? 'live_psalms_engine.exe' : 'live_psalms_engine';
+  const candidates = [
+    path.join(__dirname, '..', 'native', binName),
+    path.join(process.resourcesPath || '', 'app.asar.unpacked', 'native', binName),
+    path.join(process.resourcesPath || '', 'native', binName)
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function runNativeEngine(args = [], timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const bin = getNativeEnginePath();
+    if (!bin) return resolve(null);
+    execFile(bin, args, { timeout: timeoutMs }, (err, stdout = '') => {
+      if (err || !stdout.trim()) return resolve(null);
+      try {
+        resolve(JSON.parse(stdout.trim()));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+ipcMain.handle('get-native-engine-status', async () => {
+  const res = await runNativeEngine(['--status'], 2500);
+  if (res && res.available) return res;
+  return { available: false, engine: 'ffmpeg-fallback' };
+});
+
+ipcMain.handle('benchmark-native-engine', async (_event, opts) => {
+  const w = String(opts?.width || 1920);
+  const h = String(opts?.height || 1080);
+  const f = String(opts?.frames || 60);
+  const res = await runNativeEngine(['--benchmark', w, h, f], 10000);
+  if (res && res.ok) return res;
+  return { ok: false, error: 'Native C engine binary not built (run: make -C native)' };
+});
+
 ipcMain.handle('get-native-media-devices', async () => {
   const result = { video: [], audio: [] };
   try {
+    const cDevices = await runNativeEngine(['--list-devices'], 2500);
+    if (cDevices && Array.isArray(cDevices.video) && Array.isArray(cDevices.audio)) {
+      result.video = cDevices.video;
+      result.audio = cDevices.audio;
+      if (result.video.length > 0 || result.audio.length > 0) {
+        return result;
+      }
+    }
     if (process.platform === 'linux') {
       await new Promise((resolve) => {
         execFile('sh', ['-c', 'ls /dev/video* 2>/dev/null'], (err, stdout = '') => {

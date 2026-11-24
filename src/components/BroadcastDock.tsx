@@ -94,6 +94,8 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [nativeDevices, setNativeDevices] = useState<{ video: { id: string; label: string }[]; audio: { id: string; label: string }[] }>({ video: [], audio: [] });
+  const [nativeEngine, setNativeEngine] = useState<{ available: boolean; version?: string; cores?: number; v4l2?: boolean } | null>(null);
+  const [nativeBench, setNativeBench] = useState<{ fps: number; throughputMBps: number; elapsedMs: number } | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<string>('');
   const [isBroadcastExpanded, setIsBroadcastExpanded] = useState<boolean>(false);
   const [autoFollowLive, setAutoFollowLive] = useState<boolean>(true);
@@ -164,6 +166,20 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
     window.addEventListener('app-settings-updated', syncSetting);
     return () => window.removeEventListener('app-settings-updated', syncSetting);
   }, []);
+
+  // Probe Native C Engine status
+  useEffect(() => {
+    if (ipc) {
+      ipc.invoke('get-native-engine-status').then((res: any) => {
+        if (res) setNativeEngine(res);
+      }).catch(() => {});
+    } else {
+      fetch('/api/system/native-engine')
+        .then(r => r.json())
+        .then(res => setNativeEngine(res))
+        .catch(() => {});
+    }
+  }, [ipc]);
 
   // Listen to MediaPlayerBar transport commands so live media playback broadcasts cleanly
   useEffect(() => {
@@ -1304,6 +1320,28 @@ export const BroadcastDock: React.FC<BroadcastDockProps> = ({
                 className="w-full bg-background/60 border border-border rounded px-2 py-1 text-foreground font-mono text-2xs"
               />
               {lastRecPath && <div className="text-2xs text-success truncate">Saved: {lastRecPath}</div>}
+              <div className="pt-1 border-t border-border/70 flex items-center justify-between gap-1.5">
+                <span className={`text-2xs font-medium ${nativeEngine?.available ? 'text-success' : 'text-muted-foreground'}`}>
+                  C Engine: {nativeEngine?.available ? `v${nativeEngine.version} (${nativeEngine.cores}c)` : 'FFmpeg fallback'}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = ipc
+                      ? await ipc.invoke('benchmark-native-engine', { width: 1920, height: 1080, frames: 60 }).catch(() => null)
+                      : await fetch('/api/system/native-benchmark', { method: 'POST' }).then(r => r.json()).catch(() => null);
+                    if (res?.ok) setNativeBench(res);
+                  }}
+                  className="px-2 py-0.5 rounded bg-secondary text-foreground text-2xs font-medium hover:bg-accent transition"
+                >
+                  Benchmark 1080p
+                </button>
+              </div>
+              {nativeBench && (
+                <div className="text-2xs font-mono text-muted-foreground">
+                  {nativeBench.fps} fps • {nativeBench.throughputMBps} MB/s
+                </div>
+              )}
             </div>
           </div>
         )}

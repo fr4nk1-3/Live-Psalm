@@ -123,6 +123,19 @@ export const App: React.FC = () => {
           durationMs: detail.transitionDurationMs ?? prev.durationMs
         }));
         setAudienceViewMode(detail.audienceViewMode || 'near');
+        if (detail.defaultProjectorLayout) {
+          setThemes(prev =>
+            prev.map(t =>
+              t.id === activeThemeId
+                ? {
+                    ...t,
+                    projectorLayout: detail.defaultProjectorLayout,
+                    lowerThirdStyle: detail.defaultProjectorLayout === 'lower_third'
+                  }
+                : t
+            )
+          );
+        }
         applyUiTheme(detail.uiTheme || 'system');
       }
     };

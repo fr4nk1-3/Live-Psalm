@@ -261,6 +261,7 @@ export interface AppSettings {
   audienceMinFontSize?: number;
   uiTheme?: 'system' | 'light' | 'dark';
   slideTranslationBehavior?: 'single_slide_revert' | 'single_slide_keep' | 'entire_chapter';
+  defaultProjectorLayout?: ProjectorLayout;
   outputDisplayMap?: {
     audience?: string;
     stage?: string;
