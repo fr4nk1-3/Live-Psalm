@@ -2458,7 +2458,15 @@ export const App: React.FC = () => {
           onClearBackground={handleClearAllBackgrounds}
           onOpenInspector={() => setIsInspectorOpen(true)}
           onOpenStreamSettings={() => setIsStreamingOpen(true)}
-          onChangeProjectorLayout={handleProjectorLayoutChange}
+          onUpdateTheme={(updated) => {
+            setThemes(prev => prev.map(t => t.id === activeTheme.id ? { ...t, ...updated } : t));
+            if (updated.projectorLayout) {
+              const currentSettings = StorageService.getSettings();
+              if (currentSettings.defaultProjectorLayout !== updated.projectorLayout) {
+                StorageService.saveSettings({ ...currentSettings, defaultProjectorLayout: updated.projectorLayout });
+              }
+            }
+          }}
           countdownSeconds={countdownSeconds}
         />
 
@@ -2487,6 +2495,12 @@ export const App: React.FC = () => {
           theme={activeTheme}
           onUpdateTheme={(updated) => {
             setThemes(prev => prev.map(t => t.id === activeTheme.id ? { ...t, ...updated } : t));
+            if (updated.projectorLayout) {
+              const currentSettings = StorageService.getSettings();
+              if (currentSettings.defaultProjectorLayout !== updated.projectorLayout) {
+                StorageService.saveSettings({ ...currentSettings, defaultProjectorLayout: updated.projectorLayout });
+              }
+            }
           }}
           activeSlide={previewSlide}
           activeItem={activeItem}

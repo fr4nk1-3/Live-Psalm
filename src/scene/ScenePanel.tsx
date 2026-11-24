@@ -34,8 +34,8 @@ interface ScenePanelProps {
   mediaList?: MediaAsset[];
   /** Switches the preview monitor to scene mode. */
   onPreviewScene?: () => void;
-  /** Updates the active Audience Layout across Audience, Program, and Broadcast Scenes. */
-  onChangeProjectorLayout?: (layout: ProjectorLayout) => void;
+  /** Updates the active Theme (e.g. broadcastLayout, linkLayoutToBroadcast, projectorLayout). */
+  onUpdateTheme?: (updated: Partial<Theme>) => void;
 }
 
 /**
@@ -48,7 +48,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
   theme,
   mediaList = [],
   onPreviewScene,
-  onChangeProjectorLayout
+  onUpdateTheme
 }) => {
   const library = useSceneLibrary();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
@@ -57,8 +57,12 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const activeScene = getActiveScene(library);
   const previewScene = library.scenes.find(scene => scene.id === library.previewSceneId) || library.scenes[0];
-  const currentLayout: ProjectorLayout =
+  const isLinked = Boolean(theme.linkLayoutToBroadcast);
+  const audienceLayout: ProjectorLayout =
     theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+  const currentBroadcastLayout: ProjectorLayout = isLinked
+    ? audienceLayout
+    : (theme.broadcastLayout || 'centered');
 
   const beginRename = (scene: SceneDocument) => {
     setRenamingId(scene.id);
@@ -80,29 +84,69 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
             {library.scenes.length} scenes · broadcast:{' '}
             <span className="text-emerald-400">{activeScene?.name || 'none'}</span>
           </span>
-          {onChangeProjectorLayout && (
+          {onUpdateTheme && (
             <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border bg-background/70 px-1.5 py-0.5">
-              <span className="text-[10px] font-medium text-muted-foreground">Audience layout:</span>
+              <span className="text-[10px] font-medium text-muted-foreground">Broadcast layout:</span>
               {AUDIENCE_LAYOUT_OPTIONS.map(opt => {
-                const active = currentLayout === opt.id;
+                const active = currentBroadcastLayout === opt.id;
                 return (
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => onChangeProjectorLayout(opt.id)}
+                    onClick={() => {
+                      if (isLinked) {
+                        onUpdateTheme({
+                          projectorLayout: opt.id,
+                          lowerThirdStyle: opt.id === 'lower_third',
+                          broadcastLayout: opt.id
+                        });
+                      } else {
+                        onUpdateTheme({ broadcastLayout: opt.id });
+                      }
+                    }}
                     aria-pressed={active}
                     className={cn(
                       'rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition-colors',
                       active
-                        ? 'bg-accent text-accent-foreground'
+                        ? 'bg-emerald-500/20 text-emerald-300'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
-                    title={`Set Audience & Broadcast Scene layout to ${opt.label}`}
+                    title={
+                      isLinked
+                        ? `Linked: set both Audience & Broadcast layout to ${opt.label}`
+                        : `Independent: set Broadcast scene layout to ${opt.label} (Audience screen stays ${audienceLayout})`
+                    }
                   >
                     {opt.label}
                   </button>
                 );
               })}
+              <span className="mx-0.5 text-border" aria-hidden>
+                |
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateTheme({
+                    linkLayoutToBroadcast: !isLinked,
+                    ...(!isLinked ? { broadcastLayout: audienceLayout } : {})
+                  })
+                }
+                aria-pressed={isLinked}
+                className={cn(
+                  'rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                  isLinked
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                title={
+                  isLinked
+                    ? 'Broadcast layout is linked to Audience screen layout. Click to unlink and control Broadcast independently.'
+                    : 'Broadcast layout is independent of the Audience screen. Click to link to Audience screen layout.'
+                }
+              >
+                {isLinked ? 'Linked to Audience' : 'Link to Audience'}
+              </button>
             </div>
           )}
         </div>

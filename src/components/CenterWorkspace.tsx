@@ -95,8 +95,8 @@ interface CenterWorkspaceProps {
   onOpenInspector?: () => void;
   /** Opens the stream setup dialog from the broadcast monitor. */
   onOpenStreamSettings?: () => void;
-  /** Updates the active Audience Layout across Audience, Program, and Broadcast Scenes. */
-  onChangeProjectorLayout?: (layout: ProjectorLayout) => void;
+  /** Updates the active theme (e.g. broadcastLayout, linkLayoutToBroadcast, projectorLayout). */
+  onUpdateTheme?: (updated: Partial<Theme>) => void;
   /** Countdown seconds, mirrored into the broadcast scene. */
   countdownSeconds?: number;
 }
@@ -599,7 +599,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
   onClearBackground,
   onOpenInspector,
   onOpenStreamSettings,
-  onChangeProjectorLayout,
+  onUpdateTheme,
   countdownSeconds = 0
 }) => {
   const slideGridContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1152,29 +1152,6 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {onChangeProjectorLayout && (
-            <label className="flex items-center gap-1.5">
-              <span className="field-label">Layout</span>
-              <Select
-                value={activeTheme.projectorLayout || (activeTheme.lowerThirdStyle ? 'lower_third' : 'centered')}
-                onValueChange={value => onChangeProjectorLayout(value as ProjectorLayout)}
-              >
-                <SelectTrigger className="h-7 w-[116px] text-2xs" aria-label="Audience and broadcast layout">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="centered">Centered</SelectItem>
-                  <SelectItem value="lower_third">Lower third</SelectItem>
-                  <SelectItem value="top_banner">Top banner</SelectItem>
-                  <SelectItem value="split_left">Left split</SelectItem>
-                  <SelectItem value="split_right">Right split</SelectItem>
-                  <SelectItem value="boxed_card">Boxed card</SelectItem>
-                  <SelectItem value="minimal">Minimal</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-          )}
-
           <label className="flex items-center gap-1.5">
             <span className="field-label">Auto-advance</span>
             <Select value={String(autoAdvanceSec)} onValueChange={value => setAutoAdvanceSec(Number(value))}>
@@ -1231,7 +1208,7 @@ export const CenterWorkspace: React.FC<CenterWorkspaceProps> = ({
             theme={activeTheme}
             mediaList={mediaList}
             onPreviewScene={() => setPreviewKind('scene')}
-            onChangeProjectorLayout={onChangeProjectorLayout}
+            onUpdateTheme={onUpdateTheme}
           />
         </div>
       )}

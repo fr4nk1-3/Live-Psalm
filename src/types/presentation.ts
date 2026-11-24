@@ -158,7 +158,12 @@ export interface Theme {
   blurAmount: number; // in px
   shadowColor: string;
   lowerThirdStyle: boolean;
+  /** Layout used on the Audience Screen and Program monitor */
   projectorLayout?: ProjectorLayout;
+  /** Layout used in Broadcast Scenes when not linked to the Audience Screen */
+  broadcastLayout?: ProjectorLayout;
+  /** When true, the Audience Screen layout also drives Broadcast Scenes; when false, they are independent */
+  linkLayoutToBroadcast?: boolean;
   accentColor: string;
   backgroundUrl?: string;
   textTransform?: 'none' | 'uppercase' | 'capitalize';

@@ -52,7 +52,10 @@ export function resolveAudienceLayout(
   override?: 'theme' | ProjectorLayout | null
 ): ProjectorLayout {
   if (override && override !== 'theme') return override;
-  return theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+  if (theme.linkLayoutToBroadcast) {
+    return theme.projectorLayout || (theme.lowerThirdStyle ? 'lower_third' : 'centered');
+  }
+  return theme.broadcastLayout || 'centered';
 }
 
 export function resolveText(element: TextElement, context: SceneRenderContext): string {

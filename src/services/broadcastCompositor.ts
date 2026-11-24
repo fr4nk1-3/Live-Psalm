@@ -252,7 +252,9 @@ export function renderBroadcastScene(
       if (slide && slide.content?.trim()) {
         const projLayout =
           src.type === 'live_slide'
-            ? (theme?.projectorLayout || (theme?.lowerThirdStyle ? 'lower_third' : 'centered'))
+            ? (theme?.linkLayoutToBroadcast
+                ? (theme?.projectorLayout || (theme?.lowerThirdStyle ? 'lower_third' : 'centered'))
+                : (theme?.broadcastLayout || 'centered'))
             : 'centered';
         const isBanner = src.type === 'live_slide' && (projLayout === 'lower_third' || projLayout === 'top_banner');
         const isSplitLeft = src.type === 'live_slide' && projLayout === 'split_left';
